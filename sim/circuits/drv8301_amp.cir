@@ -1,0 +1,40 @@
+* Cross-check testbench around TI's DRV8301 current-sense op-amp macro
+* model (Aol/Vos/SR/CMRR per the WEBENCH release notes). The real chip's
+* gain network is internal and not in the model, so the macro is wrapped
+* in an external difference amplifier with the configured gain; the DC
+* sweep extracts closed-loop gain, output offset, and swing from TI's
+* model as an independent source for the [drv8301] amp parameters.
+.include components.param
+* TINA dialect: the macro references {temp}; provide it for ngspice.
+.param temp=27
+.include DRV8301.LIB
+
+* supplies
+Vavdd avdd 0 dc 6.5
+Vref2 refm 0 dc {iout_channel_ref_pin_v/2}
+
+* difference amplifier, gain = RF/R1 = drv_amp_gain.
+* NOTE: the macro's input stage sinks ~15 uA of bias current; the network
+* must stay low-impedance (like the real part's internal gain resistors and
+* the milliohm shunt it senses) or the inputs get dragged below the
+* common-mode range and the stage cuts off.
+.param r1=100
+.param rf={100*drv_amp_gain}
+Vp vp 0 dc 0
+Vn vn 0 dc 0
+R1a vn inm {r1}
+RFa inm out {rf}
+R1b vp inp {r1}
+RFb inp refm {rf}
+
+* DRV8301 AGND AVDD VINM VINP VOUT
+Xamp 0 avdd inm inp out DRV8301
+
+* Sweep kept small: the difference-amp input network must hold the macro's
+* input common mode above AGND (large negative vp cuts off the input stage
+* and the DC continuation then sticks at the low rail).
+.control
+dc vp -0.05 0.05 0.0005
+wrdata drv_amp_dc.out v(out)
+.endc
+.end

@@ -1,0 +1,394 @@
+(kicad_sch
+  (version 20250114)
+  (generator "gen_kicad_sch")
+  (generator_version "9.0")
+  (uuid "45f1c776-1866-5973-b7f8-dbd36043bb0c")
+  (paper "A4")
+  (title_block (title "BLDC feedback measurement circuits") (comment 1 "GENERATED from sim/config/params.toml - do not edit"))
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Device:C"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0.254)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "C"
+			(at 0.635 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "C"
+			(at 0.635 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 0.9652 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "cap capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "C_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "C_0_1"
+			(polyline
+				(pts
+					(xy -2.032 0.762) (xy 2.032 0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.032 -0.762) (xy 2.032 -0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "C_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol (lib_id "Device:R") (at 50.8 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "fcceb215-3e20-5eed-b7b6-83ca826b9a68")
+    (property "Reference" "R1" (at 53.339999999999996 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "95.3k" (at 53.339999999999996 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 50.8 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "a0ae7864-3e5d-53a2-bca9-3308beb1b0c2"))
+    (pin "2" (uuid "56738982-d09d-539c-b672-e6955ff84da6"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "R1") (unit 1))))
+  )
+  (global_label "EMF_IN" (shape input) (at 50.8 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "21204442-c351-51e0-8113-0e1866089225"))
+  (global_label "EMF_MID" (shape input) (at 50.8 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "2d2adee1-f9a6-53c0-9e98-ea91df43b2e4"))
+  (symbol (lib_id "Device:R") (at 50.8 76.2 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "d52df799-ed4f-5a4c-b7e8-351cc990a27d")
+    (property "Reference" "R2" (at 53.339999999999996 74.93 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 53.339999999999996 77.47 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 50.8 76.2 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "ba94a3fe-6fb5-59f3-8ac5-2fd4ed5edce1"))
+    (pin "2" (uuid "718a61ea-0dfb-5c56-81fa-35dcf941b222"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "R2") (unit 1))))
+  )
+  (global_label "EMF_MID" (shape input) (at 50.8 72.39 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "457b82bb-b370-557d-976f-78cc73e752fc"))
+  (global_label "GND" (shape input) (at 50.8 80.01 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "21ed8e93-d60e-5e01-b75d-297567773f3b"))
+  (symbol (lib_id "Device:R") (at 76.2 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "feaacec1-dfbb-5e79-bbe6-f8519212da6f")
+    (property "Reference" "R3" (at 78.74000000000001 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1k" (at 78.74000000000001 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 76.2 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "165aa1a1-e327-515e-afbb-98c70b49390e"))
+    (pin "2" (uuid "1eeee31c-cda2-5146-ac8a-477003221377"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "R3") (unit 1))))
+  )
+  (global_label "EMF_MID" (shape input) (at 76.2 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "c13b389e-945c-5b67-ae05-a3839898b781"))
+  (global_label "EMF_OUT" (shape input) (at 76.2 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "7387b56f-2739-5ada-bcea-4e4b4fccd821"))
+  (symbol (lib_id "Device:C") (at 76.2 76.2 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "9a4503ee-4de6-5610-9482-9f20875f9189")
+    (property "Reference" "C1" (at 78.74000000000001 74.93 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100n" (at 78.74000000000001 77.47 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 76.2 76.2 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "e47dba03-a253-5be5-849c-0e47b0ff05bd"))
+    (pin "2" (uuid "0e5923e0-730f-5622-9e41-cee4c72f40de"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "C1") (unit 1))))
+  )
+  (global_label "EMF_OUT" (shape input) (at 76.2 72.39 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "b230ea1d-7a35-5ded-afab-4ee516d7c632"))
+  (global_label "GND" (shape input) (at 76.2 80.01 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "e5c212f8-5395-5266-bb07-f15f5f986533"))
+  (symbol (lib_id "Device:R") (at 127.0 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "ad910fe7-240c-5407-a8b1-d11c3e225e1d")
+    (property "Reference" "R4" (at 129.54 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "53.6k" (at 129.54 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "4f9ac00e-bf42-5c24-ac3d-b0eba85fd937"))
+    (pin "2" (uuid "cc37a35a-50b0-5a6a-a1be-2d70811f9e9c"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "R4") (unit 1))))
+  )
+  (global_label "BUS_IN" (shape input) (at 127.0 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "9fdff584-e126-5885-80ec-c570abbb41e1"))
+  (global_label "BUS_OUT" (shape input) (at 127.0 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "3d133b52-accc-57d7-9e5b-5335a6c49ac8"))
+  (symbol (lib_id "Device:R") (at 127.0 76.2 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "af3a9508-7cc3-54b9-928c-97a01737ccc8")
+    (property "Reference" "R5" (at 129.54 74.93 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10k" (at 129.54 77.47 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 76.2 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "42306df7-c838-5c88-b731-e878070aadd3"))
+    (pin "2" (uuid "439c82e1-7e7b-5c2d-9b03-5f7cef0080ff"))
+    (instances (project "feedback_circuits"
+      (path "/45f1c776-1866-5973-b7f8-dbd36043bb0c" (reference "R5") (unit 1))))
+  )
+  (global_label "BUS_OUT" (shape input) (at 127.0 72.39 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "072c2ead-623e-5fec-b084-706cb0cb1292"))
+  (global_label "GND" (shape input) (at 127.0 80.01 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "0000b584-02e1-503b-a8f0-2e4c0372a2ca"))
+  (sheet_instances (path "/" (page "1")))
+)

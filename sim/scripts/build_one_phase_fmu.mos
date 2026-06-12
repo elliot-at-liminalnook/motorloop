@@ -1,0 +1,15 @@
+// Run from the project root:
+//   omc sim/scripts/build_one_phase_fmu.mos
+
+mkdir("sim/build");
+cd("sim/build");
+
+loadFile("../modelica/BldcCosimTestbench/package.mo");
+getErrorString();
+
+buildModelFMU(
+  BldcCosimTestbench.Plants.OnePhaseElectromechanicalPlant,
+  version = "2.0",
+  fmuType = "cs",
+  fileNamePrefix = "OnePhaseElectromechanicalPlant");
+getErrorString();

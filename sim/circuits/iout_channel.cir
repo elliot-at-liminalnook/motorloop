@@ -1,0 +1,17 @@
+* IOUT current-sense channel: low-side shunt + DRV8301 amp transfer
+* vo = ref/2 + gain * Rsh * i_phase (behavioral), clamped to the ADC rail.
+* DC sweep extracts gain/offset/swing (cross-checks feedback.current.*).
+.include components.param
+.param iout_ref_half={iout_channel_ref_pin_v/2}
+
+I1 0 sp dc 0
+Rsh sp 0 {iout_channel_shunt}
+Bamp raw 0 v = iout_ref_half + drv_amp_gain*v(sp)
+Bclamp out 0 v = min(max(v(raw), 0), adc_vref)
+Rload out 0 1e9
+
+.control
+dc i1 -120 120 0.5
+wrdata iout_dc.out v(out)
+.endc
+.end

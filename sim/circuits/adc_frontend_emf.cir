@@ -1,0 +1,34 @@
+* ADC front end, EMF channel: divider + series R + 100n filter cap at the
+* pin, sampled repeatedly by the MCP3208's 20p cap through the ~1k switch.
+* Each 50us cycle: the sample cap is first reset to the previous channel's
+* voltage (vprev), then connected for the 1.5-clock aperture. The transient
+* validates BOTH the per-sample charge-share fraction and the steady-state
+* reservoir droop the bench reproduces via sample-theft feedback.
+.include components.param
+.param vphase=10
+.param vprev=1.65
+
+Vphase in 0 dc {vphase}
+Rt in mid {emf_channel_r_top}
+Rb mid 0 {emf_channel_r_bottom}
+Rs mid node {emf_channel_r_series}
+Cf node 0 {emf_channel_c_filter}
+
+* reset switch: forces the sample cap to vprev before each sample
+Vprev prev 0 dc {vprev}
+S2 scap prev ctrl2 0 swreset
+Vc2 ctrl2 0 pulse(0 1 2u 1n 1n 2u 50u)
+
+* sample switch: closes for the aperture window
+S1 node scap ctrl1 0 swsample
+Vc1 ctrl1 0 pulse(0 1 5u 1n 1n {adc_t_window} 50u)
+Csmp scap 0 {adc_frontend_sample_cap}
+
+.model swsample sw vt=0.5 vh=0.01 ron={adc_frontend_sample_switch_r} roff=1e12
+.model swreset sw vt=0.5 vh=0.01 ron=1 roff=1e12
+
+.control
+tran 0.2u 2.001m
+wrdata adc_emf_tran.out v(scap) v(node)
+.endc
+.end

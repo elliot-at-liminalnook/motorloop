@@ -1,0 +1,297 @@
+# =============================================================================
+# BLDC Co-Simulation Testbench - simulation parameters, single source of truth
+# =============================================================================
+#
+# Every parameter is an inline table:
+#
+#   name = { value = ..., unit = "...", status = "...", blocked_by = "Qn",
+#            source = "...", note = "..." }
+#
+# `value`, `unit`, `status` are required. `blocked_by` references an item in
+# notes/open-questions.md and is required for any unconfirmed status.
+#
+# Status vocabulary (most to least trusted):
+#
+#   measured         - measured on our actual hardware
+#   datasheet        - from a component datasheet in docs/ (cite in `source`)
+#   decided          - a design decision we own (recorded in architecture.md)
+#   ti-evm-baseline  - TI reference-board value; the ZONRI clone MAY differ
+#   assumed          - engineering guess pending a decision or measurement
+#   placeholder      - plumbing-only value; not even a guess
+#
+# The last three are UNCONFIRMED. Loaders print a banner listing every
+# unconfirmed parameter at the start of each run, and write the same list as
+# a sidecar next to every output artifact. A trace produced from unconfirmed
+# values should never be mistaken for a prediction about the real hardware.
+#
+# Units are SI unless stated; dimensionless values use unit = "1".
+
+[meta]
+schema = 1
+statuses = ["measured", "datasheet", "decided", "ti-evm-baseline", "assumed", "placeholder"]
+unconfirmed_statuses = ["ti-evm-baseline", "assumed", "placeholder"]
+
+# -----------------------------------------------------------------------------
+# Motor electrical spec - the quantities a bench session actually measures
+# (line-to-line, what a DMM/LCR/scope reads). The wye-equivalent per-phase
+# values in [motor] are DERIVED from these (derive_params.py); the unit
+# conversions are encoded once and unit-tested instead of redone by hand.
+# !! ENTIRELY PLACEHOLDER: no motor selected or identified (Q1) !!
+# -----------------------------------------------------------------------------
+[motor_spec]
+r_line_line = { value = 1.0, unit = "Ohm", status = "placeholder", blocked_by = "Q1", note = "terminal-to-terminal resistance" }
+l_line_line = { value = 2.0e-3, unit = "H", status = "placeholder", blocked_by = "Q1", note = "terminal-to-terminal inductance" }
+ke_line_line_peak = { value = 0.034641016151377546, unit = "V.s/rad", status = "placeholder", blocked_by = "Q1", note = "peak line-to-line BEMF per mech rad/s (drill-spin scope measurement); ~= 60/(2*pi*Kv_rpm_per_v) if only Kv is known" }
+pole_count = { value = 8, unit = "1", status = "placeholder", blocked_by = "Q1", note = "magnet pole count (pole pairs derived)" }
+
+# -----------------------------------------------------------------------------
+# Motor (wye-equivalent per-phase model values, derived from [motor_spec])
+# Consumed by: one-phase slice (rung 1) onward.
+# -----------------------------------------------------------------------------
+[motor]
+R = { value = 0.5, unit = "Ohm", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "phase resistance, wye-equivalent = r_line_line/2" }
+L = { value = 1.0e-3, unit = "H", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "phase inductance, wye-equivalent = l_line_line/2" }
+Ke = { value = 0.02, unit = "V.s/rad", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "peak phase BEMF constant = ke_line_line_peak/sqrt(3) (sinusoidal)" }
+Kt = { value = 0.02, unit = "N.m/A", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "= Ke by energy consistency of the plant's torque coupling" }
+J = { value = 2.0e-4, unit = "kg.m2", status = "placeholder", blocked_by = "Q1", note = "rotor + load inertia (spin-down measurement, not circuit-derivable)" }
+B = { value = 1.0e-4, unit = "N.m.s/rad", status = "placeholder", blocked_by = "Q1", note = "viscous damping (spin-down measurement)" }
+pole_pairs = { value = 4, unit = "1", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "= pole_count/2" }
+# 0 = sinusoidal, 1 = ideal trapezoid; fit to a scope trace during motor ID.
+emf_trapezoid_blend = { value = 0.0, unit = "1", status = "placeholder", blocked_by = "Q1" }
+# Mechanical realism terms (realism-checklist stage 2; default-off in parity
+# scenarios, enabled per bench scenario via bench_factory.realism()).
+cogging_torque = { value = 5.0e-3, unit = "N.m", status = "placeholder", blocked_by = "Q1", note = "peak detent torque; slot/pole dependent" }
+cogging_order = { value = 24, unit = "1", status = "placeholder", blocked_by = "Q1", note = "detents per mech rev ~ LCM(slots, poles); 12N8P guess" }
+coulomb_friction = { value = 2.0e-3, unit = "N.m", status = "placeholder", blocked_by = "Q1", note = "kinetic friction torque (no static/kinetic split modeled)" }
+stiction_omega_eps = { value = 0.5, unit = "rad/s", status = "decided", note = "tanh regularization width for Coulomb friction; numerics, not physics" }
+
+# -----------------------------------------------------------------------------
+# DC bus / bench supply (Q5: bring-up operating point not yet decided)
+# -----------------------------------------------------------------------------
+[bus]
+vbus = { value = 12.0, unit = "V", status = "assumed", blocked_by = "Q5", note = "bench bring-up bus voltage" }
+supply_current_limit = { value = 1.0, unit = "A", status = "assumed", blocked_by = "Q5", note = "bench supply limit for first power" }
+capacitance = { value = 1.66e-3, unit = "F", status = "ti-evm-baseline", blocked_by = "Q7", source = "tidr740a BOM", note = "bulk electrolytics; clone unverified" }
+
+# -----------------------------------------------------------------------------
+# Bench supply dynamics (realism stage 1; bench scenarios only - parity runs
+# keep a stiff source). CV with series impedance, CC fold at the limit, and
+# no current sinking (regen pumps the bus cap).
+# -----------------------------------------------------------------------------
+[supply]
+r_source = { value = 0.05, unit = "Ohm", status = "assumed", blocked_by = "Q5", note = "CV-mode source impedance incl. leads" }
+v_alarm = { value = 20.0, unit = "V", status = "assumed", blocked_by = "Q5", note = "bus overvoltage alarm for regen scenarios; far under 85 V FETs / 100 V caps but protects 16 V-class assumptions" }
+ramp_time = { value = 0.0, unit = "s", status = "decided", note = "E18: power-on v_set ramp duration (0 = instant); slow-ramp scenarios sweep the UVLO region during boot" }
+
+[drv8301_uvlo]
+pvdd_falling = { value = 5.9, unit = "V", status = "datasheet", source = "SLOS719F / slva552", note = "PVDD UVLO falling threshold; below this the device resets registers (the slva552 brownout cause)" }
+pvdd_hysteresis = { value = 0.3, unit = "V", status = "assumed", note = "rising-recovery hysteresis; not explicitly specified" }
+
+# -----------------------------------------------------------------------------
+# PWM / gate drive
+# -----------------------------------------------------------------------------
+[pwm]
+frequency = { value = 20.0e3, unit = "Hz", status = "decided", source = "architecture.md ADC decision", note = "pinned near 20 kHz by ADC schedule; bootstrap needs >= ~20 kHz" }
+rtl_dead_time = { value = 1.0e-6, unit = "s", status = "assumed", blocked_by = "Q5", note = "dead time the RTL enforces, above the DTC hardware floor" }
+
+[inverter]
+fet_rds_on = { value = 4.6e-3, unit = "Ohm", status = "datasheet", source = "crmicro-crss052n08n-datasheet.pdf @ VGS=10V", note = "ZONRI clone FETs" }
+body_diode_vf = { value = 0.95, unit = "V", status = "datasheet", source = "crmicro-crss052n08n-datasheet.pdf" }
+dtc_dead_time_floor = { value = 50.0e-9, unit = "s", status = "assumed", blocked_by = "Q7", note = "DRV8301 DTC pin floor; actual resistor on ZONRI board unmeasured (50-500 ns range)" }
+
+# -----------------------------------------------------------------------------
+# DRV8301 behavioral model (rung 3 / fault-injection tier)
+# -----------------------------------------------------------------------------
+[drv8301]
+en_gate_ready_time = { value = 10.0e-3, unit = "s", status = "datasheet", source = "SLOS719F 6.9", note = "worst case of 5-10 ms; PWM/SPI invalid earlier" }
+quick_reset_pulse_max = { value = 10.0e-6, unit = "s", status = "datasheet", source = "SLOS719F 6.9", note = "EN_GATE low pulse shorter than this = fault reset without shutdown" }
+spi_sclk_max = { value = 10.0e6, unit = "Hz", status = "datasheet", source = "SLOS719F 6.8" }
+amp_gain = { value = 10.0, unit = "V/V", status = "decided", note = "power-on default; SPI-settable 10/20/40/80" }
+amp_vref = { value = 1.65, unit = "V", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.iout_channel", source = "ZONRI silkscreen REF+ 1.65V", note = "shunt-amp output midpoint = ref_pin_v/2" }
+oc_adj_set = { value = 0, unit = "1", status = "assumed", blocked_by = "Q10", note = "power-on default unconfirmed; code 0 = 60 mV VDS = ~13 A trip with 4.6 mOhm FETs" }
+
+# -----------------------------------------------------------------------------
+# Codified circuit specifications - component-level values, the things a
+# Q7 bench session measures with a DMM. Derived parameters below reference
+# these via derived_from; derive_params.py recomputes and verifies them.
+# All TI-EVM baseline today (clone unverified).
+# -----------------------------------------------------------------------------
+[circuit.emf_channel]
+r_top = { value = 95.3e3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", source = "tidr738/tidr740a (95.3k 1%)" }
+r_bottom = { value = 10.0e3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", source = "tidr738/tidr740a (10k 1%)" }
+r_series = { value = 1.0e3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", note = "series R into the filter cap / ADC" }
+c_filter = { value = 100.0e-9, unit = "F", status = "ti-evm-baseline", blocked_by = "Q7" }
+# The two candidate topologies differ ~10x in cutoff: 'post_divider' (filter
+# sees divider Thevenin + r_series ~ 10 kOhm) vs 'series_only' (ideal source
+# behind r_series ~ 1 kOhm). Resolve by measurement on the ZONRI board.
+filter_topology = { value = "post_divider", unit = "enum", status = "assumed", blocked_by = "Q7" }
+
+[circuit.iout_channel]
+shunt = { value = 2.0e-3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", source = "tidr740a BOM R80-R82, Rev B1" }
+ref_pin_v = { value = 3.3, unit = "V", status = "ti-evm-baseline", blocked_by = "Q7", note = "DRV8301 REF pin; amp output midpoint = REF/2 (ZONRI silkscreen REF+ 1.65V)" }
+
+[circuit.bus_divider]
+r_top = { value = 53.6e3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q11", note = "extraction suspect - math does not close at 60 V" }
+r_bottom = { value = 10.0e3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q11" }
+
+[circuit.adc_frontend]
+sample_switch_r = { value = 1.0e3, unit = "Ohm", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf fig 4-1" }
+sample_cap = { value = 20.0e-12, unit = "F", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf fig 4-1" }
+iout_source_impedance = { value = 10.0, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", note = "OPA365-buffered IOUT outputs: near-zero closed-loop impedance" }
+
+[circuit.harness]
+r_return = { value = 0.02, unit = "Ohm", status = "assumed", blocked_by = "Q9", note = "inter-board ground-return resistance (jumper wires + connectors)" }
+l_return = { value = 0.5e-6, unit = "H", status = "assumed", blocked_by = "Q9", note = "ground-return loop inductance, ~0.5 m of wire" }
+
+[circuit.gate_pulldowns]
+en_gate_pulldown = { value = 10.0e3, unit = "Ohm", status = "assumed", blocked_by = "Q13", note = "planned external pull-down holding EN_GATE low through the FPGA configuration window" }
+
+# -----------------------------------------------------------------------------
+# Analog feedback chain - DERIVED from [circuit.*] (verify via
+# `python3 sim/scripts/derive_params.py --check`)
+# Consumed by: rung 2 onward.
+# -----------------------------------------------------------------------------
+[feedback.current]
+shunt = { value = 2.0e-3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.iout_channel" }
+offset = { value = 1.65, unit = "V", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.iout_channel", note = "= ref_pin_v/2 per DRV8301 amp transfer" }
+
+[feedback.emf]
+divider_ratio = { value = 0.0949667616334283, unit = "1", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.emf_channel", note = "= r_bottom/(r_top+r_bottom)" }
+source_impedance = { value = 10050.328584994302, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.emf_channel", note = "Thevenin (r_top||r_bottom) + r_series; drives ADC settling" }
+rc_cutoff = { value = 158.35789008387587, unit = "Hz", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.emf_channel", note = "topology 'post_divider': pole at 1/(2*pi*source_impedance*c_filter). Was hand-estimated at 1.6 kHz before the topology was made explicit (10x error class)" }
+
+[feedback.bus_voltage]
+divider_ratio = { value = 0.15723270440251572, unit = "1", status = "ti-evm-baseline", blocked_by = "Q11", derived_from = "circuit.bus_divider", note = "= r_bottom/(r_top+r_bottom)" }
+
+# -----------------------------------------------------------------------------
+# ADC (MCP3208) - domain decision recorded in architecture.md
+# Consumed by: rung 2 onward.
+# -----------------------------------------------------------------------------
+[adc]
+vref = { value = 3.3, unit = "V", status = "decided", source = "architecture.md ADC decision" }
+sclk = { value = 1.0e6, unit = "Hz", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "2.7 V spec used conservatively at 3.3 V; bench-validate 1.3-1.5 MHz for margin" }
+conversions_per_pwm_period = { value = 2, unit = "1", status = "decided", source = "architecture.md ADC decision", note = "sector-aware schedule: active current + floating EMF" }
+sample_aperture = { value = 2.0e-6, unit = "s", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "~1.5 SCLK cycles early in frame; must land in PWM off-window" }
+# Shared-sample-cap residual: fraction of (previous cap voltage - target)
+# left at the hold instant, exp(-t_window/((R_source+R_switch)*C_sample)).
+# Worst case = full-scale channel step: residual * 4096 LSB of crosstalk.
+sample_residual_emf = { value = 0.0001999600079984003, unit = "1", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.adc_frontend", note = "EMF channels (3-5): charge share with the 100n filter cap at the pin; reservoir droop recovers via the channel RC (sample-theft feedback in the bench)" }
+sample_residual_bus = { value = 0.00035079675924591436, unit = "1", status = "ti-evm-baseline", blocked_by = "Q11", derived_from = "circuit.adc_frontend", note = "VBUS channel (6), ~8.4 kOhm source, no local cap: settling residual" }
+sample_residual_iout = { value = 0.0, unit = "1", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.adc_frontend", note = "IOUT channels (0-2), op-amp buffered: negligible" }
+# Transfer nonidealities (realism stage 3; datasheet-grade, applied always).
+offset_lsb = { value = 1.0, unit = "1", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf (offset error +/-1 LSB max)" }
+gain_error = { value = 2.4e-4, unit = "1", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf (gain error +/-1 LSB max over 4096)" }
+inl_bow_lsb = { value = 1.0, unit = "1", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf (INL +/-1 LSB max, modeled as smooth bow)" }
+
+# -----------------------------------------------------------------------------
+# Correlated analog disturbances (realism stage 3; bench scenarios only,
+# amplitudes are harness/layout dependent - resolved by Q9 measurements).
+# Ground shift is DERIVED from [circuit.harness].
+# -----------------------------------------------------------------------------
+[disturbance]
+gnd_shift_r = { value = 0.02, unit = "Ohm", status = "assumed", blocked_by = "Q9", derived_from = "circuit.harness", note = "= harness r_return; common-mode V per A of bus return current" }
+gnd_shift_l = { value = 0.5e-6, unit = "H", status = "assumed", blocked_by = "Q9", derived_from = "circuit.harness", note = "= harness l_return; common-mode V per A/s of bus return slew" }
+gate_edge_spike = { value = 20.0e-3, unit = "V", status = "assumed", blocked_by = "Q9", note = "switching-edge transient amplitude on current/EMF channels" }
+gate_edge_tau = { value = 1.0e-6, unit = "s", status = "assumed", blocked_by = "Q9", note = "edge transient decay time constant" }
+vref_ripple = { value = 10.0e-3, unit = "V", status = "assumed", blocked_by = "Q9", note = "PWM-synchronized ripple on the 3.3 V rail feeding the ADC reference" }
+
+# -----------------------------------------------------------------------------
+# Thermal lumps and drift laws (realism stage 4; bench scenarios only)
+# -----------------------------------------------------------------------------
+[thermal]
+fet_rth_jc = { value = 0.72, unit = "K/W", status = "datasheet", source = "crmicro-crss052n08n-datasheet.pdf" }
+fet_rth_ca = { value = 20.0, unit = "K/W", status = "assumed", blocked_by = "Q7", note = "case-to-ambient incl. ZONRI copper/heatsink; board dependent" }
+fet_cth = { value = 0.8, unit = "J/K", status = "assumed", note = "junction+case lump heat capacity, TO-263 + pad" }
+drv_rth_ja = { value = 30.0, unit = "K/W", status = "datasheet", source = "SLOS719F (TSSOP-56 PowerPAD)" }
+drv_cth = { value = 0.3, unit = "J/K", status = "assumed", note = "TSSOP-56 + PowerPAD copper lump heat capacity" }
+motor_rth_wa = { value = 8.0, unit = "K/W", status = "placeholder", blocked_by = "Q1", note = "winding-to-ambient; motor dependent" }
+motor_cth = { value = 15.0, unit = "J/K", status = "placeholder", blocked_by = "Q1", note = "winding+stator lump" }
+sw_loss_k = { value = 50.0e-9, unit = "J/(V.A)", status = "assumed", note = "per-FET switching energy ~ k*Vbus*|I| per edge; clone gate-drive dependent" }
+gate_drive_e_per_edge = { value = 0.6e-6, unit = "J", status = "assumed", note = "DRV die heating per gate edge ~ Qg(55nC)*GVDD(11V)" }
+rds_tempco = { value = 4.0e-3, unit = "1/K", status = "assumed", note = "RDS(on) temperature coefficient, typical silicon FET" }
+drv_quiescent_w = { value = 0.15, unit = "W", status = "assumed", note = "buck + charge pump + gate drive baseline losses" }
+alpha_cu = { value = 3.93e-3, unit = "1/K", status = "datasheet", source = "copper temperature coefficient" }
+ke_derate = { value = 1.1e-3, unit = "1/K", status = "assumed", blocked_by = "Q1", note = "NdFeB Br tempco ~ -0.11%/K; magnet grade unknown" }
+ambient_c = { value = 25.0, unit = "Cel", status = "decided", note = "scenario ambient" }
+otw_c = { value = 130.0, unit = "Cel", status = "datasheet", source = "SLOS719F (OTW threshold)" }
+otsd_c = { value = 150.0, unit = "Cel", status = "datasheet", source = "SLOS719F (OTSD threshold)" }
+
+# -----------------------------------------------------------------------------
+# Sensor imperfection (realism stage 5; mounting-dependent, Q20)
+# -----------------------------------------------------------------------------
+[sensor_imperfection]
+eccentricity_e1 = { value = 0.035, unit = "rad", status = "assumed", blocked_by = "Q20", note = "~2 deg once-per-rev angle error from magnet eccentricity" }
+eccentricity_phi1 = { value = 0.7, unit = "rad", status = "assumed", blocked_by = "Q20" }
+eccentricity_e2 = { value = 0.009, unit = "rad", status = "assumed", blocked_by = "Q20", note = "~0.5 deg twice-per-rev (tilt) term" }
+eccentricity_phi2 = { value = 2.1, unit = "rad", status = "assumed", blocked_by = "Q20" }
+angle_noise_lsb = { value = 1.5, unit = "1", status = "datasheet", source = "ams-osram-as5600-datasheet.pdf (output noise ~0.015 deg rms scaled)" }
+mounting_offset = { value = 0.0, unit = "rad", status = "placeholder", blocked_by = "Q20", note = "static sensor-vs-rotor angular offset (e.g. pi for a flipped magnet, E24); resolved by the alignment-calibration routine" }
+
+# -----------------------------------------------------------------------------
+# Angle sensor (AS5600) - path decision still open (Q3); these model the sensor
+# Consumed by: rung 2 onward.
+# -----------------------------------------------------------------------------
+[angle_sensor]
+sample_period = { value = 150.0e-6, unit = "s", status = "datasheet", source = "ams-osram-as5600-datasheet.pdf" }
+filter_settling = { value = 2.2e-3, unit = "s", status = "datasheet", source = "ams-osram-as5600-datasheet.pdf", note = "slow filter SF=00 default; 0.286 ms at SF=11" }
+pwm_carrier = { value = 920.0, unit = "Hz", status = "assumed", blocked_by = "Q3", note = "fastest PWM-output option; ~1.1 ms frame latency" }
+
+# -----------------------------------------------------------------------------
+# RTL build-time constants. sim/scripts/gen_rtl_params.py renders these (plus
+# pwm.*, motor.pole_pairs, adc.*, drv8301.*) into rtl/gen/rtl_params.vh so the
+# Verilog and the simulation share one source of truth.
+# -----------------------------------------------------------------------------
+[rtl]
+clock_frequency = { value = 25.0e6, unit = "Hz", status = "assumed", blocked_by = "Q12", note = "core oscillator read as 25 MHz off the schematic, unconfirmed; bench clocks the RTL at this rate" }
+drv_spi_divider = { value = 16, unit = "1", status = "decided", note = "SCLK = clk/div ~ 1.56 MHz, well under the DRV8301 10 MHz max" }
+adc_spi_divider = { value = 26, unit = "1", status = "decided", note = "SCLK = clk/div ~ 961 kHz, margin under the 1 MHz budget" }
+adc_emf_lead_cycles = { value = 160, unit = "1", status = "decided", note = "EMF conversion launch lead so the hold aperture lands at the PWM off-window center (~5.5 SCLK after CS fall)" }
+drv_refresh_period = { value = 1.0e-3, unit = "s", status = "decided", note = "register readback-verify-rewrite watchdog period (slva552)" }
+speed_pi_kp = { value = 12, unit = "1", status = "assumed", blocked_by = "Q1", note = "duty counts per rad/s error; tuned against placeholder motor params, retune after motor ID" }
+speed_pi_ki_shift = { value = 4, unit = "1", status = "assumed", blocked_by = "Q1", note = "integral gain = kp >> shift per update; tuned against placeholder motor params" }
+sensored_align_offset = { value = 3755, unit = "1", status = "decided", note = "elec12 counts; drive sector = floor((theta_e + 330 deg)/60 deg) for the sim plant's phase convention. Hardware needs an alignment routine (sensor mounting unknown, Q1)" }
+oc_adj_code = { value = 16, unit = "1", status = "assumed", blocked_by = "Q5", note = "VDS trip 0.403 V -> ~88 A with 4.6 mOhm FETs at the TI table; revisit with real operating point" }
+amp_gain_code = { value = 0, unit = "1", status = "decided", note = "10 V/V power-on default keeps SPI config minimal for first spin" }
+uart_baud = { value = 115200, unit = "Hz", status = "assumed", note = "telemetry/command link rate; final choice with the host tooling" }
+duty_down_slew = { value = 40, unit = "1", status = "assumed", blocked_by = "Q5", note = "max duty-compare decrease per PI update: bounds regen current (~0.8 A steps) so deceleration cannot pump the bus (realism 1.7) without crippling decel dynamics; retune with motor" }
+# Edge-case policy constants (edge-case-scenarios.md spec gaps; decisions
+# recorded in architecture.md).
+sector_hysteresis = { value = 64, unit = "1", status = "decided", note = "E1: elec12 counts of hysteresis on the sensored-sector compare (~5.6 elec deg) so boundary noise cannot chatter the commutation" }
+emf_skip_duty_margin = { value = 24, unit = "1", status = "decided", note = "E4: skip the EMF conversion when duty_compare > HALF - margin (off-window narrower than the hold aperture); EMF code holds last valid value" }
+dc_cal_offset_tol = { value = 256, unit = "1", status = "decided", note = "E10: captured DC_CAL offsets accepted only within 2048 +/- tol; else previous value kept and a flag raised" }
+drv_dead_threshold = { value = 8, unit = "1", status = "decided", note = "E13: consecutive verify-rewrite failures before declaring the DRV dead (latched safe-off + flag)" }
+fault_lockout_threshold = { value = 4, unit = "1", status = "decided", note = "E20: consecutive fault recoveries without a healthy-run interval before latching lockout (cleared by >100 ms in mode 0)" }
+stall_timeout = { value = 0.3, unit = "s", status = "assumed", blocked_by = "Q1", note = "E21: mode-2 stall detector - duty near max with zero speed for this long = stall fault (safe-off; cleared in mode 0); retune with motor" }
+uart_byte_timeout = { value = 2.0e-3, unit = "s", status = "decided", note = "E16: inter-byte timeout resetting the UART command FSM so one torn frame cannot poison the link" }
+adc_stuck_threshold = { value = 32, unit = "1", status = "decided", note = "E14: consecutive all-zero or all-one conversions before flagging the ADC as stuck/absent (telemetry flag)" }
+
+# -----------------------------------------------------------------------------
+# Simulation engine constants
+# -----------------------------------------------------------------------------
+[sim]
+current_epsilon = { value = 1.0e-6, unit = "A", status = "decided", note = "float-mode threshold for diode/disconnect resolution" }
+max_substep = { value = 1.0e-6, unit = "s", status = "decided", note = "plant integration substep cap in the lockstep bench (switched mode)" }
+
+# -----------------------------------------------------------------------------
+# Scenario defaults for the rung-1 one-phase reference run
+# -----------------------------------------------------------------------------
+[scenario.one_phase_reference]
+stop = { value = 0.100, unit = "s", status = "decided", note = "plumbing test horizon" }
+dt = { value = 1.0e-5, unit = "s", status = "decided", note = "RK4 fixed step" }
+load_torque = { value = 0.0, unit = "N.m", status = "decided", note = "free shaft" }
+# Piecewise-constant duty schedule, [[t_start_s, duty], ...]; shared verbatim by
+# the Python, C++, and Modelica implementations so parity is exact.
+duty_schedule = { value = [[0.0, 0.0], [0.005, 0.25], [0.050, 0.50], [0.075, 0.0]], unit = "(s, 1)", status = "decided" }
+
+# -----------------------------------------------------------------------------
+# Open-loop forced six-step ramp (averaged mode): the three-way parity scenario
+# shared by the C++ plant, the Python reference, and the Modelica oracle.
+# -----------------------------------------------------------------------------
+[scenario.three_phase_open_loop]
+stop = { value = 0.150, unit = "s", status = "decided" }
+dt = { value = 1.0e-5, unit = "s", status = "decided", note = "outer step; sector held constant within it" }
+max_substep = { value = 1.0e-5, unit = "s", status = "decided", note = "averaged-mode parity runs integrate at the outer step" }
+duty = { value = 0.5, unit = "1", status = "decided" }
+f_elec_final = { value = 40.0, unit = "Hz", status = "decided", note = "electrical commutation frequency after the ramp" }
+ramp_time = { value = 0.100, unit = "s", status = "decided" }
+load_torque = { value = 0.0, unit = "N.m", status = "decided" }

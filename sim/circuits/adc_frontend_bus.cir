@@ -1,0 +1,25 @@
+* ADC front end, bus-voltage channel: 53.6k/10k divider with NO local cap.
+* The 20p sample cap must settle through the divider Thevenin + switch
+* resistance within the aperture; the residual fraction of the initial
+* error cross-checks adc.sample_residual_bus.
+.include components.param
+.param vbus=12
+.param vprev=1.65
+
+Vbus in 0 dc {vbus}
+Rt in node {bus_divider_r_top}
+Rb node 0 {bus_divider_r_bottom}
+
+S1 node scap ctrl 0 swsample
+Csmp scap 0 {adc_frontend_sample_cap}
+Vc ctrl 0 pulse(0 1 1u 1n 1n {adc_t_window} 1)
+
+.model swsample sw vt=0.5 vh=0.01 ron={adc_frontend_sample_switch_r} roff=1e12
+
+.ic v(scap)={vprev}
+
+.control
+tran 2n 4u uic
+wrdata adc_bus_tran.out v(scap) v(node)
+.endc
+.end

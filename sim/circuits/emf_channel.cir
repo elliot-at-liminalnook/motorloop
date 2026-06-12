@@ -1,0 +1,17 @@
+* EMF measurement channel, post_divider topology:
+* phase voltage -> 95.3k/10k divider -> series R -> filter cap at ADC pin.
+* AC analysis extracts the dominant pole (cross-checks feedback.emf.rc_cutoff).
+* Component values come from sim/config/params.toml via components.param.
+.include components.param
+
+V1 in 0 dc 0 ac 1
+R1 in mid {emf_channel_r_top}
+R2 mid 0 {emf_channel_r_bottom}
+R3 mid out {emf_channel_r_series}
+C1 out 0 {emf_channel_c_filter}
+
+.control
+ac dec 100 0.1 1e6
+wrdata emf_ac.out vm(out)
+.endc
+.end
