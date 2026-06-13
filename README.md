@@ -31,11 +31,10 @@ is one.
 
 ## Ethos
 
-The deeper aim is epistemic hygiene for hardware: making it harder to
-confuse a useful simulation with truth about the physical bench. The project
-keeps measured facts, datasheet facts, design decisions, assumptions, and
-placeholders labeled all the way through the architecture. See
-[Ethos: Knowing What The Bench Knows](notes/ethos.md).
+The deeper aim is to make hardware uncertainty visible: what is measured,
+what is copied from a datasheet, what is a design decision, and what is
+still only a useful guess. The architecture is built around keeping those
+claims separate. See [Why This Exists](notes/ethos.md).
 
 ## What it caught
 
