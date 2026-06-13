@@ -43,6 +43,9 @@ python3 sim/scripts/run_bench_scenario.py open_loop --seconds 1.0
 
 # plot any shared-schema trace CSV
 python3 sim/scripts/plot_trace.py sim/build/bench_closed_loop.csv
+
+# regenerate the README figures (runs startup + brownout scenarios)
+python3 sim/scripts/gen_readme_figures.py
 ```
 
 ## Layout
@@ -78,6 +81,11 @@ is the model-validation strategy until hardware traces exist:
 
 Measured agreement (open-loop ramp scenario): C++ vs Python ~1e-8 (shared
 integrator), C++ vs Modelica ~0.2% RMS on currents, <0.5% on speed.
+
+![Three-way plant parity](../figures/parity.png)
+
+*(Regenerate with `python3 sim/scripts/gen_readme_figures.py --only
+parity` — the residual panel is the verification claim, drawn live.)*
 
 ## Parameters And Assumption Flags
 

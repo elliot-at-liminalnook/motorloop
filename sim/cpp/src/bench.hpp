@@ -134,6 +134,7 @@ class Bench {
   double time_s() const { return time_s_; }
   const ThreePhasePlant& plant() const { return plant_; }
   const Drv8301& drv() const { return drv_; }
+  const As5600& encoder() const { return encoder_; }
   std::array<double, 3> currents() const { return plant_.state().current_a; }
   double omega() const { return plant_.state().omega_rad_s; }
   double theta() const { return plant_.state().theta_rad; }

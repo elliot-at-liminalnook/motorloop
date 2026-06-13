@@ -535,6 +535,22 @@ PYBIND11_MODULE(bldcsim, m) {
       .def_property_readonly("speed", &bldcsim::Bench::dbg_speed)
       .def_property_readonly("angle", &bldcsim::Bench::dbg_angle)
       .def_property_readonly("angle_valid", &bldcsim::Bench::dbg_angle_valid)
+      .def_property_readonly(
+          "gates",
+          [](const bldcsim::Bench& b) {
+            py::list hi;
+            py::list lo;
+            for (int i = 0; i < 3; ++i) {
+              hi.append(b.drv().gate_high()[i]);
+              lo.append(b.drv().gate_low()[i]);
+            }
+            return py::make_tuple(hi, lo);
+          })
+      .def_property_readonly(
+          "encoder_angle_rad",
+          [](const bldcsim::Bench& b) {
+            return b.encoder().filtered_angle_rad();
+          })
       .def_property_readonly("offset_a", &bldcsim::Bench::dbg_offset_a)
       .def_property_readonly("offset_b", &bldcsim::Bench::dbg_offset_b)
       .def_property_readonly("noctw_count", &bldcsim::Bench::dbg_noctw_count)
