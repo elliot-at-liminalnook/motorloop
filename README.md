@@ -29,6 +29,14 @@ rigs. There was no open equivalent for hand-written Verilog: a way to
 develop RTL against a plant instead of against a waveform viewer. This repo
 is one.
 
+## Ethos
+
+The deeper aim is epistemic hygiene for hardware: making it harder to
+confuse a useful simulation with truth about the physical bench. The project
+keeps measured facts, datasheet facts, design decisions, assumptions, and
+placeholders labeled all the way through the architecture. See
+[Ethos: Knowing What The Bench Knows](notes/ethos.md).
+
 ## What it caught
 
 The point of the bench is the class of bug it finds before hardware does.
