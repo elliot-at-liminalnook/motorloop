@@ -48,9 +48,38 @@ verilate(bldcsim
     ${RTL_DIR}/open_loop_ramp.v
     ${RTL_DIR}/drv_manager.v
     ${RTL_DIR}/adc_sequencer.v
+    ${RTL_DIR}/sincos.v
+    ${RTL_DIR}/clarke.v
+    ${RTL_DIR}/park.v
+    ${RTL_DIR}/inv_park.v
+    ${RTL_DIR}/svpwm.v
+    ${RTL_DIR}/current_pi.v
+    ${RTL_DIR}/circle_limit.v
+    ${RTL_DIR}/foc_core.v
+    ${RTL_DIR}/speed_iq_pi.v
   TOP_MODULE controller_top
   PREFIX Vcontroller_top
   TRACE
+  INCLUDE_DIRS ${RTL_DIR} ${RTL_DIR}/gen
+  VERILATOR_ARGS --x-assign fast --x-initial fast
+)
+
+# Combinational FOC math harness: a separate pybind module so the FOC
+# primitives (sincos/clarke/park/inv_park/svpwm) can be checked bit-for-bit
+# against the Python reference (foc-checklist stages 2-3).
+pybind11_add_module(focmath src/bindings_focmath.cpp)
+target_include_directories(focmath PRIVATE src)
+set_target_properties(focmath PROPERTIES POSITION_INDEPENDENT_CODE ON)
+verilate(focmath
+  SOURCES
+    ${RTL_DIR}/foc_math.v
+    ${RTL_DIR}/sincos.v
+    ${RTL_DIR}/clarke.v
+    ${RTL_DIR}/park.v
+    ${RTL_DIR}/inv_park.v
+    ${RTL_DIR}/svpwm.v
+  TOP_MODULE foc_math
+  PREFIX Vfoc_math
   INCLUDE_DIRS ${RTL_DIR} ${RTL_DIR}/gen
   VERILATOR_ARGS --x-assign fast --x-initial fast
 )

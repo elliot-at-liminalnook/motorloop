@@ -111,8 +111,23 @@ void ThreePhasePlant::set_gates(const std::array<bool, 3>& gate_high,
 
 void ThreePhasePlant::set_averaged(int sector, double duty) {
   averaged_mode_ = true;
+  avg_three_phase_ = false;
   sector_ = ((sector % 6) + 6) % 6;
   duty_ = std::max(0.0, std::min(1.0, duty));
+}
+
+void ThreePhasePlant::set_speed_clamp(bool enabled, double omega_rad_s) {
+  speed_clamp_ = enabled;
+  clamp_omega_ = omega_rad_s;
+  if (enabled) state_.omega_rad_s = omega_rad_s;
+}
+
+void ThreePhasePlant::set_averaged_phase(const std::array<double, 3>& duty) {
+  averaged_mode_ = true;
+  avg_three_phase_ = true;
+  for (int k = 0; k < 3; ++k) {
+    avg_duty_[k] = std::max(0.0, std::min(1.0, duty[k]));
+  }
 }
 
 ThreePhaseOutputs ThreePhasePlant::evaluate(const ThreePhaseState& s) const {
@@ -121,7 +136,11 @@ ThreePhaseOutputs ThreePhasePlant::evaluate(const ThreePhaseState& s) const {
 
   for (int k = 0; k < 3; ++k) {
     const double i = s.current_a[k];
-    if (averaged_mode_) {
+    if (averaged_mode_ && avg_three_phase_) {
+      // Continuous modulation: every leg actively driven by its half-bridge;
+      // the averaged terminal voltage is avg_duty_[k]*rail.
+      modes[k] = LegMode::kDrivenHigh;
+    } else if (averaged_mode_) {
       const auto [hi, lo] = six_step_phases(sector_);
       if (k == hi) {
         modes[k] = LegMode::kDrivenHigh;
@@ -199,7 +218,9 @@ ThreePhaseOutputs ThreePhasePlant::evaluate_with_modes(
     switch (modes[k]) {
       case LegMode::kDrivenHigh:
         out.terminal_v[k] =
-            averaged_mode_ ? duty_ * rail : rail - i * rds;
+            averaged_mode_
+                ? (avg_three_phase_ ? avg_duty_[k] * rail : duty_ * rail)
+                : rail - i * rds;
         break;
       case LegMode::kDrivenLow:
         out.terminal_v[k] = averaged_mode_ ? 0.0 : -i * rds;
@@ -285,6 +306,7 @@ ThreePhasePlant::Derivatives ThreePhasePlant::derivatives(
               motor_.load_torque_n_m - tau_fric - tau_cog) /
              motor_.inertia_kg_m2;
   d.dtheta = s.omega_rad_s;
+  if (speed_clamp_) d.domega = 0.0;  // dyno holds omega; theta still advances
 
   if (supply_.enabled && !averaged_mode_) {
     double v_set = supply_.v_set_v;

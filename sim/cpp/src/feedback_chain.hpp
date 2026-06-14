@@ -115,7 +115,24 @@ class FeedbackChain {
     }
   }
 
-  double channel(int idx) const { return channels_[idx]; }
+  // FOC phase-current sample-and-hold (foc-checklist stage 4, Q21). In the
+  // simultaneous scheme an external S/H (or dual ADC) freezes all three
+  // low-side-shunt currents at the PWM-counter peak, so the sequencer's two
+  // sequential reads both reflect the same instant; in the sequential scheme
+  // this is off and each read samples live (the ~22 us inter-conversion skew
+  // is real). The bench arms the latch at each counter peak.
+  void set_simultaneous_currents(bool on) { simultaneous_currents_ = on; }
+  void latch_currents() {
+    for (int k = 0; k < 3; ++k) held_current_[k] = channels_[k];
+    current_latched_ = true;
+  }
+
+  double channel(int idx) const {
+    if (simultaneous_currents_ && current_latched_ && idx >= 0 && idx < 3) {
+      return held_current_[idx];
+    }
+    return channels_[idx];
+  }
   const std::array<double, 8>& channels() const { return channels_; }
 
  private:
@@ -132,6 +149,9 @@ class FeedbackChain {
   std::array<bool, 2> dc_cal_{false, false};
   double gnd_shift_v_ = 0.0;
   double edge_spike_state_ = 0.0;
+  bool simultaneous_currents_ = false;
+  bool current_latched_ = false;
+  std::array<double, 3> held_current_{};
 };
 
 }  // namespace bldcsim

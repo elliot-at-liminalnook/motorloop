@@ -99,6 +99,16 @@ def bench_config(params, **overrides):
         "vref_ripple_v": 0.0,
         "pwm_frequency_hz": params.value("pwm.frequency"),
         "uart_baud": params.value("rtl.uart_baud"),
+        # FOC runtime config (C++/bench-side; the RTL gains are build-time
+        # constants in rtl_params.vh). Inert until ctrl_mode = 3 and the
+        # stage-4/7 plumbing consume current_sample_scheme / angle_latency.
+        "foc": {
+            "current_sample_scheme": int(
+                params.value("foc.current_sample_scheme")),
+            "angle_extrap_enable": int(
+                params.value("foc.angle_extrap_enable")),
+            "angle_latency_s": params.value("foc.angle_latency_s"),
+        },
     }
     for key, value in overrides.items():
         if isinstance(value, dict) and isinstance(cfg.get(key), dict):
@@ -145,6 +155,61 @@ def realism(params, *groups, **extra_overrides):
                 "sensor_imperfection.angle_noise_lsb"),
         }
     # Deep-merge caller overrides on top.
+    for key, value in extra_overrides.items():
+        if isinstance(value, dict) and isinstance(overrides.get(key), dict):
+            overrides[key].update(value)
+        else:
+            overrides[key] = value
+    return bench_config(params, **overrides)
+
+
+def foc(params, *groups, **extra_overrides):
+    """bench_config for FOC scenarios: confirms the sinusoidal-PMSM plant
+    (emf_trapezoid_blend = 0) and selects FOC runtime options. Accepts the
+    same realism group names as realism() so FOC can be exercised with
+    supply/mechanical/thermal/sensor effects, plus FOC-specific overrides
+    (sample_scheme=, angle_extrap=, angle_latency_s=)."""
+    overrides = {}
+    if "supply" in groups:
+        overrides["supply"] = {"enabled": True}
+    if "mechanical" in groups:
+        overrides["motor"] = {
+            "cogging_torque_nm": params.value("motor.cogging_torque"),
+            "cogging_order": int(params.value("motor.cogging_order")),
+            "coulomb_friction_nm": params.value("motor.coulomb_friction"),
+            "stiction_omega_eps": params.value("motor.stiction_omega_eps"),
+        }
+    if "thermal" in groups:
+        overrides["thermal"] = {"enabled": True}
+    if "sensor" in groups:
+        overrides["encoder"] = {
+            "eccentricity_e1_rad": params.value(
+                "sensor_imperfection.eccentricity_e1"),
+            "eccentricity_phi1_rad": params.value(
+                "sensor_imperfection.eccentricity_phi1"),
+            "eccentricity_e2_rad": params.value(
+                "sensor_imperfection.eccentricity_e2"),
+            "eccentricity_phi2_rad": params.value(
+                "sensor_imperfection.eccentricity_phi2"),
+            "angle_noise_lsb": params.value(
+                "sensor_imperfection.angle_noise_lsb"),
+        }
+    # Ensure the sinusoidal-PMSM plant for FOC regardless of caller.
+    motor = overrides.setdefault("motor", {})
+    motor["trapezoid_blend"] = 0.0
+    # FOC-specific convenience overrides map onto the foc sub-dict.
+    foc_over = {}
+    if "sample_scheme" in extra_overrides:
+        foc_over["current_sample_scheme"] = int(
+            extra_overrides.pop("sample_scheme"))
+    if "angle_extrap" in extra_overrides:
+        foc_over["angle_extrap_enable"] = int(
+            extra_overrides.pop("angle_extrap"))
+    if "angle_latency_s" in extra_overrides:
+        foc_over["angle_latency_s"] = float(
+            extra_overrides.pop("angle_latency_s"))
+    if foc_over:
+        overrides["foc"] = foc_over
     for key, value in extra_overrides.items():
         if isinstance(value, dict) and isinstance(overrides.get(key), dict):
             overrides[key].update(value)

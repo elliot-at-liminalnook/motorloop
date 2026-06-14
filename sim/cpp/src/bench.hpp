@@ -64,6 +64,16 @@ struct AdcSampleLog {
   int duty;          // active duty compare at the hold instant
 };
 
+// FOC runtime config (foc-checklist stage 4/7). The RTL gains are build-time
+// constants in rtl_params.vh; these are the bench-modeled choices: the
+// phase-current sampling architecture (Q21) and the angle-latency
+// compensation knobs (Q22).
+struct FocConfig {
+  int current_sample_scheme = 0;  // 0 dual/simultaneous, 1 sequential skew
+  int angle_extrap_enable = 1;
+  double angle_latency_s = 1.5e-3;
+};
+
 struct BenchConfig {
   double clk_hz = 25e6;
   double vbus_v = 12.0;
@@ -80,6 +90,7 @@ struct BenchConfig {
   double pwm_frequency_hz = 20e3;
   double uart_baud = 115200.0;
   double trace_interval_s = 10e-6;
+  FocConfig foc{};
 };
 
 class Bench {
@@ -93,6 +104,12 @@ class Bench {
   void set_target_speed(int rad_s);
   void set_open_loop(std::uint32_t freq_word, std::uint32_t ramp_inc);
   void set_align_offset(int offset12);
+  void set_foc_sample(bool on);    // force FOC current sampling (test/debug)
+  void set_id_target(int lsb);     // FOC d-axis current command (LSB)
+  void set_iq_target(int lsb);     // FOC q-axis (torque) current command (LSB)
+  void set_foc_speed_loop(bool on);  // 1: iq* from the speed PI; 0: direct
+  void set_foc_extrap(bool on);      // angle-latency extrapolation (Q22)
+  void set_speed_clamp(bool on, double omega_rad_s);  // dyno hold (plant)
 
   // -- run --
   void run_for(double seconds);
@@ -149,6 +166,15 @@ class Bench {
   int dbg_offset_a() const;
   int dbg_offset_b() const;
   int dbg_noctw_count() const;
+  // FOC current samples (signed LSB, offset removed) + ready strobe.
+  int foc_cur_a() const;
+  int foc_cur_b() const;
+  bool foc_valid() const;
+  // FOC datapath state (measured dq currents and commanded dq voltages).
+  int foc_id() const;
+  int foc_iq() const;
+  int foc_vd() const;
+  int foc_vq() const;
 
   long shoot_through_violations() const { return shoot_through_; }
   double min_dead_time_s() const { return min_dead_time_; }
@@ -214,6 +240,7 @@ class Bench {
   double bus_v_max_ = -1e9;
   bool last_pvdd_uv_ = false;
   long pvdd_uv_events_ = 0;
+  bool last_pwm_up_ = true;     // peak detection for the FOC current S/H
   long config_window_gate_activity_ = 0;
   double base_load_nm_ = 0.0;
   double load_osc_amp_ = 0.0;

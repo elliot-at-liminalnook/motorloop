@@ -101,6 +101,13 @@ class ThreePhasePlant {
   // Sector table (hi, lo): 0:AB 1:AC 2:BC 3:BA 4:CA 5:CB.
   void set_averaged(int sector, double duty);
 
+  // Averaged 3-phase continuous mode: each leg driven-high with its own duty
+  // fraction d[k] in [0, 1] (averaged terminal voltage = d[k]*vbus). The
+  // continuous-modulation analogue of set_averaged's six-step drive; used for
+  // the dq cross-check (foc-checklist stage 1) and the Python FOC reference
+  // (stage 8). Physics solver is identical - only the leg drive differs.
+  void set_averaged_phase(const std::array<double, 3>& duty);
+
   void advance(double dt_s);
 
   const ThreePhaseState& state() const { return state_; }
@@ -109,6 +116,13 @@ class ThreePhasePlant {
   long shoot_through_requests() const { return shoot_through_requests_; }
 
   void set_load_torque(double n_m) { motor_.load_torque_n_m = n_m; }
+
+  // Test/dyno affordance: clamp the rotor to a fixed speed (mechanical
+  // integration overridden, theta advances at omega). Lets a test read the
+  // electrical steady state (L/R ~ ms) at a known speed without waiting out
+  // the mechanical time constant (J/B ~ s). Physics of the electrical solve
+  // is unchanged.
+  void set_speed_clamp(bool enabled, double omega_rad_s = 0.0);
 
   // Live thermal-drift multipliers (realism stage 4); default 1.0.
   void set_r_scale(double s) { r_scale_ = s; }
@@ -154,10 +168,14 @@ class ThreePhasePlant {
   double rds_scale_ = 1.0;
 
   bool averaged_mode_ = false;
+  bool avg_three_phase_ = false;   // continuous per-leg averaged drive
+  bool speed_clamp_ = false;       // dyno: hold omega fixed
+  double clamp_omega_ = 0.0;
   std::array<bool, 3> gate_high_{false, false, false};
   std::array<bool, 3> gate_low_{false, false, false};
   int sector_ = 0;
   double duty_ = 0.0;
+  std::array<double, 3> avg_duty_{0.0, 0.0, 0.0};
   long shoot_through_requests_ = 0;
 };
 

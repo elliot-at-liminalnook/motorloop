@@ -244,6 +244,18 @@ bldcsim::BenchConfig bench_config_from_dict(const py::dict& d) {
   if (d.contains("uart_baud")) {
     c.uart_baud = d["uart_baud"].cast<double>();
   }
+  if (d.contains("foc")) {
+    py::dict f = d["foc"].cast<py::dict>();
+    if (f.contains("current_sample_scheme")) {
+      c.foc.current_sample_scheme = f["current_sample_scheme"].cast<int>();
+    }
+    if (f.contains("angle_extrap_enable")) {
+      c.foc.angle_extrap_enable = f["angle_extrap_enable"].cast<int>();
+    }
+    if (f.contains("angle_latency_s")) {
+      c.foc.angle_latency_s = f["angle_latency_s"].cast<double>();
+    }
+  }
   return c;
 }
 
@@ -316,8 +328,15 @@ PYBIND11_MODULE(bldcsim, m) {
            [](bldcsim::ThreePhasePlant& self, const std::array<bool, 3>& gh,
               const std::array<bool, 3>& gl) { self.set_gates(gh, gl); })
       .def("set_averaged", &bldcsim::ThreePhasePlant::set_averaged)
+      .def("set_averaged_phase",
+           [](bldcsim::ThreePhasePlant& self,
+              const std::array<double, 3>& d) {
+             self.set_averaged_phase(d);
+           })
       .def("advance", &bldcsim::ThreePhasePlant::advance)
       .def("set_load_torque", &bldcsim::ThreePhasePlant::set_load_torque)
+      .def("set_speed_clamp", &bldcsim::ThreePhasePlant::set_speed_clamp,
+           py::arg("enabled"), py::arg("omega_rad_s") = 0.0)
       .def_property_readonly("time_s", &bldcsim::ThreePhasePlant::time_s)
       .def_property_readonly("shoot_through_requests",
                              &bldcsim::ThreePhasePlant::shoot_through_requests)
@@ -484,6 +503,20 @@ PYBIND11_MODULE(bldcsim, m) {
       .def("set_target_speed", &bldcsim::Bench::set_target_speed)
       .def("set_open_loop", &bldcsim::Bench::set_open_loop)
       .def("set_align_offset", &bldcsim::Bench::set_align_offset)
+      .def("set_foc_sample", &bldcsim::Bench::set_foc_sample)
+      .def("set_id_target", &bldcsim::Bench::set_id_target)
+      .def("set_iq_target", &bldcsim::Bench::set_iq_target)
+      .def("set_foc_speed_loop", &bldcsim::Bench::set_foc_speed_loop)
+      .def("set_foc_extrap", &bldcsim::Bench::set_foc_extrap)
+      .def("set_speed_clamp", &bldcsim::Bench::set_speed_clamp,
+           py::arg("on"), py::arg("omega_rad_s") = 0.0)
+      .def_property_readonly("foc_cur_a", &bldcsim::Bench::foc_cur_a)
+      .def_property_readonly("foc_cur_b", &bldcsim::Bench::foc_cur_b)
+      .def_property_readonly("foc_valid", &bldcsim::Bench::foc_valid)
+      .def_property_readonly("foc_id", &bldcsim::Bench::foc_id)
+      .def_property_readonly("foc_iq", &bldcsim::Bench::foc_iq)
+      .def_property_readonly("foc_vd", &bldcsim::Bench::foc_vd)
+      .def_property_readonly("foc_vq", &bldcsim::Bench::foc_vq)
       .def("run_for", &bldcsim::Bench::run_for)
       .def("run_cycles", &bldcsim::Bench::run_cycles)
       .def("inject_drv_register_reset",

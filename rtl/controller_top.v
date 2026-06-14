@@ -41,6 +41,11 @@ module controller_top (
     input  wire [31:0] ctrl_ol_freq_word,    // open-loop final freq word
     input  wire [31:0] ctrl_ol_ramp_inc,     // freq word step per 256 clk
     input  wire [11:0] ctrl_align_offset,    // elec angle -> sector offset
+    input  wire        ctrl_foc_sample,      // force FOC current sampling (test)
+    input  wire signed [17:0] ctrl_id_target,  // FOC d-axis current command
+    input  wire signed [17:0] ctrl_iq_target,  // FOC q-axis (torque) command
+    input  wire        ctrl_foc_speed_loop,    // 1: iq* from speed PI, 0: direct
+    input  wire        ctrl_foc_extrap,        // 1: angle-latency extrapolation
     // Debug
     output wire [2:0]  dbg_sector,
     output wire [15:0] dbg_duty,
@@ -63,7 +68,16 @@ module controller_top (
     output wire        dbg_stall,
     output wire        dbg_adc_stuck,
     output wire        dbg_offset_fault,
-    output wire        dbg_reverse
+    output wire        dbg_reverse,
+    // FOC current sampling (foc-checklist stage 4)
+    output wire signed [17:0] dbg_foc_cur_a,
+    output wire signed [17:0] dbg_foc_cur_b,
+    output wire        dbg_foc_valid,
+    // FOC datapath (foc-checklist stage 5/6)
+    output wire signed [17:0] dbg_foc_id,
+    output wire signed [17:0] dbg_foc_iq,
+    output wire signed [17:0] dbg_foc_vd,
+    output wire signed [17:0] dbg_foc_vq
 );
 
   // ---- Fault pin synchronizers ---------------------------------------------
@@ -203,8 +217,10 @@ module controller_top (
       .low_phase(low_phase), .float_phase(float_phase)
   );
 
+  // Modes 2 (sensored six-step) and 3 (FOC) need a valid rotor angle.
+  wire need_angle = (eff_mode == 2'd2) || (eff_mode == 2'd3);
   wire run_gates = (eff_mode != 2'd0) && configured
-                   && (eff_mode != 2'd2 || angle_valid);
+                   && (!need_angle || angle_valid);
 
   wire [15:0] pi_duty;
   reg [15:0] duty;
@@ -282,11 +298,60 @@ module controller_top (
   wire [15:0] pwm_counter;
   wire        pwm_up, period_start;
   wire [2:0]  gate_high, gate_low;
+  // ---- FOC datapath (mode 3) -------------------------------------------------
+  // Electrical angle to 16-bit (elec12 is 0..4095 = 0..2pi), optionally
+  // advanced by omega_e*t_latency to undo the AS5600 frame+filter lag (Q22).
+  wire signed [17:0] speed_signed_for_extrap =
+      speed_reverse ? -$signed({2'b00, speed}) : $signed({2'b00, speed});
+  wire signed [31:0] extrap_counts =
+      (speed_signed_for_extrap * `EXTRAP_NUM) >>> `EXTRAP_SH;
+  wire [11:0] elec12_foc = ctrl_foc_extrap
+                         ? (elec12 + extrap_counts[11:0])
+                         : elec12;
+  wire [15:0] theta_e16 = {elec12_foc, 4'd0};
+  wire [47:0] foc_duty3;
+  wire foc_enable = (eff_mode == 2'd3) && run_gates;
+  // A UART host commanding FOC (mode 3) always drives the outer speed loop
+  // (it sends a speed target, not a raw current); the bench-direct path can
+  // also command iq* directly (stage-5 fixed-angle current control).
+  wire eff_foc_speed_loop = use_uart ? (eff_mode == 2'd3)
+                                     : ctrl_foc_speed_loop;
+  wire signed [17:0] speed_iq_cmd;
+  speed_iq_pi u_speed_iq (
+      .clk(clk), .rst_n(rst_n),
+      .enable(foc_enable && eff_foc_speed_loop),
+      .update(speed_update),
+      .target_speed(eff_target),
+      .speed(speed),
+      .reverse(speed_reverse),
+      .iq_target(speed_iq_cmd)
+  );
+  wire signed [17:0] foc_iq_target =
+      eff_foc_speed_loop ? speed_iq_cmd : ctrl_iq_target;
+
+  foc_core u_foc (
+      .clk(clk), .rst_n(rst_n),
+      .enable(foc_enable), .update(dbg_foc_valid),
+      .cur_a(dbg_foc_cur_a), .cur_b(dbg_foc_cur_b),
+      .theta_e(theta_e16),
+      .id_target(ctrl_id_target), .iq_target(foc_iq_target),
+      .duty3(foc_duty3),
+      .dbg_id(dbg_foc_id), .dbg_iq(dbg_foc_iq),
+      .dbg_vd(dbg_foc_vd), .dbg_vq(dbg_foc_vq)
+  );
+
+  // PWM input mux: FOC drives three independent duties with all legs in PWM
+  // mode; six-step replicates the single duty and floats/grounds two legs.
+  wire [47:0] pwm_duty3 = (eff_mode == 2'd3) ? foc_duty3 : {duty, duty, duty};
+  wire [5:0]  pwm_leg_mode =
+      !run_gates ? 6'b000000
+                 : (eff_mode == 2'd3) ? 6'b010101 : leg_mode;
+
   pwm_generator u_pwm (
       .clk(clk), .rst_n(rst_n),
       .kill(gate_kill || !run_gates || stall_latched),
-      .duty_compare(duty),
-      .leg_mode(run_gates ? leg_mode : 6'b000000),
+      .duty3(pwm_duty3),
+      .leg_mode(pwm_leg_mode),
       .gate_high(gate_high), .gate_low(gate_low),
       .counter_out(pwm_counter), .counting_up(pwm_up),
       .period_start(period_start)
@@ -297,10 +362,13 @@ module controller_top (
   assign dbg_pwm_up = pwm_up;
 
   // ---- Speed measurement + PI -------------------------------------------------
+  // Speed is measured from the sensored sector (the real rotor position) in
+  // every mode, so the FOC speed loop (mode 3) has a measurement even though
+  // it does not use the commutation sector.
   wire [15:0] speed;
   wire        speed_valid, speed_update, speed_reverse;
   speed_meter u_speed (
-      .clk(clk), .rst_n(rst_n), .sector(sector),
+      .clk(clk), .rst_n(rst_n), .sector(sensored_sector),
       .speed(speed), .reverse(speed_reverse),
       .speed_valid(speed_valid), .update(speed_update)
   );
@@ -328,6 +396,9 @@ module controller_top (
       .sclk(adc_sclk), .mosi(adc_mosi), .ncs(adc_ncs), .miso(adc_miso)
   );
 
+  // FOC current sampling is active in FOC mode (3) or when forced for tests.
+  wire foc_sample = (eff_mode == 2'd3) || ctrl_foc_sample;
+
   wire [11:0] offset_c_unused;
   adc_sequencer u_adc_seq (
       .clk(clk), .rst_n(rst_n),
@@ -343,7 +414,10 @@ module controller_top (
       .offset_fault(dbg_offset_fault), .adc_stuck(dbg_adc_stuck),
       .cur_valid(), .emf_valid(),
       .adc_start(adc_start), .adc_channel(adc_channel),
-      .adc_busy(adc_busy), .adc_done(adc_done), .adc_code(adc_code)
+      .adc_busy(adc_busy), .adc_done(adc_done), .adc_code(adc_code),
+      .foc_mode(foc_sample),
+      .foc_cur_a(dbg_foc_cur_a), .foc_cur_b(dbg_foc_cur_b),
+      .foc_valid(dbg_foc_valid)
   );
 
   // ---- UART register file instance ---------------------------------------------

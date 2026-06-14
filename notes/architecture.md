@@ -265,6 +265,38 @@ Obligations this creates:
 - Optional margin: bench-validate SCLK at 1.3–1.5 MHz (the 1 MHz figure is the
   2.7 V spec) for a free ~30–50 % throughput bump.
 
+### FOC control law (implemented 2026-06-14)
+
+The controller runs both sensored six-step (modes 1–2) and field-oriented
+control of a sinusoidal PMSM (mode 3), selectable per scenario. The FOC
+datapath (`rtl/foc_core.v`) is Clarke → Park → id/iq current PIs → voltage-
+circle limiter → inverse Park → SVPWM (min/max common-mode injection), with
+an outer speed PI (`speed_iq_pi.v`) commanding iq\*. Fixed-point throughout,
+with a bit-exact Python twin (`sim/scripts/foc_reference.py`) used as the
+executable spec. The plant is unchanged — FOC is a configuration
+(`emf_trapezoid_blend = 0`, sinusoidal) plus new RTL — so the three-way
+electromechanical parity keeps validating it. Build record and findings:
+`foc-checklist.md`.
+
+Two hardware questions the bench resolved before any board (full write-ups in
+`open-questions.md`):
+
+- **Q21 — current sampling.** Confirmed the ADC-decision prediction
+  quantitatively: with the single sequential MCP3208 the second phase-current
+  conversion lands ~22 µs late, after that leg's low-side shunt conduction
+  window has closed, giving a ~12× larger dq measurement error than
+  simultaneous sampling (~1.5 A vs ~0.13 A). **Decision: a second
+  MCP3208 / external S&H (simultaneous sampling) is required for FOC** — the
+  six-step ADC schedule does not generalize.
+- **Q22 — angle latency.** The AS5600 frame+filter lag (~1.5 ms) rotates the
+  dq frame off-true, and the torque loss grows with speed (≈10 %+ by
+  120 rad/s on placeholder params). Advancing the angle by ω·t_latency in the
+  RTL recovers it; the bench quantifies the trade-off per speed.
+
+FOC also needs its own sensor-to-flux alignment offset (`foc.align_offset`),
+distinct from the six-step sector-convention offset — both are bench-derived
+placeholders pending a hardware alignment routine (Q1/Q20).
+
 ## First slice
 
 Port the one-phase averaged plant to C++ with a pybind11 binding and a pytest

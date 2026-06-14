@@ -57,7 +57,7 @@ J = { value = 2.0e-4, unit = "kg.m2", status = "placeholder", blocked_by = "Q1",
 B = { value = 1.0e-4, unit = "N.m.s/rad", status = "placeholder", blocked_by = "Q1", note = "viscous damping (spin-down measurement)" }
 pole_pairs = { value = 4, unit = "1", status = "placeholder", blocked_by = "Q1", derived_from = "motor_spec", note = "= pole_count/2" }
 # 0 = sinusoidal, 1 = ideal trapezoid; fit to a scope trace during motor ID.
-emf_trapezoid_blend = { value = 0.0, unit = "1", status = "placeholder", blocked_by = "Q1" }
+emf_trapezoid_blend = { value = 0.0, unit = "1", status = "placeholder", blocked_by = "Q1", note = "back-EMF shape: 0 = pure sinusoidal (PMSM, the FOC assumption), 1 = clamp(2sin) 120-deg flat-top trapezoid (BLDC, six-step). FOC scenarios use 0; six-step scenarios may use either. The plant is phase-variable abc and handles both - see notes/foc-checklist.md stage 1." }
 # Mechanical realism terms (realism-checklist stage 2; default-off in parity
 # scenarios, enabled per bench scenario via bench_factory.realism()).
 cogging_torque = { value = 5.0e-3, unit = "N.m", status = "placeholder", blocked_by = "Q1", note = "peak detent torque; slot/pole dependent" }
@@ -264,6 +264,26 @@ fault_lockout_threshold = { value = 4, unit = "1", status = "decided", note = "E
 stall_timeout = { value = 0.3, unit = "s", status = "assumed", blocked_by = "Q1", note = "E21: mode-2 stall detector - duty near max with zero speed for this long = stall fault (safe-off; cleared in mode 0); retune with motor" }
 uart_byte_timeout = { value = 2.0e-3, unit = "s", status = "decided", note = "E16: inter-byte timeout resetting the UART command FSM so one torn frame cannot poison the link" }
 adc_stuck_threshold = { value = 32, unit = "1", status = "decided", note = "E14: consecutive all-zero or all-one conversions before flagging the ADC as stuck/absent (telemetry flag)" }
+
+# -----------------------------------------------------------------------------
+# Field-oriented control (FOC). Sinusoidal PMSM control law; see
+# notes/foc-checklist.md and notes/foc-fixed-point.md. The plant is unchanged
+# (phase-variable abc) - FOC is enabled by motor.emf_trapezoid_blend = 0
+# (sinusoidal) plus the FOC RTL, selected by ctrl_mode = 3.
+# -----------------------------------------------------------------------------
+[foc]
+id_target = { value = 0, unit = "LSB", status = "decided", note = "d-axis current command; 0 for a surface PMSM (no reluctance torque to exploit). Field weakening drives it negative above base speed." }
+align_offset = { value = 160, unit = "1", status = "decided", note = "elec12 counts aligning the sensor angle with the FOC dq frame (q-axis on the EMF). Determined by a bench torque-maximizing sweep at 100% efficiency (foc-checklist stage 5); DIFFERENT from rtl.sensored_align_offset (the six-step sector convention). Hardware needs an alignment routine - sensor mounting unknown (Q1/Q20)." }
+cur_pi_kp = { value = 2, unit = "1", status = "assumed", blocked_by = "Q1", note = "current-loop proportional gain (duty-units per current-LSB error); tuned against placeholder motor params, retune after motor ID" }
+cur_pi_ki_shift = { value = 4, unit = "1", status = "assumed", blocked_by = "Q1", note = "current-loop integral gain = kp >> shift per FOC update; tuned against placeholder motor params" }
+speed_kp = { value = 4, unit = "1", status = "assumed", blocked_by = "Q1", note = "FOC outer speed loop: iq* current command (LSB) per rad/s speed error; tuned against placeholder motor params" }
+speed_ki_shift = { value = 5, unit = "1", status = "assumed", blocked_by = "Q1", note = "FOC speed-loop integral gain = speed_kp >> shift per update" }
+iq_max = { value = 300, unit = "LSB", status = "assumed", blocked_by = "Q1", note = "FOC speed-loop torque-current clamp (~12 A at the placeholder shunt/gain); the current loop's circle limiter bounds the voltage regardless" }
+v_circle_limit = { value = 0.95, unit = "1", status = "decided", note = "fraction of the inscribed-circle modulation radius the voltage-circle limiter allows (leaves headroom for dead time and min-pulse)" }
+sincos_table_bits = { value = 8, unit = "1", status = "decided", note = "quarter-wave sin/cos LUT address bits (2^8 = 256 entries/quadrant); 16-bit electrical angle, Q15 signed output" }
+angle_extrap_enable = { value = 1, unit = "1", status = "assumed", blocked_by = "Q22", note = "enable angle-latency compensation (theta += omega_e * angle_latency); the sensor frame+filter lag rotates the dq frame off-true and the error grows with speed (Q18)" }
+angle_latency_s = { value = 1.5e-3, unit = "s", status = "assumed", blocked_by = "Q22", note = "effective AS5600 angle latency to compensate; ~1.1 ms PWM frame + filter group delay (angle_sensor.*). Bench-measured per Q22." }
+current_sample_scheme = { value = 0, unit = "enum", status = "assumed", blocked_by = "Q21", note = "phase-current acquisition: 0 dual-ADC simultaneous, 1 sequential single-ADC with inter-sample skew, 2 single-shunt DC-bus reconstruction. The single MCP3208 cannot do 0 (Q17/architecture.md); the bench evaluates the ripple of each before a board decision." }
 
 # -----------------------------------------------------------------------------
 # Simulation engine constants

@@ -119,7 +119,8 @@ question here, also flip the matching statuses there.
   active-phase current samples arrive every 20 kHz period and the
   floating-phase EMF hold aperture lands inside the PWM off-window across
   duty 0.10–0.95. FOC-grade simultaneous sampling remains out of reach for
-  a single MCP3208 (already recorded in `architecture.md`).
+  a single MCP3208 (already recorded in `architecture.md`; now **quantified**
+  — see Q21: the sequential scheme injects a ~12× larger dq error).
 - [ ] **Q18 — Does AS5600-based commutation degrade gracefully or fail as
   speed rises?** Feeds Q3. *Preliminary evidence (2026-06-12, placeholder
   motor params): degrades gracefully — closed-loop six-step is stable and
@@ -127,7 +128,42 @@ question here, also flip the matching statuses there.
   sensor's filter+frame latency (~1.5–2 ms ≈ 40–50 elec deg of lag) erodes
   torque. Frame quantization also forced a full-revolution speed
   measurement in the RTL (see simulation-checklist findings). Full sweep
-  with identified motor params is post-milestone item P2.*
+  with identified motor params is post-milestone item P2.* **FOC update
+  (2026-06-14, Q22):** for FOC the same latency costs torque that grows with
+  speed; with ω·t_latency extrapolation the AS5600 is usable across the
+  modeled range. The placeholder motor's voltage-limited base speed
+  (~570 rad/s) is far above the sensor ceiling, so the sensor — not the
+  voltage limit — bounds FOC speed here.
 - [ ] **Q19 — Does the RTL's defensive logic survive the slva552 fault
   scenarios** (silent register reset, nOCTW storms, ADC noise, magnet-loss
   flags)?
+
+## FOC conversion (notes/foc-checklist.md)
+
+- [~] **Q21 — Synchronized phase-current sampling architecture for FOC.**
+  FOC needs two phase currents at the *same* instant (the PWM-center, all
+  low-sides conducting); the single sequential MCP3208 cannot (~22 µs per
+  conversion ≈ a third of a 20 kHz period — Q17, `architecture.md`).
+  Candidates: (a) two ADCs on separate SPI buses started simultaneously,
+  (b) sequential single-ADC carrying the real inter-sample skew,
+  (c) single-shunt DC-bus reconstruction (one sensor, minimum-vector blind
+  zones). **Bench-resolved 2026-06-14 (foc-checklist stage 4,
+  `test_foc_sampling.py`):** schemes (a) and (b) modeled; (a) recovers both
+  currents (dq measurement error ~0.13 A), (b) loses ~half of phase B and
+  injects a ~12× larger dq error (~1.5 A) because the second conversion lands
+  after that leg's conduction window closes. **Recommendation: simultaneous
+  sampling (dual ADC / external S&H) is required.** Scheme (c) characterized
+  but not implemented (different sensor topology). *Remaining:* the actual
+  board decision + layout.
+- [~] **Q22 — Is AS5600 angle latency tolerable for FOC, and does
+  extrapolation recover it?** For six-step the sensor frame+filter lag is a
+  minor commutation-timing shift; for FOC it rotates the dq frame off-true
+  and the error grows with speed (cos(lag) torque loss + cross-coupling).
+  **Bench-resolved 2026-06-14 (foc-checklist stage 7,
+  `test_foc_latency.py`):** with the raw sensor angle the developed torque
+  falls measurably as speed rises (≈10 %+ by 120 rad/s on placeholder
+  params); advancing the angle by ω·t_latency recovers it, and is neutral at
+  low speed. So the AS5600 is usable for FOC *with* extrapolation across the
+  modeled range. *Remaining:* confirm with a real motor's base speed and the
+  measured sensor latency (the linear extrapolation overshoots past
+  ~300 rad/s, irrelevant for this sensor's range). Extends Q18 / feeds Q3.

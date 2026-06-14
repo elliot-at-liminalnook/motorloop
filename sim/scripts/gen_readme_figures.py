@@ -50,8 +50,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "sim" / "tests"))
 sys.path.insert(0, str(PROJECT_ROOT / "sim" / "build" / "cpp"))
 
 import sim_params  # noqa: E402
-from bench_factory import (bench_config, expected_init_time, freq_word,  # noqa: E402
-                           realism)
+from bench_factory import (bench_config, expected_init_time, foc,  # noqa: E402
+                           freq_word, realism)
 
 CAVEAT = ("simulated output with placeholder motor parameters "
           "(provenance: sim/config/params.toml) - illustrative, "
@@ -869,6 +869,162 @@ def fig_deadtime(params, bldcsim, out):
 
 
 # ---------------------------------------------------------------------------
+# FOC figures (foc-checklist stage 8)
+# ---------------------------------------------------------------------------
+
+def _foc_align(params):
+    return int(params.value("foc.align_offset"))
+
+
+def _lsb_per_amp(params):
+    return (params.value("drv8301.amp_gain")
+            * params.value("feedback.current.shunt")
+            * 4096.0 / params.value("adc.vref"))
+
+
+def fig_foc_startup(params, bldcsim, out):
+    import foc_reference as fr
+    pp = int(params.value("motor.pole_pairs"))
+    lpa = _lsb_per_amp(params)
+    b = bldcsim.Bench(bench_config(params, trace_interval_s=2e-4,
+                                   motor={"trapezoid_blend": 0.0}))
+    b.run_for(expected_init_time(params))
+    t_init = b.time_s
+    b.set_align_offset(_foc_align(params))
+    b.set_id_target(0)
+    b.set_foc_speed_loop(True)
+    b.set_target_speed(80)
+    b.set_mode(3)
+    # Sample id/iq alongside the trace by stepping in small windows.
+    ts, omega, idq_d, idq_q = [], [], [], []
+    for _ in range(600):
+        b.run_for(2e-3)
+        ts.append(b.time_s)
+        omega.append(b.omega)
+        id_, iq = fr.park(*fr.clarke(b.foc_cur_a / lpa, b.foc_cur_b / lpa),
+                          pp * b.theta)
+        idq_d.append(id_)
+        idq_q.append(iq)
+    t = np.asarray(ts)
+
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(9.5, 5.6),
+                             constrained_layout=True)
+    fig.suptitle("Field-oriented control spinning the simulated PMSM: speed "
+                 "loop -> iq*, inner current loop holds id = 0", fontsize=12)
+    ax = axes[0]
+    ax.plot(t, omega, color="tab:blue", lw=1.4, label="plant speed")
+    ax.axhline(80, color="0.4", ls=":", lw=1, label="target (80 rad/s)")
+    ax.axvspan(0, t_init, color="0.5", alpha=0.15, linewidth=0)
+    ax.set_ylabel("speed [rad/s]")
+    ax.legend(loc="lower right", fontsize=8)
+    ax.grid(alpha=0.25)
+    ax = axes[1]
+    ax.plot(t, idq_q, color="tab:green", lw=1.0, label="iq (torque current)")
+    ax.plot(t, idq_d, color="tab:red", lw=1.0, label="id (flux current)")
+    ax.axhline(0, color="0.4", ls=":", lw=1)
+    ax.set_ylabel("dq current [A]")
+    ax.set_xlabel("time [s]")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.grid(alpha=0.25)
+    fig.text(0.99, 0.005,
+             "FOC: id held at 0 (all current makes torque). " + CAVEAT,
+             ha="right", va="bottom", fontsize=6.5, color="0.45",
+             style="italic")
+    fig.savefig(out, dpi=160, facecolor="white")
+    plt.close(fig)
+
+
+def fig_foc_sampling(params, bldcsim, out):
+    """Q21: dq measurement error of the two sampling schemes over a window."""
+    import foc_reference as fr
+    pp = int(params.value("motor.pole_pairs"))
+    clk = params.value("rtl.clock_frequency")
+    lpa = _lsb_per_amp(params)
+
+    def collect(scheme):
+        b = bldcsim.Bench(foc(params, sample_scheme=scheme))
+        b.run_for(expected_init_time(params))
+        b.set_open_loop(freq_word(20.0, clk), 1 << 20)
+        b.set_duty(int(0.45 * 625))
+        b.set_mode(1)
+        b.set_foc_sample(True)
+        b.run_for(0.25)
+        ts, err = [], []
+        for _ in range(400):
+            b.run_for(2e-4)
+            te = pp * b.theta
+            tid, tiq = fr.park(*fr.clarke(*b.currents[:2]), te)
+            mid, miq = fr.park(*fr.clarke(b.foc_cur_a / lpa,
+                                          b.foc_cur_b / lpa), te)
+            ts.append(b.time_s)
+            err.append(math.hypot(mid - tid, miq - tiq))
+        return np.asarray(ts), np.asarray(err)
+
+    t0, e0 = collect(0)
+    t1, e1 = collect(1)
+    fig, ax = plt.subplots(figsize=(9.5, 4.0), constrained_layout=True)
+    fig.suptitle("Why FOC needs simultaneous current sampling (Q21): dq "
+                 "measurement error per scheme", fontsize=12)
+    ax.plot((t1 - t1[0]) * 1e3, e1, color="tab:red", lw=0.9,
+            label=f"sequential single-ADC (mean {np.mean(e1):.2f} A)")
+    ax.plot((t0 - t0[0]) * 1e3, e0, color="tab:blue", lw=0.9,
+            label=f"simultaneous (dual ADC / S&H, mean {np.mean(e0):.2f} A)")
+    ax.set_ylabel("dq current error [A]")
+    ax.set_xlabel("time [ms]")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.grid(alpha=0.25)
+    ax.set_title("the sequential ADC samples phase B ~22 us late, after its "
+                 "low-side conduction window closes", fontsize=9, color="0.3")
+    caveat(fig)
+    fig.savefig(out, dpi=160, facecolor="white")
+    plt.close(fig)
+
+
+def fig_foc_latency(params, bldcsim, out):
+    """Q22: torque vs speed, AS5600 angle latency, extrapolation off vs on."""
+    ke = params.value("motor.Ke")
+    pp = int(params.value("motor.pole_pairs"))
+
+    def torque_at(omega, extrap):
+        b = bldcsim.Bench(foc(params, "sensor"))
+        b.run_for(expected_init_time(params))
+        b.set_speed_clamp(True, omega)
+        b.set_align_offset(_foc_align(params))
+        b.set_foc_extrap(extrap)
+        b.set_id_target(0)
+        b.set_iq_target(80)
+        b.set_mode(3)
+        b.run_for(0.1)
+        ts = []
+        for _ in range(150):
+            b.run_for(2e-4)
+            te = pp * b.theta
+            ia, ib, ic = b.currents
+            ts.append(ke * (math.sin(te) * ia
+                            + math.sin(te - 2 * math.pi / 3) * ib
+                            + math.sin(te - 4 * math.pi / 3) * ic))
+        return float(np.mean(ts))
+
+    speeds = [20, 40, 60, 80, 100, 120]
+    t_off = [torque_at(w, False) for w in speeds]
+    t_on = [torque_at(w, True) for w in speeds]
+    fig, ax = plt.subplots(figsize=(9.5, 4.0), constrained_layout=True)
+    fig.suptitle("AS5600 angle latency costs FOC torque as speed rises - and "
+                 "extrapolation recovers it (Q22)", fontsize=12)
+    ax.plot(speeds, t_off, "o-", color="tab:red", lw=1.4,
+            label="raw sensor angle")
+    ax.plot(speeds, t_on, "s-", color="tab:blue", lw=1.4,
+            label="omega-latency extrapolation")
+    ax.set_xlabel("clamped speed [rad/s]")
+    ax.set_ylabel("developed torque [N·m]\n(fixed iq* = 80 LSB)")
+    ax.legend(loc="lower left", fontsize=8)
+    ax.grid(alpha=0.25)
+    caveat(fig)
+    fig.savefig(out, dpi=160, facecolor="white")
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
 # three-way plant parity
 # ---------------------------------------------------------------------------
 
@@ -990,7 +1146,8 @@ def main() -> int:
 
     all_names = ["startup", "commutation", "gif", "brownout", "regen",
                  "adc_chain", "thermal", "cogging", "eccentricity",
-                 "pwm_ripple", "stall_raster", "deadtime", "parity"]
+                 "pwm_ripple", "stall_raster", "deadtime", "parity",
+                 "foc_startup", "foc_sampling", "foc_latency"]
     only = set(args.only.split(",")) if args.only else set(all_names)
     unknown = only - set(all_names)
     if unknown:
@@ -1034,7 +1191,10 @@ def main() -> int:
               ("pwm_ripple", fig_pwm_ripple, "PWM ripple"),
               ("stall_raster", fig_stall_raster, "stall raster"),
               ("deadtime", fig_deadtime, "dead-time microscopy"),
-              ("parity", fig_parity, "three-way parity")]
+              ("parity", fig_parity, "three-way parity"),
+              ("foc_startup", fig_foc_startup, "FOC startup"),
+              ("foc_sampling", fig_foc_sampling, "FOC sampling (Q21)"),
+              ("foc_latency", fig_foc_latency, "FOC angle latency (Q22)")]
     for name, fn, desc in simple:
         if name in only:
             print(f"running {desc} scenario...")

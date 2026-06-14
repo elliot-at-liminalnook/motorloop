@@ -85,11 +85,11 @@ stimulus-replay testbenches:
   and stiction, ground-shift and gate-edge coupling into the feedback
   dividers, thermal RC lumps that feed resistance and Ke drift back into the
   plant, sensor eccentricity.
-- **Driven from Python.** pybind11 bindings; tests are pytest. 155 tests
-  cover protocol golden vectors, plant parity, closed-loop scenarios, fault
-  injection, and 29 edge cases (stall, flooded UART, dead driver, corrupted
-  calibration, inertia extremes...). A shoot-through checker runs in every
-  scenario.
+- **Driven from Python.** pybind11 bindings; tests are pytest. 372 tests
+  cover protocol golden vectors, plant parity, closed-loop scenarios (six-step
+  and FOC), bit-exact FOC-math parity, fault injection, and 29 edge cases
+  (stall, flooded UART, dead driver, corrupted calibration, inertia
+  extremes...). A shoot-through checker runs in every scenario.
 
 ## What a run looks like
 
@@ -133,10 +133,18 @@ voltage against what the RTL actually decodes after divider scaling, RC
 lag, sample aperture, charge-sharing residual, and quantization. Control
 loops live on the staircase, not the smooth line.*
 
+![FOC startup](figures/foc_startup.png)
+
+*The same controller, field-oriented-control mode: the outer speed loop
+commands the q-axis (torque) current while the inner current loop holds the
+d-axis (flux) current at zero, so every amp makes torque. Bringing FOC up
+against the plant is what surfaced the Q21 (current-sampling) and Q22
+(angle-latency) findings — see the gallery.*
+
 **More in the [figure gallery](figures/gallery.md):** locked-rotor
 thermal drift, cogging-detent startup, the sensor-eccentricity signature,
 per-cycle PWM ripple, the stall-detection raster, dead-time microscopy,
-and the three-way plant-parity residuals.
+the three-way plant-parity residuals, and the FOC sampling/latency studies.
 
 ## Every parameter states what it's worth
 
@@ -175,9 +183,18 @@ from its spec.
   (`compare_traces.py`, `fit_motor_params.py`, portable stimulus timelines)
   so that the day hardware traces exist, the comparison is a command, not a
   project.
-- **Not FOC.** The controller is sensored six-step with a speed PI loop.
-  The bench doesn't care — any Verilog that talks SPI/PWM to these
-  peripherals can be dropped in — but the reference RTL is trapezoidal.
+- **Two control laws, one bench.** The reference RTL runs both sensored
+  six-step (trapezoidal) *and* field-oriented control (sinusoidal PMSM:
+  Clarke/Park, dq current PIs, SVPWM) — selectable per scenario, both
+  verified closed-loop. Bringing FOC up against the plant surfaced real
+  findings before any hardware: a single sequential MCP3208 can't sample two
+  phase currents in time for the dq transform (the second lands ~22 µs late,
+  after its shunt's conduction window closes — Q21), and the AS5600's angle
+  latency costs torque that grows with speed unless the angle is
+  extrapolated (Q22). See [`notes/foc-checklist.md`](notes/foc-checklist.md)
+  and the FOC figures in the [gallery](figures/gallery.md). The bench itself
+  is control-law-agnostic: any Verilog that talks SPI/PWM to these
+  peripherals drops in.
 - **Not analog simulation.** Feedback circuits are behavioral (validated
   against SPICE, but ODE/algebraic, not transistor-level). Sub-ns gate
   timing and EMI are out of scope.

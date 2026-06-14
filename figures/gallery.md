@@ -70,6 +70,33 @@ are low for the configured dead time before the opposite device turns on.
 The always-on shoot-through checker measures this gap on every edge of
 every scenario in the test suite.
 
+## Field-oriented control (FOC)
+
+The controller also runs as a sinusoidal-PMSM FOC drive (mode 3) — see
+[`notes/foc-checklist.md`](../notes/foc-checklist.md). These are
+bench-generated like everything else.
+
+![FOC startup](foc_startup.png)
+
+The outer speed loop commands the q-axis (torque) current; the inner current
+loop holds the d-axis (flux) current at zero, so every amp makes torque. The
+loop spins the simulated PMSM to the commanded speed.
+
+![FOC current sampling, Q21](foc_sampling.png)
+
+Why FOC needs simultaneous current sampling: a single sequential MCP3208
+samples phase B ~22 µs after phase A, by which point B's low-side shunt
+conduction window has closed — the dq measurement error spikes to several
+amps. A dual ADC / external sample-and-hold (freezing both at the PWM peak)
+keeps it near zero. This is the bench measurement that resolves Q21.
+
+![FOC angle latency, Q22](foc_latency.png)
+
+The AS5600's frame + filter latency lags the true rotor angle, rotating the
+dq frame off-true; the developed torque falls as speed rises. Advancing the
+angle by ω·t_latency in the RTL recovers it. The curves coincide at low
+speed (negligible lag) and diverge as speed climbs.
+
 ## Three-way plant parity
 
 ![parity](parity.png)

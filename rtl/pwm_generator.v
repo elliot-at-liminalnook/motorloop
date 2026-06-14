@@ -1,16 +1,20 @@
 // Center-aligned three-phase PWM with per-leg complementary drive, dead-time
 // insertion, and minimum-pulse enforcement.
 //
+// Each leg has its OWN duty compare (duty3[16*g +: 16]); six-step drives all
+// three with the same value (leg_mode then floats/grounds two of them), while
+// FOC/SVPWM drives all three as PWM legs with independent duties.
+//
 // Leg modes:
 //   00 OFF      - both gates off (floating leg)
-//   01 PWM      - complementary chop: high FET on while counter < duty,
+//   01 PWM      - complementary chop: high FET on while counter < duty[g],
 //                 low FET on otherwise, dead time inserted on both edges
 //   10 LOW_ON   - low FET solid on
 //   11 HIGH_ON  - high FET solid on (unused by six-step, kept for symmetry)
 //
 // The up/down counter peaks at PWM_HALF_PERIOD; the high-side on-window is
 // centered on counter == 0, so the off-window is centered on the peak
-// (where the ADC samples the floating-phase EMF).
+// (where the ADC samples the floating-phase EMF / FOC samples phase current).
 
 `include "rtl_params.vh"
 
@@ -18,7 +22,7 @@ module pwm_generator (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        kill,            // force all gates off immediately
-    input  wire [15:0] duty_compare,    // high-side on while counter < this
+    input  wire [47:0] duty3,           // {leg C, leg B, leg A} 16 bits each
     input  wire [5:0]  leg_mode,        // {leg C, leg B, leg A}, 2 bits each
     output reg  [2:0]  gate_high,
     output reg  [2:0]  gate_low,
@@ -36,14 +40,6 @@ module pwm_generator (
 
   assign counter_out = counter;
   assign counting_up = up;
-
-  // Min-pulse enforcement: snap tiny on/off slivers to full off/on.
-  reg [15:0] duty_eff;
-  always @(*) begin
-    if (duty_compare < MINP) duty_eff = 16'd0;
-    else if (duty_compare > HALF - MINP) duty_eff = HALF;
-    else duty_eff = duty_compare;
-  end
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -65,13 +61,22 @@ module pwm_generator (
     end
   end
 
-  wire pwm_on = counter < duty_eff;
-
-  // Per-leg complementary drive with dead time.
+  // Per-leg complementary drive with dead time and min-pulse enforcement.
   genvar g;
   generate
     for (g = 0; g < 3; g = g + 1) begin : leg
-      wire [1:0] mode = leg_mode[2*g+1:2*g];
+      wire [1:0]  mode = leg_mode[2*g+1:2*g];
+      wire [15:0] duty = duty3[16*g +: 16];
+
+      // Min-pulse enforcement: snap tiny on/off slivers to full off/on.
+      reg [15:0] duty_eff;
+      always @(*) begin
+        if (duty < MINP) duty_eff = 16'd0;
+        else if (duty > HALF - MINP) duty_eff = HALF;
+        else duty_eff = duty;
+      end
+      wire pwm_on = counter < duty_eff;
+
       reg desired_h, desired_l;
       always @(*) begin
         case (mode)

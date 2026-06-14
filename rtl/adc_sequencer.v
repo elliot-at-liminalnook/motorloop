@@ -40,7 +40,17 @@ module adc_sequencer (
     output reg  [2:0]  adc_channel,
     input  wire        adc_busy,
     input  wire        adc_done,
-    input  wire [11:0] adc_code
+    input  wire [11:0] adc_code,
+    // FOC current sampling (foc-checklist stage 4). When foc_mode is high the
+    // sequencer samples phase A (ch0) then phase B (ch1) near the PWM-counter
+    // peak (all low-side shunts conducting) once per period and emits the
+    // offset-removed signed currents with a strobe. The simultaneity of the
+    // two samples is a bench/board property (Q21): scheme 0 freezes both at
+    // the peak (external S/H or dual ADC), scheme 1 reads them sequentially.
+    input  wire              foc_mode,
+    output reg signed [17:0] foc_cur_a,
+    output reg signed [17:0] foc_cur_b,
+    output reg               foc_valid
 );
 
   // Slot timing: the EMF conversion launches on the UP slope so its hold
@@ -64,6 +74,11 @@ module adc_sequencer (
   reg       cal_pending;
   reg [7:0] stuck_count;  // E14
 
+  // FOC current-sampling FSM.
+  localparam [1:0] FOC_IDLE = 2'd0, FOC_A = 2'd1, FOC_B = 2'd2;
+  reg [1:0]  foc_state;
+  reg [11:0] foc_a_raw;
+
   assign adc_stuck = stuck_count >= `ADC_STUCK_N;
 
   wire offset_plausible = adc_code >= OFFSET_LO && adc_code <= OFFSET_HI;
@@ -82,7 +97,10 @@ module adc_sequencer (
       pending <= PEND_NONE; period_count <= 3'd0;
       cal_channel <= 2'd0; cal_pending <= 1'b0;
       stuck_count <= 8'd0;
+      foc_state <= FOC_IDLE; foc_a_raw <= 12'd0;
+      foc_cur_a <= 18'sd0; foc_cur_b <= 18'sd0; foc_valid <= 1'b0;
     end else begin
+      foc_valid <= 1'b0;
       // E14: count consecutive rail-pinned conversions on any channel.
       if (adc_done) begin
         if (adc_code == 12'd0 || adc_code == 12'd4095) begin
@@ -118,6 +136,37 @@ module adc_sequencer (
           cal_channel <= (cal_channel == 2'd2) ? 2'd0 : cal_channel + 2'd1;
           cal_pending <= 1'b0;
         end
+      end else if (foc_mode) begin
+        cal_pending <= 1'b0;
+        // FOC: sample ch0 (ia) then ch1 (ib) starting near the counter peak,
+        // where every low-side shunt conducts. The first conversion launches
+        // on the up-slope so its hold aperture lands at the off-window center;
+        // ch1 follows as soon as ch0 completes.
+        case (foc_state)
+          FOC_IDLE:
+            if (pwm_up && pwm_counter == EMF_LAUNCH && !adc_busy) begin
+              adc_channel <= 3'd0;
+              adc_start <= 1'b1;
+              foc_state <= FOC_A;
+            end
+          FOC_A:
+            if (adc_done) begin
+              foc_a_raw <= adc_code;
+              adc_channel <= 3'd1;
+              adc_start <= 1'b1;
+              foc_state <= FOC_B;
+            end
+          FOC_B:
+            if (adc_done) begin
+              foc_cur_a <= $signed({6'd0, foc_a_raw}) -
+                           $signed({6'd0, offset_a});
+              foc_cur_b <= $signed({6'd0, adc_code}) -
+                           $signed({6'd0, offset_b});
+              foc_valid <= 1'b1;
+              foc_state <= FOC_IDLE;
+            end
+          default: foc_state <= FOC_IDLE;
+        endcase
       end else begin
         cal_pending <= 1'b0;
 

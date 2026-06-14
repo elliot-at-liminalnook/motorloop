@@ -15,7 +15,7 @@ sim/scripts/check_cosim_toolchain.sh
 # 1. build the bench module (generates rtl/gen/rtl_params.vh, cmake, ninja)
 sim/scripts/build_bench.sh
 
-# 2. run the full verification suite (150 tests, ~12 min; the parity,
+# 2. run the full verification suite (372 tests, ~21 min; the parity,
 #    peripheral, and derivation tiers alone finish in seconds)
 python3 -m pytest sim/tests
 ```
@@ -30,6 +30,14 @@ peripheral protocol golden tests, RTL lint, and the closed-loop scenarios
 S0–S5 (init sequencing, open-loop spin, sensored six-step speed control,
 ADC aperture schedule, transients, fault injection) with an always-on
 shoot-through checker.
+
+It also covers the field-oriented control tier (`test_foc_*.py`,
+`notes/foc-checklist.md`): bit-exact RTL↔reference parity for the
+Clarke/Park/SVPWM primitives, the dq plant cross-check, the current loop and
+full speed cascade, the Q21 current-sampling study (why FOC needs
+simultaneous sampling) and the Q22 angle-latency study (extrapolation
+recovers torque), a Python FOC reference loop, and a FOC run driven over
+UART. FOC (mode 3) and six-step (mode 2) share the same bench and plant.
 
 ## Manual Scenario Runs
 

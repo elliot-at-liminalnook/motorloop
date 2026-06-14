@@ -32,12 +32,20 @@ Bench::Bench(const BenchConfig& config)
   top_->ctrl_ol_freq_word = 0;
   top_->ctrl_ol_ramp_inc = 0;
   top_->ctrl_align_offset = 0;
+  top_->ctrl_foc_sample = 0;
+  top_->ctrl_id_target = 0;
+  top_->ctrl_iq_target = 0;
+  top_->ctrl_foc_speed_loop = 0;
+  top_->ctrl_foc_extrap = config_.foc.angle_extrap_enable ? 1 : 0;
   top_->nfault = 1;
   top_->noctw = 1;
   top_->drv_miso = 0;
   top_->adc_miso = 0;
   top_->angle_pwm = 0;
   top_->uart_rx_pin = 1;  // idle high
+  // FOC phase-current sampling scheme (Q21): simultaneous (scheme 0) freezes
+  // the low-side-shunt currents at the PWM peak via an external S/H.
+  chain_.set_simultaneous_currents(config_.foc.current_sample_scheme == 0);
   // A few reset cycles.
   for (int n = 0; n < 8; ++n) {
     top_->clk = 1; top_->eval();
@@ -72,6 +80,39 @@ void Bench::set_open_loop(std::uint32_t freq_word, std::uint32_t ramp_inc) {
 }
 void Bench::set_align_offset(int offset12) {
   top_->ctrl_align_offset = offset12 & 0xFFF;
+}
+void Bench::set_foc_sample(bool on) { top_->ctrl_foc_sample = on ? 1 : 0; }
+
+namespace {
+// Sign-extend an 18-bit two's-complement value held in a uint32.
+int sx18(std::uint32_t v) {
+  v &= 0x3FFFF;
+  return (v & 0x20000) ? static_cast<int>(v | 0xFFFC0000) : static_cast<int>(v);
+}
+}  // namespace
+
+int Bench::foc_cur_a() const { return sx18(top_->dbg_foc_cur_a); }
+int Bench::foc_cur_b() const { return sx18(top_->dbg_foc_cur_b); }
+bool Bench::foc_valid() const { return top_->dbg_foc_valid; }
+int Bench::foc_id() const { return sx18(top_->dbg_foc_id); }
+int Bench::foc_iq() const { return sx18(top_->dbg_foc_iq); }
+int Bench::foc_vd() const { return sx18(top_->dbg_foc_vd); }
+int Bench::foc_vq() const { return sx18(top_->dbg_foc_vq); }
+
+void Bench::set_id_target(int lsb) {
+  top_->ctrl_id_target = static_cast<std::uint32_t>(lsb) & 0x3FFFF;
+}
+void Bench::set_iq_target(int lsb) {
+  top_->ctrl_iq_target = static_cast<std::uint32_t>(lsb) & 0x3FFFF;
+}
+void Bench::set_speed_clamp(bool on, double omega_rad_s) {
+  plant_.set_speed_clamp(on, omega_rad_s);
+}
+void Bench::set_foc_speed_loop(bool on) {
+  top_->ctrl_foc_speed_loop = on ? 1 : 0;
+}
+void Bench::set_foc_extrap(bool on) {
+  top_->ctrl_foc_extrap = on ? 1 : 0;
 }
 
 int Bench::dbg_sector() const { return top_->dbg_sector; }
@@ -267,6 +308,20 @@ void Bench::tick() {
     last_gh_[k] = gh[k];
     last_gl_[k] = gl[k];
   }
+
+  // FOC current sample-and-hold (Q21): freeze the low-side-shunt currents at
+  // the PWM-counter peak (pwm_up 1->0), where every low side conducts. Only
+  // active while the RTL is FOC-sampling (mode 3 or forced) - it must not
+  // perturb six-step, which samples on the down-slope. Scheme 1 (sequential)
+  // leaves the hold off and each ADC read samples live.
+  const bool foc_active = top_->ctrl_foc_sample || (top_->ctrl_mode == 3);
+  const bool pwm_up_now = top_->dbg_pwm_up;
+  if (foc_active && last_pwm_up_ && !pwm_up_now &&
+      config_.foc.current_sample_scheme == 0) {
+    sync_plant();             // refresh the chain to the peak instant
+    chain_.latch_currents();
+  }
+  last_pwm_up_ = pwm_up_now;
 
   // MCP3208 (analog source reads the feedback chain). The reference is the
   // live 3.3 V rail: PWM-synchronized ripple makes conversions ratiometric.
