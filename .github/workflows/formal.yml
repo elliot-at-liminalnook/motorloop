@@ -1,0 +1,54 @@
+# Formal property verification (formal-checklist stage 11.2).
+# Notably, unlike proprietary DV, the open formal stack runs in CI: this
+# proves the plant-independent safety properties on every push and publishes
+# the proof report as an artifact.
+name: formal
+
+on:
+  push:
+    paths:
+      - 'rtl/**'
+      - 'formal/**'
+      - 'sim/config/params.toml'
+      - 'sim/scripts/gen_rtl_params.py'
+      - '.github/workflows/formal.yml'
+  workflow_dispatch:
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OSS CAD Suite (yosys + sby + solvers)
+        run: |
+          cd "$HOME"
+          URL=$(curl -s https://api.github.com/repos/YosysHQ/oss-cad-suite-build/releases/latest \
+            | python3 -c "import json,sys;[print(a['browser_download_url']) for a in json.load(sys.stdin)['assets'] if 'linux-x64' in a['name'] and a['name'].endswith('.tgz')]")
+          curl -sL -o oss.tgz "$URL"
+          tar xzf oss.tgz
+          echo "$HOME/oss-cad-suite/bin" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Toolchain check
+        run: bash formal/check_formal_toolchain.sh
+
+      - name: Run formal proofs and gate
+        run: |
+          python3 formal/run_formal.py --check
+          python3 formal/gen_proof_report.py
+
+      - name: Formal regression tier
+        run: python3 -m pytest sim/tests/test_formal.py -q
+
+      - name: Publish proof report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: proof_report
+          path: |
+            formal/proof_report.md
+            formal/work/results.json

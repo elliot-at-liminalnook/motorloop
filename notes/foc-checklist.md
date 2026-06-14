@@ -285,7 +285,12 @@ cross-check), `test_foc_math.py` (RTL↔reference bit-parity, 184 cases),
 `test_foc_sampling.py` (Q21), `test_foc_current_loop.py` (stage 5),
 `test_foc_speed.py` (stage 6), `test_foc_latency.py` (Q22),
 `test_foc_reference_loop.py` (8.1), `test_foc_scenarios.py` (8.3),
-`test_foc_uart.py` (9.1). All green; the pre-existing 361 tests stay green
+`test_foc_uart.py` (9.1). The shoot-through and dead-time guarantees the FOC
+scenarios *observe* are now also formally **proven** for all states
+(`notes/formal-checklist.md`, `formal/proof_report.md`) — and bringing FOC up
+through formal flushed out a non-synthesizable `isqrt` in `circle_limit.v`
+(data-dependent loop bounds), now fixed. All green; the pre-existing 361 tests
+stay green
 (parity + six-step + edge cases unperturbed).
 
 Recorded numbers and gotchas:

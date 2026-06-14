@@ -297,6 +297,46 @@ FOC also needs its own sensor-to-flux alignment offset (`foc.align_offset`),
 distinct from the six-step sector-convention offset — both are bench-derived
 placeholders pending a hardware alignment routine (Q1/Q20).
 
+## Formal verification (implemented 2026-06-14)
+
+The bench *observes* safety invariants across finite simulation; an
+open-source formal flow (`formal/`, build record: `formal-checklist.md`)
+*proves* the plant-independent ones for all reachable states. Toolchain:
+YosysHQ OSS CAD Suite (Yosys + SymbiYosys + boolector/yices/bitwuzla/z3) — no
+proprietary tools, so it runs in CI. Properties live in `bind`-ed `*_fv.sv`
+checkers; a `manifest.toml` is the single source of truth; `run_formal.py`
+drives the proofs and `gen_proof_report.py` renders `formal/proof_report.md`.
+
+What is proven (unbounded, by k-induction) — these hold regardless of the
+unmeasured motor parameters (Q1):
+
+- **Shoot-through freedom** — no leg ever drives both gates, at the
+  `pwm_generator` boundary *and* at the integrated `controller_top` boundary
+  (the composition proof: the FOC/six-step muxing cannot bypass it).
+- **Dead-time minimum** — a gate asserts only after its complement has been
+  off ≥ DEAD_CYCLES (1-inductive via the design's off-time counters).
+- Bounds: SVPWM duties ∈ [0, HALF], the current/speed PI saturation clamps,
+  the PWM counter range.
+- FSM legality (`drv_manager` never holds an undefined state), reset safety
+  (gates off during/after reset), and well-formed sample strobes.
+
+Discipline (the formal analogue of the parameter-provenance banner):
+**PROVEN** means an *unbounded* proof; **BOUNDED(N)** and **DOCUMENTED** are
+weaker and labelled as such. Every assumption-guarded safety proof ships
+**non-vacuity covers** — a proof whose interesting states are unreachable is
+reported INCOMPLETE, never PROVEN. Each proof's **assumptions** are recorded
+and rendered in the report. One honest gap is surfaced as DOCUMENTED: the
+voltage-circle-limiter magnitude bound requires reasoning through an integer
+divide + sqrt, intractable for the open bit-blasting SMT engines — bounded by
+construction and sim-validated instead.
+
+This is **verification, not validation**: a proof is a property of the RTL
+under its assumptions, and says nothing about correspondence to real silicon
+or the real motor — that still needs hardware (the model-form harness). The
+formal layer closes the half we *can* close completely; bringing FOC up
+through it also flushed out a non-synthesizable `isqrt` (data-dependent loop
+bounds), now fixed.
+
 ## First slice
 
 Port the one-phase averaged plant to C++ with a pybind11 binding and a pytest

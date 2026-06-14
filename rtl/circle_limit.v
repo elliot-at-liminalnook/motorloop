@@ -25,15 +25,17 @@ module circle_limit (
 
   assign sat = mag2 > (VLIM * VLIM);
 
-  // Integer sqrt (floor) of a 32-bit value; standard restoring algorithm.
+  // Integer sqrt (floor) of a 32-bit value; fixed 16-iteration bit-by-bit
+  // algorithm (synthesizable and formal-friendly - no data-dependent loop
+  // bounds). Equivalent to floor(sqrt(n)) for all 32-bit n.
   function [15:0] isqrt(input [31:0] n);
-    reg [31:0] x, b, rem;
+    reg [31:0] rem, x, b;
+    integer i;
     begin
       rem = n;
       x = 0;
-      b = 32'h40000000;
-      while (b > rem) b = b >> 2;
-      while (b != 0) begin
+      b = 32'h40000000;   // 2^30, the largest power of 4 in 32 bits
+      for (i = 0; i < 16; i = i + 1) begin
         if (rem >= x + b) begin
           rem = rem - (x + b);
           x = (x >> 1) + b;

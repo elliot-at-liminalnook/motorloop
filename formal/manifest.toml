@@ -1,0 +1,234 @@
+# Formal property manifest - the single source of truth for what we prove and
+# under what assumptions (formal-checklist.md). Each [[check]] is one sby task
+# (one checker bound into one module). run_formal.py drives proofs from this;
+# gen_proof_report.py renders proof_report.md from this + work/results.json.
+#
+# Fields:
+#   id            unique task name
+#   module        the DUT top for the proof
+#   checker       the bound *_fv.sv checker
+#   rtl           RTL source files the DUT needs
+#   includes      extra `include files (e.g. generated headers) - optional
+#   category      safety | bounded | reset | cover | liveness | equivalence
+#   method        prove (unbounded k-induction) | bmc (bounded) | cover
+#   engine        sby engine line
+#   depth         BMC/induction depth
+#   expected      PROVEN | BOUNDED | COVER  (run_formal --check enforces this)
+#   covers        true if the checker carries non-vacuity covers to run
+#   param_scope   config (motorloop constants) | envelope (param range)
+#   envelope      the legal parameter range, when param_scope = envelope
+#   assumptions   the assumptions the proof relies on (rendered in the report)
+#   properties    English claims proven (for the report)
+#   cover_props   English non-vacuity covers (for the report)
+#   justification one line of rationale
+
+[[check]]
+id            = "pwm_generator"
+module        = "pwm_generator"
+checker       = "formal/bind/pwm_generator_fv.sv"
+rtl           = ["rtl/pwm_generator.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 20
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = [
+  "synchronous reset is applied (sby init), then rst_n high",
+  "the PWM constants are the motorloop config (PWM_HALF_PERIOD=625, DEAD_CYCLES=25, MIN_PULSE_CYCLES from rtl_params.vh)",
+]
+properties    = [
+  "Shoot-through freedom: no leg ever drives both gates simultaneously",
+  "PWM counter stays within [0, PWM_HALF_PERIOD]",
+  "While kill holds, every gate is off",
+]
+cover_props   = [
+  "high-side actually enables",
+  "low-side actually enables",
+  "active high-side drive (high-side on while counting up) is reachable",
+  "kill occurs during operation",
+]
+justification = "Plant-independent safety; gate exclusivity is combinational (1-inductive), counter bound k-inductive with the peak-implies-down strengthening."
+
+[[check]]
+id            = "svpwm"
+module        = "svpwm"
+top           = "svpwm_fv"
+checker       = "formal/bind/svpwm_fv.sv"
+rtl           = ["rtl/svpwm.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 6
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = [
+  "|valpha|, |vbeta| <= V_RAW_MAX = 2500 (the design feeds svpwm from inv_park of the circle-limited voltage; discharged by stage-9 composition)",
+]
+properties    = ["SVPWM: every per-leg duty stays within [0, PWM_HALF_PERIOD]"]
+cover_props   = [
+  "an actively-modulating (non-centered) duty is reachable",
+  "a leg can reach 0% and 100% duty",
+]
+justification = "Combinational; min/max injection + sat_duty clamp every leg into [0, HALF] under the bounded-input assumption."
+
+[[check]]
+id            = "circle_limit"
+module        = "circle_limit"
+top           = "circle_limit_fv"
+checker       = "formal/bind/circle_limit_fv.sv"
+rtl           = ["rtl/circle_limit.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 6
+expected      = "DOCUMENTED"
+skip          = true
+covers        = false
+param_scope   = "config"
+assumptions   = [
+  "|vd_in|, |vq_in| <= V_RAW_MAX = 2500 (current_pi clamps its output; circle_limit's 32-bit mag2 would otherwise overflow)",
+]
+properties    = ["Voltage-circle limiter: |(vd_out, vq_out)| <= V_CIRCLE_LIMIT + slack (modulation stays within the inscribed circle)"]
+justification = "DOCUMENTED, not machine-proven: the property requires reasoning through an integer divide and square root, intractable for the open bit-blasting SMT engines (boolector timed out > 5 min). Bounded by construction (|d| <= isqrt(d^2+q^2) so |d*VLIM/mag| <= VLIM up to integer-floor slack) and validated by the FOC simulation tier. An arithmetic-aware prover or a bit-width-reduced reformulation is future work."
+
+[[check]]
+id            = "current_pi"
+module        = "current_pi"
+checker       = "formal/bind/current_pi_fv.sv"
+rtl           = ["rtl/current_pi.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 6
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["Current-PI output stays within its clamp [-V_RAW_MAX, V_RAW_MAX] for any error/integrator state"]
+cover_props   = ["the clamp is reachable (PI can demand max and min drive)"]
+justification = "The output sat() clamps praw regardless of the (possibly overflowed) integrator term; this bounds the input the circle limiter assumes."
+
+[[check]]
+id            = "speed_iq_pi"
+module        = "speed_iq_pi"
+checker       = "formal/bind/speed_iq_pi_fv.sv"
+rtl           = ["rtl/speed_iq_pi.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 6
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["FOC torque command iq_target stays within [-IQ_MAX, IQ_MAX] for any speed error/integrator state"]
+cover_props   = ["the clamp is reachable (loop can demand max/min torque current)"]
+justification = "The output clamp bounds iq_target by construction; bounds the inner current loop's command."
+
+[[check]]
+id            = "pwm_deadtime"
+module        = "pwm_generator"
+checker       = "formal/bind/pwm_deadtime_fv.sv"
+rtl           = ["rtl/pwm_generator.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["Dead-time minimum: a gate asserts only after its complement has been off >= DEAD_CYCLES (no cross-conduction window)"]
+cover_props   = ["a complementary gate handoff actually occurs"]
+justification = "1-inductive via the design's real off-time counters (a gate rises only when the relevant off-time counter was already >= DEAD)."
+
+[[check]]
+id            = "drv_manager"
+module        = "drv_manager"
+checker       = "formal/bind/drv_manager_fv.sv"
+rtl           = ["rtl/drv_manager.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = false
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["FSM legality: the state register only ever holds one of the 17 defined states (no undefined/illegal state)"]
+justification = "k-inductive; every case arm assigns a defined next state and reset starts at S_PWRUP. Reachability covers omitted (deep power-up timer makes BMC infeasible; sim tier exercises the full FSM)."
+
+[[check]]
+id            = "pwm_reset"
+module        = "pwm_generator"
+checker       = "formal/bind/pwm_reset_fv.sv"
+rtl           = ["rtl/pwm_generator.v"]
+category      = "reset"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["rst_n is the async active-low reset"]
+properties    = [
+  "During reset, every gate is off",
+  "Immediately after reset deasserts, every gate is still off (no power-on glitch)",
+]
+cover_props   = ["reset actually occurs", "reset actually releases"]
+justification = "Async reset holds the gate FFs at 0; the post-release cycle is safe because the FFs were reset."
+
+[[check]]
+id            = "controller_top_composition"
+module        = "controller_top"
+checker       = "formal/bind/controller_top_fv.sv"
+rtl           = ["rtl/controller_top.v", "rtl/pwm_generator.v", "rtl/commutation.v", "rtl/spi_drv_master.v", "rtl/adc_spi_master.v", "rtl/divider32.v", "rtl/as5600_pwm_capture.v", "rtl/speed_meter.v", "rtl/speed_pi.v", "rtl/open_loop_ramp.v", "rtl/drv_manager.v", "rtl/adc_sequencer.v", "rtl/sincos.v", "rtl/clarke.v", "rtl/park.v", "rtl/inv_park.v", "rtl/svpwm.v", "rtl/current_pi.v", "rtl/circle_limit.v", "rtl/foc_core.v", "rtl/speed_iq_pi.v", "rtl/uart_regfile.v", "rtl/uart_rx.v", "rtl/uart_tx.v"]
+includes      = ["rtl/gen/sincos_init.vh"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 12
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["Top-level composition: the integrated controller never commands shoot-through at inh/inl, across every mode and the FOC/six-step muxing"]
+cover_props   = ["the gates actually drive at the top level"]
+justification = "The pwm_generator shoot-through guarantee holds for any leg_mode/duty3, so the mode mux cannot break it; proven at the top boundary to confirm nothing downstream inverts/bypasses it."
+
+[[check]]
+id            = "lib_no_shoot_through"
+module        = "pwm_generator"
+checker       = "formal/bind/pwm_lib_nst.sv"
+rtl           = ["rtl/pwm_generator.v", "formal/lib/no_shoot_through.sv"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "generic"
+assumptions   = ["rst_n is the design reset"]
+properties    = ["Shoot-through freedom proven via the reusable formal/lib/no_shoot_through checker (parameter-generic over leg count N)"]
+cover_props   = ["each leg actually drives (bundled by the library checker)"]
+justification = "Demonstrates the reusable checker library: the same parameterized checker binds to any N-leg half-bridge; the property references no design constants, so it is parameter-generic."
+
+[[check]]
+id            = "adc_sequencer"
+module        = "adc_sequencer"
+checker       = "formal/bind/adc_sequencer_fv.sv"
+rtl           = ["rtl/adc_sequencer.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = ["Sample strobes (foc_valid, cur_valid, emf_valid) and adc_start are well-formed single-cycle pulses - one event per sample"]
+cover_props   = ["a FOC current-sample strobe actually occurs"]
+justification = "1-inductive: each strobe defaults to 0 every cycle and is set for at most one cycle."

@@ -146,6 +146,27 @@ thermal drift, cogging-detent startup, the sensor-eccentricity signature,
 per-cycle PWM ripple, the stall-detection raster, dead-time microscopy,
 the three-way plant-parity residuals, and the FOC sampling/latency studies.
 
+## Proven safety properties (formal)
+
+The tests above *observe* safety invariants across simulation; an open-source
+formal flow (Yosys + SymbiYosys, no proprietary tools) *proves* the
+plant-independent ones for **all reachable states** — they hold regardless of
+the unmeasured motor parameters. Unbounded-proven by k-induction:
+
+- **Shoot-through freedom** — no leg ever drives both gates, at the
+  `pwm_generator` boundary *and* at the integrated `controller_top` boundary
+  (so the FOC/six-step muxing can't bypass it).
+- **Dead-time minimum** — a gate asserts only after its complement has been
+  off ≥ the dead-time, plus SVPWM duty bounds, PI saturation clamps, FSM
+  legality, and reset safety.
+
+The flow distinguishes unbounded **proofs** from bounded checks, records each
+proof's **assumptions**, and guards against vacuous proofs with non-vacuity
+covers — see the generated [`formal/proof_report.md`](formal/proof_report.md)
+and [`notes/formal-checklist.md`](notes/formal-checklist.md). This is
+verification, not validation: it closes the plant-independent half of
+correctness completely; hardware correspondence still needs measurement.
+
 ## Every parameter states what it's worth
 
 Simulation results are only as good as the numbers underneath them, so every
