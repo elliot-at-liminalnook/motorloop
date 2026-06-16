@@ -82,6 +82,9 @@ jobs:
       - name: ASIC-readiness smoke (yosys: gates, no latches/loops/multidriver)
         run: python3 synth/asic_smoke.py --check
 
+      - name: Multi-vendor portability (yosys: maps to Xilinx/Intel/Gowin)
+        run: make portability
+
       - name: Package resolves (Bender) - same source map as FuseSoC
         run: |
           B=0.32.0
@@ -94,6 +97,9 @@ jobs:
 
       - name: Contract coverage gate (every block has a finished datasheet)
         run: make contracts
+
+      - name: Release version consistency (CITATION/cores/IP-XACT/CHANGELOG)
+        run: make version
 
       - name: Docs build (mkdocs + WaveDrom timing)
         run: |

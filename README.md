@@ -38,6 +38,26 @@ placeholder pending motor identification. The OpenLane pass is a *synthesizable
 **Reproduce it:** `docker build -f Containerfile -t motorloop . && docker run --rm motorloop`
 (or `make all` locally) — see [`notes/reproduce.md`](notes/reproduce.md).
 
+## Portability
+
+The RTL is deliberately Verilog-2005, so it isn't tied to Lattice. yosys maps
+`controller_top` to every major family with no vendor tools (`make portability`,
+in CI); authoritative numbers come from the open P&R (ECP5/Gowin) and the vendor
+flows where licensed. Full table + logs: [`synth/portability_report.md`](synth/portability_report.md).
+
+| Family | Maps | Open P&R Fmax | Vendor numbers |
+| --- | --- | --- | --- |
+| Lattice ECP5 (LFE5U-85F) | ✓ | **64 MHz** (`synth/run_synth.py`) | — |
+| Gowin GW5A (Tang Primer 25K) | ✓ | flow wired (`synth/run_gowin.py`; needs board `.cst`) | — |
+| Xilinx 7-series | ✓ | — | `synth/vivado/` (where licensed) |
+| Intel Cyclone | ✓ | — | `synth/quartus/` (where licensed) |
+
+## Citing
+
+If you use motorloop, please cite it — `CITATION.cff` (GitHub renders a "Cite
+this repository" widget) and the Zenodo DOI (badge above; minted per
+[`notes/release-checklist.md`](notes/release-checklist.md)).
+
 ## The problem
 
 Open-source FPGA motor controllers are almost universally verified

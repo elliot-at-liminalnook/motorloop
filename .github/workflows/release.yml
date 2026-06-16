@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: MIT
+# Release automation (release-and-portability-checklist §3.2): on a v* tag,
+# regenerate the headline reports + bitstream and attach them to the GitHub
+# release, so a tag produces a complete, citable release with no manual uploads.
+# (The tag itself is the maintainer's action; this runs after the push.)
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write          # create/upload to the release
+
+env:
+  OSS_CAD_SUITE: "2026-06-14"   # keep in sync with toolchain.lock
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: Install pinned OSS CAD Suite
+        run: |
+          cd "$HOME"; TAG="${OSS_CAD_SUITE}"; STAMP="${TAG//-/}"
+          curl -sL -o oss.tgz \
+            "https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${TAG}/oss-cad-suite-linux-x64-${STAMP}.tgz"
+          tar xzf oss.tgz
+          echo "$HOME/oss-cad-suite/bin" >> "$GITHUB_PATH"
+      - name: Python deps
+        run: pip install -r requirements.txt -r requirements-docs.txt
+
+      - name: Version consistency must match the tag
+        run: |
+          python3 scripts/check_version.py
+          test "v$(grep -m1 '^version:' CITATION.cff | awk '{print $2}')" = "${GITHUB_REF_NAME}"
+
+      - name: Regenerate the release reports + bitstream
+        run: |
+          make synth asic portability ipxact docs \
+            MKDOCS="$(command -v mkdocs)"
+          python3 formal/gen_proof_report.py || true
+          python3 notes/gen_status_matrix.py || true
+          ( cd site && zip -qr ../docs-site.zip . )
+
+      - name: Create the release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            synth/synth_report.md
+            synth/asic_smoke_report.md
+            synth/portability_report.md
+            formal/proof_report.md
+            notes/status-matrix-generated.md
+            synth/work/board_top.bit
+            docs-site.zip

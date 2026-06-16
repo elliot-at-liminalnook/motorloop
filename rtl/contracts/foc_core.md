@@ -70,6 +70,8 @@ duties hold. Surface-PMSM convention (`id_target = 0`).
   to **41 → 64 MHz** (alongside pipelining the speed PIs); see
   `notes/foc-fmax-optimization-checklist.md` and `synth/synth_report.md`. The
   simulator is cycle-accurate regardless.
+- **Portability:** the Verilog-2005 RTL maps to Xilinx 7-series / Intel Cyclone /
+  Gowin GW5A as well as ECP5 (`synth/portability_report.md`, `make portability`).
 
 ## Reuse notes
 

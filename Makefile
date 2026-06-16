@@ -14,8 +14,8 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
 # python3 and ONLY the synth/formal targets source $(OSS) (in-recipe).
 
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
-        contracts formal synth synth-check asic fmax ipxact bender docs clean \
-        soc-sim soc-build
+        contracts version portability formal synth synth-check asic fmax ipxact \
+        bender docs clean soc-sim soc-build
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -39,6 +39,10 @@ coverage:  ## every core proven-or-sim-only
 	python3 formal/check_coverage.py
 contracts:  ## every block has a finished datasheet
 	python3 scripts/check_contracts.py
+version:  ## release version is consistent (CITATION/cores/IP-XACT/CHANGELOG)
+	python3 scripts/check_version.py
+portability:  ## RTL maps to Xilinx/Intel/Gowin (yosys, resource estimates)
+	source $(OSS) && python3 synth/portability.py --check
 
 ## --- build + simulate (system python; do NOT source OSS - numpy shadow) ---
 deps:  ## verify the toolchain is present
@@ -72,7 +76,7 @@ soc-build:  ## build the reference SoC gateware (ULX3S bitstream)
 	source $(OSS) && $(LITEX_PY) soc/motorloop_soc.py --build
 
 ## --- aggregate ---
-verify: cores lint reuse coverage contracts test cocotb formal synth-check asic ipxact docs  ## the CI gate set
+verify: cores lint reuse coverage contracts version test cocotb formal synth-check asic portability ipxact docs  ## the CI gate set
 all: verify synth  ## verify + a full place&route Fmax run
 
 clean:  ## remove generated/build artifacts
