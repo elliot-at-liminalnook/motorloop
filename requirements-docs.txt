@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: MIT
+# Docs-site deps (mkdocs). The WaveDrom timing renders client-side via a
+# superfence + CDN JS (no python wavedrom package needed).
+mkdocs==1.6.1
+mkdocs-material==9.7.6
+pymdown-extensions==10.21.3

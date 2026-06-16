@@ -33,5 +33,33 @@ nav:
   - Verification plan: verification-plan.md
   - Timing diagrams: timing.md
   - Contracts:
-      - pwm_generator: contracts/pwm_generator.md
+      - adc_sequencer: contracts/adc_sequencer.md
+      - adc_spi_master: contracts/adc_spi_master.md
+      - ads9224r_master: contracts/ads9224r_master.md
+      - as5047p_spi_master: contracts/as5047p_spi_master.md
+      - as5600_pwm_capture: contracts/as5600_pwm_capture.md
+      - axil_regfile: contracts/axil_regfile.md
+      - axis_sampler: contracts/axis_sampler.md
+      - circle_limit: contracts/circle_limit.md
+      - circle_limit_seq: contracts/circle_limit_seq.md
+      - clarke: contracts/clarke.md
+      - commutation: contracts/commutation.md
+      - current_pi: contracts/current_pi.md
+      - divider32: contracts/divider32.md
+      - drv_manager: contracts/drv_manager.md
       - foc_core: contracts/foc_core.md
+      - inv_park: contracts/inv_park.md
+      - open_loop_ramp: contracts/open_loop_ramp.md
+      - park: contracts/park.md
+      - pwm_generator: contracts/pwm_generator.md
+      - sincos: contracts/sincos.md
+      - speed_iq_pi: contracts/speed_iq_pi.md
+      - speed_meter: contracts/speed_meter.md
+      - speed_pi: contracts/speed_pi.md
+      - spi_drv_master: contracts/spi_drv_master.md
+      - svpwm: contracts/svpwm.md
+      - svpwm_seq: contracts/svpwm_seq.md
+      - uart_regfile: contracts/uart_regfile.md
+      - uart_rx: contracts/uart_rx.md
+      - uart_tx: contracts/uart_tx.md
+      - wb_regfile: contracts/wb_regfile.md

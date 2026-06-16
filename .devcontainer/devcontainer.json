@@ -1,0 +1,17 @@
+{
+  "//1": "Dev container for the motorloop HDL library (tier2-adoption §3A): the",
+  "//2": "pinned toolchain from the repo Containerfile. Open in VS Code / Codespaces;",
+  "//3": "then `make verify` reproduces the full gate set.",
+  "name": "motorloop",
+  "build": { "dockerfile": "../Containerfile", "context": ".." },
+  "containerEnv": {
+    "OSS": "/opt/oss-cad-suite/environment",
+    "COCOTB_PY": "python3",
+    "MKDOCS": "mkdocs"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["mshr-h.veriloghdl", "ms-python.python"]
+    }
+  }
+}

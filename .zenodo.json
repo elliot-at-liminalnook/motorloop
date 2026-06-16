@@ -1,0 +1,21 @@
+{
+  "title": "motorloop: verified, reusable BLDC field-oriented-control HDL IP",
+  "upload_type": "software",
+  "description": "Reusable, formally-verified motor-control HDL IP: a pipelined field-oriented-control datapath and the surrounding BLDC controller, packaged with per-block contracts, SymbiYosys proofs, a cycle-accurate co-simulation, AXI-Lite/AXI-Stream/Wishbone wrappers, FuseSoC/Bender/IP-XACT, an open ECP5 synthesis flow, and a RISC-V (LiteX) reference SoC.",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    { "name": "Elliot", "affiliation": "liminalnook" }
+  ],
+  "keywords": [
+    "FPGA", "HDL", "Verilog", "BLDC motor control", "field-oriented control",
+    "formal verification", "RISC-V", "LiteX"
+  ],
+  "related_identifiers": [
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://github.com/elliot-at-liminalnook/motorloop",
+      "scheme": "url"
+    }
+  ]
+}

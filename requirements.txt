@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: MIT
+# Core build / test / lint Python deps (system python3). Pinned to the validated
+# set; bump deliberately and record in CHANGELOG.md. See toolchain.lock for the
+# HDL toolchain (OSS CAD Suite / Verilator / Verible / Bender), which is NOT pip.
+pybind11==3.0.1
+pytest==9.0.2
+numpy==2.3.5
+reuse==6.2.0

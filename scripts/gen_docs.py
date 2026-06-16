@@ -134,8 +134,21 @@ def main():
     contracts = sorted(CONTRACTS.glob("*.md"))
     for c in contracts:
         shutil.copy(c, DOCS / "contracts" / c.name)
+    update_nav(contracts)
     print(f"assembled site-src/: index, timing, 2 references, "
-          f"{len(contracts)} contracts")
+          f"{len(contracts)} contracts; nav regenerated")
+
+
+def update_nav(contracts):
+    """Regenerate the Contracts nav in mkdocs.yml from the contract files, so a
+    new block's datasheet appears in the site without hand-editing the nav.
+    Contracts is the last nav section, so we replace from its header to EOF."""
+    mk = ROOT / "mkdocs.yml"
+    text = mk.read_text()
+    head = text[:text.index("  - Contracts:")]
+    lines = ["  - Contracts:"]
+    lines += [f"      - {c.stem}: contracts/{c.name}" for c in contracts]
+    mk.write_text(head + "\n".join(lines) + "\n")
 
 
 if __name__ == "__main__":

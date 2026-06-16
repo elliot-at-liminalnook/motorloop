@@ -38,7 +38,7 @@ jobs:
         run: bash formal/check_formal_toolchain.sh
 
       - name: Coverage gate (every reusable block is proven or declared sim-only)
-        run: python3 formal/check_coverage.py
+        run: make coverage       # Makefile is the single source for gate commands
 
       - name: Run formal proofs and gate
         run: |

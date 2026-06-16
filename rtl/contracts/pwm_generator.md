@@ -58,4 +58,4 @@ and formally proven.** Self-contained (no includes, no child modules).
 
 - **Language:** Verilog-2005; accepted by Verilator/yosys/Vivado/Quartus.
 - **Dependencies:** none — drop in `rtl/pwm_generator.v`, set the three params.
-- **Pull it:** `fusesoc run motorloop:ip:pwm_generator` (core in `cores/`).
+- **Pull it:** `fusesoc run motorloop:ip:pwm_generator` (core at repo root).

@@ -1,6 +1,12 @@
 <!-- SPDX-License-Identifier: MIT -->
 # motorloop
 
+[![ci](https://github.com/elliot-at-liminalnook/motorloop/actions/workflows/ci.yml/badge.svg)](https://github.com/elliot-at-liminalnook/motorloop/actions/workflows/ci.yml)
+[![formal](https://github.com/elliot-at-liminalnook/motorloop/actions/workflows/formal.yml/badge.svg)](https://github.com/elliot-at-liminalnook/motorloop/actions/workflows/formal.yml)
+[![REUSE compliant](https://api.reuse.software/badge/github.com/elliot-at-liminalnook/motorloop)](https://api.reuse.software/info/github.com/elliot-at-liminalnook/motorloop)
+[![DOI](https://img.shields.io/badge/DOI-pending-blue.svg)](notes/release-checklist.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSES/MIT.txt)
+
 **Motor-in-the-loop verification for Verilog.** Run your controller RTL
 closed-loop against a simulated motor, gate driver, and ADCs — before
 hardware exists.
@@ -13,6 +19,24 @@ through its real feedback circuits; tests assert on physics (speed, current,
 bus voltage, die temperature), not just on waveforms.
 
 ![animated rotor and phase currents](figures/motorloop.gif)
+
+## What this is — and isn't
+
+**Is:** reusable, parameterized BLDC field-oriented-control HDL IP that ships
+with the full bundle — per-block contracts (`rtl/contracts/`), SymbiYosys proofs
+(12 PROVEN), a 400-test cycle-accurate co-sim, a cocotb block suite,
+AXI-Lite/AXI-Stream/Wishbone wrappers (protocol legality *proven*),
+FuseSoC/Bender/IP-XACT packaging, an open ECP5 synth flow (FOC datapath
+pipelined to ~64 MHz), and a RISC-V (LiteX) reference SoC that drives the
+controller over AXI-Lite.
+
+**Isn't (yet):** silicon-validated. Everything is sim + formal + FPGA synthesis;
+the controller has not driven a physical motor, and the control gains are
+placeholder pending motor identification. The OpenLane pass is a *synthesizable
++ clean* smoke, not a tapeout. See [`notes/adoption-roadmap.md`](notes/adoption-roadmap.md).
+
+**Reproduce it:** `docker build -f Containerfile -t motorloop . && docker run --rm motorloop`
+(or `make all` locally) — see [`notes/reproduce.md`](notes/reproduce.md).
 
 ## The problem
 

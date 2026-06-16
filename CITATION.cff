@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: MIT
+cff-version: 1.2.0
+title: "motorloop: verified, reusable BLDC field-oriented-control HDL IP"
+message: "If you use this software, please cite it using these metadata."
+type: software
+authors:
+  - given-names: Elliot
+    affiliation: liminalnook
+    email: elliot@liminalnook.com
+repository-code: "https://github.com/elliot-at-liminalnook/motorloop"
+url: "https://github.com/elliot-at-liminalnook/motorloop"
+license: MIT
+version: 0.1.0
+date-released: "2026-06-16"
+keywords:
+  - FPGA
+  - HDL
+  - "BLDC motor control"
+  - "field-oriented control"
+  - "formal verification"
+  - Verilog
+  - RISC-V
+  - LiteX
+# After minting the Zenodo DOI (notes/release-checklist.md), uncomment + fill:
+# doi: 10.5281/zenodo.XXXXXXX

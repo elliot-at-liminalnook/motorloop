@@ -58,7 +58,7 @@ jobs:
           bash rtl/lint/run_verible.sh
 
       - name: License gate (REUSE)
-        run: reuse lint
+        run: make reuse          # Makefile is the single source for gate commands
 
       - name: Build the co-sim bench
         run: bash sim/scripts/build_bench.sh
@@ -91,6 +91,9 @@ jobs:
           BIN="$HOME/bender/bender-x86_64-unknown-linux-gnu/bender"
           "$BIN" script flist > /dev/null
           echo "bender resolved $("$BIN" script flist | wc -l) sources"
+
+      - name: Contract coverage gate (every block has a finished datasheet)
+        run: make contracts
 
       - name: Docs build (mkdocs + WaveDrom timing)
         run: |

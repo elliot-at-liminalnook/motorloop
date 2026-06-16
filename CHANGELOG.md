@@ -8,7 +8,26 @@ the stable surface a release promises.
 Releases are cut by tagging (`git tag v<x.y.z>`) and attaching the status matrix,
 `formal/proof_report.md`, and the ECP5 bitstream as release assets.
 
-## [Unreleased]
+## [0.1.0] - 2026-06-16
+
+### Added — robotics IP, pipelined FOC, reference SoC, one-command repro
+- **Pipelined FOC datapath.** `foc_core` walks Clarke→Park→PI→limit→inv-Park→
+  SVPWM over registered stages; the combinational `circle_limit`/`svpwm` became
+  bit-exact sequential `circle_limit_seq`/`svpwm_seq`, and the speed PIs were
+  pipelined. System post-route **Fmax 3.3 → 64 MHz** (ECP5 -85F), every step
+  verified bit-exact/latency-only; 400 tests + 12 proofs stay green.
+- **Robotics-IP packaging.** Bender manifest + IEEE-1685-2014 IP-XACT (validated)
+  for the bus wrappers; AXI-Lite/AXI-Stream/Wishbone wrappers with **proven**
+  protocol legality; REUSE-3.3 compliant; Verible-clean; cocotb block suite (12).
+- **A contract (datasheet) for every block** (`rtl/contracts/`, 30) + a CI gate.
+- **One-command reproducibility.** Root `Makefile` (`make all`/`verify`),
+  `Containerfile` + devcontainer, pinned `requirements*.txt`, refreshed
+  `notes/reproduce.md`.
+- **RISC-V reference SoC** (`soc/`): a LiteX/VexRiscv SoC drives the controller
+  over AXI-Lite (`rtl/soc/motorloop_axil_top.v`); cocotb integration test +
+  litex_sim. Board: ULX3S (ECP5).
+- **Release plumbing:** `CITATION.cff`, `.zenodo.json`, README badges,
+  `notes/release-checklist.md`.
 
 ### Added — trusted-library foundation (stages 1–3)
 - **Parameterized leaf IP.** Every reusable module takes its motorloop-specific
