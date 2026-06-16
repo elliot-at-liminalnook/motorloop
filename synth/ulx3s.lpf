@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# Minimal ULX3S (ECP5 LFE5U-85F, CABGA381) constraint for the timing run.
+# Only the 25 MHz oscillator is located + frequency-constrained; the ctrl_*/dbg_*
+# interface ports (the bench's stand-in for the UART register file) are left
+# unconstrained for the open-coverage synth check (nextpnr is run with
+# --lpf-allow-unconstrained). A real board build would map those to headers.
+LOCATE COMP "clk" SITE "G2";
+IOBUF PORT "clk" IO_TYPE=LVCMOS33;
+FREQUENCY PORT "clk" 25 MHZ;

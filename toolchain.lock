@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: MIT
+# Pinned toolchain for reproducible builds (trusted-library-checklist stage 3.1).
+# CI and `notes/reproduce.md` install exactly these. Bump deliberately, re-green,
+# and record in CHANGELOG.md. Versions below are the validated set as of the
+# 2026-06-14 library snapshot.
+
+# OSS CAD Suite (yosys + SymbiYosys + boolector/yices/z3 + nextpnr-ecp5 + ecppack)
+# YosysHQ/oss-cad-suite-build release tag (date-stamped):
+OSS_CAD_SUITE = "2026-06-14"          # VERSION file: 20260614; yosys 0.66+89
+
+# RTL simulation / lint. Verilator is BUNDLED in the OSS CAD Suite pin above
+# (5.049 in the 2026-06-14 tag), so CI gets it from the same tarball as the
+# proof + synth stack - one pin covers everything. Local dev also works with the
+# system Verilator 5.032 (Debian 5.032-1).
+VERILATOR    = "bundled: 5.049 (OSS CAD Suite 2026-06-14) | system: 5.032"
+
+# Build / bindings
+CMAKE        = ">=3.22"               # validated 4.2.3
+PYTHON       = "3.12"                 # CI; local dev validated on 3.14
+PYBIND11     = "from pip (pinned in requirements)"
+
+# Packaging + license-compliance tooling (pipx-installed, persistent)
+FUSESOC      = "2.4.6"                # cores/*.core, motorloop.core
+REUSE        = "6.2.0"                # `reuse lint` (REUSE 3.3 compliant tree)
+
+# Notes
+# - Leaf IP RTL is Verilog-2005 and also elaborates under Vivado/Quartus; the
+#   pins above are for the open verification + synth flow.
+# - The formal solvers ship inside the OSS CAD Suite pin, so pinning that tag
+#   pins the whole proof stack.

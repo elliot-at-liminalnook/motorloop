@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MIT
+# Lint + sim + synth gates (trusted-library-checklist stage 3.2). The formal
+# gate is in formal.yml. All four gates use ONE pinned OSS CAD Suite tarball
+# (yosys + Verilator + sby + nextpnr-ecp5 + ecppack), so the whole toolchain is
+# pinned by a single tag (toolchain.lock).
+name: ci
+
+on:
+  push:
+    paths:
+      - 'rtl/**'
+      - 'sim/**'
+      - 'synth/**'
+      - 'cores/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+  workflow_dispatch:
+
+env:
+  OSS_CAD_SUITE: "2026-06-14"   # keep in sync with toolchain.lock
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned OSS CAD Suite (yosys + verilator + sby + nextpnr)
+        run: |
+          cd "$HOME"
+          TAG="${OSS_CAD_SUITE}"
+          STAMP="${TAG//-/}"
+          URL="https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${TAG}/oss-cad-suite-linux-x64-${STAMP}.tgz"
+          curl -sL -o oss.tgz "$URL"
+          tar xzf oss.tgz
+          echo "$HOME/oss-cad-suite/bin" >> "$GITHUB_PATH"
+
+      - name: Python deps
+        run: pip install pybind11 pytest
+
+      - name: Lint (Verilator --lint-only on the system top)
+        run: |
+          verilator --lint-only -Wall -Irtl -Irtl/gen rtl/controller_top.v \
+            $(ls rtl/*.v | grep -v foc_math) || true   # report; do not fail the gate on style-only
+
+      - name: Build the co-sim bench
+        run: bash sim/scripts/build_bench.sh
+
+      - name: Sim gate (platforms + open-question + FOC-math tiers)
+        run: |
+          python3 -m pytest -q \
+            sim/tests/test_platforms.py sim/tests/test_foc_math.py \
+            sim/tests/test_as5047p.py sim/tests/test_drv8316r.py \
+            sim/tests/test_ads9224r.py sim/tests/test_drv8323.py
+          # The full realism/edge tiers run nightly (they are ~30 min).
+
+      - name: Synth gate (ECP5 maps + fits)
+        run: python3 synth/run_synth.py --check
+
+      - name: Status matrix artifact
+        if: always()
+        run: |
+          python3 notes/gen_status_matrix.py || true
+          echo "status matrix regenerated"

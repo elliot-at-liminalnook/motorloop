@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# ECP5 synthesis of controller_top (platform-abstraction Phase C, stage 15).
+# Open flow: yosys synth_ecp5 -> JSON netlist for nextpnr-ecp5. Reads the same
+# RTL set the simulation verilates (the controller_top hierarchy); the FOC math
+# harness (foc_math.v) is excluded. Run via synth/run_synth.py.
+read_verilog -I rtl -I rtl/gen \
+  synth/board_top.v \
+  rtl/controller_top.v rtl/pwm_generator.v rtl/commutation.v rtl/spi_drv_master.v \
+  rtl/adc_spi_master.v rtl/divider32.v rtl/as5600_pwm_capture.v \
+  rtl/as5047p_spi_master.v rtl/ads9224r_master.v rtl/speed_meter.v rtl/speed_pi.v \
+  rtl/open_loop_ramp.v rtl/drv_manager.v rtl/adc_sequencer.v rtl/sincos.v \
+  rtl/clarke.v rtl/park.v rtl/inv_park.v rtl/svpwm.v rtl/current_pi.v \
+  rtl/circle_limit.v rtl/foc_core.v rtl/speed_iq_pi.v rtl/uart_regfile.v \
+  rtl/uart_rx.v rtl/uart_tx.v
+synth_ecp5 -top board_top -json synth/work/board_top.json
+tee -o synth/work/stat.txt stat
