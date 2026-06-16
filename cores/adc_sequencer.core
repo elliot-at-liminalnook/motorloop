@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:adc_sequencer:0.1.0
+description: "Sector-aware ADC schedule + FOC current sampling (pulse well-formedness PROVEN)"
+filesets:
+  rtl:
+    files:
+      - ../rtl/adc_sequencer.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: adc_sequencer
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

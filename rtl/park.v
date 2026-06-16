@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Park transform: stationary (alpha,beta) -> rotor (d,q) frame.
 //   id =  ialpha*cos + ibeta*sin
 //   iq =  ialpha*sin - ibeta*cos

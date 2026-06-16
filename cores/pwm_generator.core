@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:pwm_generator:0.1.0
+description: "Center-aligned 3-phase complementary PWM + dead-time (shoot-through-free, PROVEN)"
+filesets:
+  rtl:
+    files:
+      - ../rtl/pwm_generator.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: pwm_generator
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

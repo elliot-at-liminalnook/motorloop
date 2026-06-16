@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // AS5600 PWM-output capture: measures the high time and period of the
 // sensor's PWM frame and decodes the 12-bit angle.
 //
@@ -7,9 +8,9 @@
 // Validity: period must be within +/-25% of the expected carrier and edges
 // must keep arriving (magnet loss / disconnection -> invalid after timeout).
 
-`include "rtl_params.vh"
-
-module as5600_pwm_capture (
+module as5600_pwm_capture #(
+    parameter integer ANGLE_CARRIER_CYC = 27174   // AS5600 PWM frame period in clocks
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        pwm_in,
@@ -18,7 +19,7 @@ module as5600_pwm_capture (
     output reg         new_sample    // 1-cycle pulse per decoded frame
 );
 
-  localparam [31:0] CARRIER = `ANGLE_CARRIER_CYC;
+  localparam [31:0] CARRIER = ANGLE_CARRIER_CYC;
   // E15: validity hysteresis - while valid, tolerate +/-25% carrier drift;
   // once invalid, require +/-15% to revalidate, so a carrier sitting at the
   // boundary cannot flap the loop between run and coast.

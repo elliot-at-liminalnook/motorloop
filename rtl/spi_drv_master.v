@@ -1,11 +1,12 @@
+// SPDX-License-Identifier: MIT
 // SPI master for the DRV8301: mode 1 (CPOL=0, CPHA=1), 16-bit frames,
 // MSB first. The slave shifts SDO out on the SCLK rising edge and samples
 // SDI on the falling edge, so the master drives MOSI before the rising edge
 // and samples MISO at the end of the high half-period.
 
-`include "rtl_params.vh"
-
-module spi_drv_master (
+module spi_drv_master #(
+    parameter [7:0] DRV_SPI_DIV = 8'd16   // SCLK = clk / DRV_SPI_DIV (<= 255)
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        start,
@@ -19,7 +20,7 @@ module spi_drv_master (
     input  wire        miso
 );
 
-  localparam [7:0] HALF_DIV = `DRV_SPI_DIV / 2;
+  localparam [7:0] HALF_DIV = DRV_SPI_DIV >> 1;
 
   localparam [2:0] S_IDLE = 3'd0, S_LEAD = 3'd1, S_LOW = 3'd2,
                    S_HIGH = 3'd3, S_TAIL = 3'd4, S_GAP = 3'd5;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Amplitude-invariant Clarke transform. Balanced three-phase => ic = -ia-ib,
 // so only ia, ib are needed. Currents in ADC-LSB units (signed).
 //   ialpha = ia

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // FOC datapath core: Clarke -> Park -> {id,iq} PI -> circle limit ->
 // inverse Park -> SVPWM, all combinational, with the PI integrators and the
 // output duties registered once per current sample (`update` = the
@@ -12,9 +13,14 @@
 // Surface-PMSM convention: id_target = 0 (no reluctance torque); iq_target is
 // the torque command. See notes/foc-fixed-point.md.
 
-`include "rtl_params.vh"
-
-module foc_core (
+module foc_core #(
+    parameter integer PWM_HALF_PERIOD  = 625,
+    parameter integer SINCOS_TABLE_BITS = 8,
+    parameter integer V_CIRCLE_LIMIT   = 594,
+    parameter integer CUR_PI_KP        = 2,
+    parameter integer CUR_PI_KI_SHIFT  = 4,
+    parameter integer V_RAW_MAX        = 2500
+) (
     input  wire               clk,
     input  wire               rst_n,
     input  wire               enable,
@@ -30,14 +36,15 @@ module foc_core (
     output reg signed [17:0]  dbg_vd,
     output reg signed [17:0]  dbg_vq
 );
-  localparam [15:0] CENTER = `PWM_HALF_PERIOD >> 1;
+  localparam [31:0] CENTER = PWM_HALF_PERIOD >> 1;  // 50% duty (sliced at use)
 
   // Forward measurement path (combinational).
   wire signed [17:0] ialpha, ibeta;
   clarke u_clarke (.ia(cur_a), .ib(cur_b), .ialpha(ialpha), .ibeta(ibeta));
 
   wire signed [15:0] cos_q15, sin_q15;
-  sincos u_sincos (.theta(theta_e), .sin_out(sin_q15), .cos_out(cos_q15));
+  sincos #(.BITS(SINCOS_TABLE_BITS)) u_sincos (
+      .theta(theta_e), .sin_out(sin_q15), .cos_out(cos_q15));
 
   wire signed [17:0] id_m, iq_m;
   park u_park (.ialpha(ialpha), .ibeta(ibeta),
@@ -47,14 +54,16 @@ module foc_core (
   // Current PIs (frozen together when the voltage vector saturates).
   wire sat;
   wire signed [17:0] vd_raw, vq_raw, vd_lim, vq_lim;
-  current_pi u_pi_d (
+  current_pi #(.CUR_PI_KP(CUR_PI_KP), .CUR_PI_KI_SHIFT(CUR_PI_KI_SHIFT),
+               .V_RAW_MAX(V_RAW_MAX)) u_pi_d (
       .clk(clk), .rst_n(rst_n), .enable(enable), .update(update),
       .freeze(sat), .target(id_target), .meas(id_m), .v_out(vd_raw));
-  current_pi u_pi_q (
+  current_pi #(.CUR_PI_KP(CUR_PI_KP), .CUR_PI_KI_SHIFT(CUR_PI_KI_SHIFT),
+               .V_RAW_MAX(V_RAW_MAX)) u_pi_q (
       .clk(clk), .rst_n(rst_n), .enable(enable), .update(update),
       .freeze(sat), .target(iq_target), .meas(iq_m), .v_out(vq_raw));
 
-  circle_limit u_limit (
+  circle_limit #(.V_CIRCLE_LIMIT(V_CIRCLE_LIMIT)) u_limit (
       .vd_in(vd_raw), .vq_in(vq_raw),
       .vd_out(vd_lim), .vq_out(vq_lim), .sat(sat));
 
@@ -65,15 +74,16 @@ module foc_core (
                        .valpha(valpha), .vbeta(vbeta));
 
   wire [47:0] duty3_comb;
-  svpwm u_svpwm (.valpha(valpha), .vbeta(vbeta), .duty3(duty3_comb));
+  svpwm #(.PWM_HALF_PERIOD(PWM_HALF_PERIOD)) u_svpwm (
+      .valpha(valpha), .vbeta(vbeta), .duty3(duty3_comb));
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
-      duty3 <= {CENTER, CENTER, CENTER};
+      duty3 <= {CENTER[15:0], CENTER[15:0], CENTER[15:0]};
       dbg_id <= 18'sd0; dbg_iq <= 18'sd0;
       dbg_vd <= 18'sd0; dbg_vq <= 18'sd0;
     end else if (!enable) begin
-      duty3 <= {CENTER, CENTER, CENTER};   // 50% all legs = zero voltage
+      duty3 <= {CENTER[15:0], CENTER[15:0], CENTER[15:0]};   // 50% all legs = zero voltage
     end else if (update) begin
       duty3 <= duty3_comb;
       dbg_id <= id_m; dbg_iq <= iq_m;

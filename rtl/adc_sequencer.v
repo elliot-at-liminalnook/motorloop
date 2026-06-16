@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Sector-aware ADC schedule, two conversions per PWM period (the 3.3 V
 // MCP3208 budget, see architecture.md):
 //
@@ -13,9 +14,13 @@
 //
 // Channels: 0..2 IOUTA/B/C, 3..5 EMF-A/B/C, 6 VBUS.
 
-`include "rtl_params.vh"
-
-module adc_sequencer (
+module adc_sequencer #(
+    parameter [15:0] PWM_HALF_PERIOD = 16'd625,
+    parameter [15:0] ADC_EMF_LEAD    = 16'd160,
+    parameter [11:0] DC_CAL_TOL      = 12'd256,
+    parameter [7:0]  ADC_STUCK_N     = 8'd32,
+    parameter [15:0] EMF_SKIP_MARGIN = 16'd24
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire [15:0] pwm_counter,
@@ -59,14 +64,14 @@ module adc_sequencer (
   // slope after that, completing before the next EMF launch. (A conversion
   // takes ~560 clk; the period is 2*PWM_HALF_PERIOD = 1250 clk.)
   localparam [15:0] CUR_LAUNCH = 16'd150;  // on the down slope
-  localparam [15:0] EMF_LAUNCH = `PWM_HALF_PERIOD - `ADC_EMF_LEAD;
+  localparam [15:0] EMF_LAUNCH = PWM_HALF_PERIOD - ADC_EMF_LEAD;
 
   localparam [1:0] PEND_NONE = 2'd0, PEND_CUR = 2'd1, PEND_EMF = 2'd2,
                    PEND_VBUS = 2'd3;
 
   // E10: plausibility window for DC_CAL offsets (amp midpoint = 2048).
-  localparam [11:0] OFFSET_LO = 12'd2048 - `DC_CAL_TOL;
-  localparam [11:0] OFFSET_HI = 12'd2048 + `DC_CAL_TOL;
+  localparam [11:0] OFFSET_LO = 12'd2048 - DC_CAL_TOL;
+  localparam [11:0] OFFSET_HI = 12'd2048 + DC_CAL_TOL;
 
   reg [1:0] pending;
   reg [2:0] period_count;
@@ -79,13 +84,13 @@ module adc_sequencer (
   reg [1:0]  foc_state;
   reg [11:0] foc_a_raw;
 
-  assign adc_stuck = stuck_count >= `ADC_STUCK_N;
+  assign adc_stuck = stuck_count >= ADC_STUCK_N;
 
   wire offset_plausible = adc_code >= OFFSET_LO && adc_code <= OFFSET_HI;
   // E4: the hold aperture must land in the off-window; above this duty the
   // off-window is too narrow, so the EMF sample is skipped this period.
   wire emf_window_ok =
-      duty_compare <= (`PWM_HALF_PERIOD - `EMF_SKIP_MARGIN);
+      duty_compare <= (PWM_HALF_PERIOD - EMF_SKIP_MARGIN);
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin

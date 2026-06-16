@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:drv_manager:0.1.0
+description: "Gate-driver bring-up/SPI-config/fault FSM (legality PROVEN)"
+filesets:
+  rtl:
+    files:
+      - ../rtl/drv_manager.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: drv_manager
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

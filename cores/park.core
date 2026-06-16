@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:park:0.1.0
+description: "Park transform (alpha/beta -> d/q), combinational"
+filesets:
+  rtl:
+    files:
+      - ../rtl/park.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: park
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

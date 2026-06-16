@@ -1,0 +1,30 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:foc_core:0.1.0
+description: "FOC datapath: Clarke/Park/PI/circle-limit/inv-Park/SVPWM"
+filesets:
+  rtl:
+    files:
+      - ../rtl/foc_core.v
+      - ../rtl/sincos.v
+      - ../rtl/clarke.v
+      - ../rtl/park.v
+      - ../rtl/inv_park.v
+      - ../rtl/current_pi.v
+      - ../rtl/circle_limit.v
+      - ../rtl/svpwm.v
+    file_type: verilogSource
+  gen:
+    files:
+      - ../rtl/gen/sincos_init.vh: {is_include_file: true}
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl, gen]
+    toplevel: foc_core
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

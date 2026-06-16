@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Open-loop forced-commutation sector source: 32-bit electrical phase
 // accumulator with a linear frequency ramp. The accumulator maps one
 // electrical revolution to 2^32; sector = floor(phase * 6 / 2^32).

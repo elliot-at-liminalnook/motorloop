@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Combinational test harness wiring the FOC math primitives so they can be
 // exercised bit-for-bit against sim/scripts/foc_reference.py (test_foc_math).
 // Not part of the controller; build target only.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Sequential restoring divider, 32/32 -> 32, one quotient bit per cycle.
 //
 // Classic formulation: acc = {remainder, working}; each cycle shift left,

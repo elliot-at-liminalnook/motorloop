@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:adc_spi_master:0.1.0
+description: "SPI master for the MCP3208 12-bit ADC"
+filesets:
+  rtl:
+    files:
+      - ../rtl/adc_spi_master.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: adc_spi_master
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

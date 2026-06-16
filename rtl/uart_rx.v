@@ -1,8 +1,9 @@
-// 8N1 UART receiver, mid-bit sampling at `UART_DIV clocks per bit.
+// SPDX-License-Identifier: MIT
+// 8N1 UART receiver, mid-bit sampling at UART_DIV clocks per bit.
 
-`include "rtl_params.vh"
-
-module uart_rx (
+module uart_rx #(
+    parameter [15:0] UART_DIV = 16'd217   // clocks per bit (clk / baud)
+) (
     input  wire       clk,
     input  wire       rst_n,
     input  wire       rx,
@@ -10,7 +11,7 @@ module uart_rx (
     output reg        valid      // 1-cycle pulse
 );
 
-  localparam [15:0] DIV = `UART_DIV;
+  localparam [15:0] DIV = UART_DIV;
 
   reg [1:0]  sync;
   reg [15:0] cnt;
@@ -31,11 +32,11 @@ module uart_rx (
         if (!rx_s) begin            // start-bit edge
           busy <= 1'b1;
           bit_idx <= 4'd0;
-          cnt <= DIV / 2;           // sample mid-bit
+          cnt <= DIV >> 1;          // sample mid-bit
         end
       end else begin
         if (cnt == 16'd0) begin
-          cnt <= DIV - 1;
+          cnt <= DIV - 16'd1;
           if (bit_idx == 4'd0) begin
             if (rx_s) busy <= 1'b0;  // false start
             else bit_idx <= 4'd1;

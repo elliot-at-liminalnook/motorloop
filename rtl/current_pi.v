@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Single-axis current PI (one instance for id, one for iq). Parallel form
 // with conditional-integration anti-windup: the integrator is frozen by the
 // `freeze` input, which the FOC core drives from the voltage-circle limiter's
@@ -10,9 +11,11 @@
 // downstream by circle_limit.v. Gains are placeholder-grade (foc.cur_pi_*,
 // blocked by Q1). Mirrors the current-PI math in notes/foc-fixed-point.md.
 
-`include "rtl_params.vh"
-
-module current_pi (
+module current_pi #(
+    parameter integer CUR_PI_KP       = 2,
+    parameter integer CUR_PI_KI_SHIFT = 4,
+    parameter integer V_RAW_MAX       = 2500
+) (
     input  wire               clk,
     input  wire               rst_n,
     input  wire               enable,   // reset integrator when low
@@ -22,9 +25,9 @@ module current_pi (
     input  wire signed [17:0] meas,
     output wire signed [17:0] v_out
 );
-  localparam signed [31:0] KP   = `CUR_PI_KP;
-  localparam integer       KISH = `CUR_PI_KI_SHIFT;
-  localparam signed [31:0] VMAX = `V_RAW_MAX;
+  localparam signed [31:0] KP   = CUR_PI_KP;
+  localparam integer       KISH = CUR_PI_KI_SHIFT;
+  localparam signed [31:0] VMAX = V_RAW_MAX;
 
   reg signed [31:0] integ;
 

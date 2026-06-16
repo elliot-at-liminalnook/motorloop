@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Speed measurement from commutation-sector edges.
 //
 // The AS5600's PWM-frame latency (~1 ms) quantizes individual sector-edge
@@ -10,9 +11,10 @@
 // SPEED_NUM = CLK_HZ * 2*pi / (6 * PP).
 // Times out to zero speed at standstill so the PI keeps updating.
 
-`include "rtl_params.vh"
-
-module speed_meter (
+module speed_meter #(
+    parameter integer CLK_HZ    = 25000000,
+    parameter integer SPEED_NUM = 6544985   // clk * 2pi / (6 * pole_pairs)
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire [2:0]  sector,
@@ -25,9 +27,9 @@ module speed_meter (
   // Quick timeout declares standstill only when NO edges arrived (so a slow
   // but completing 6-edge window is never corrupted); the hard timeout
   // abandons a stalled partial window.
-  localparam [31:0] TIMEOUT = `CLK_HZ / 50;        // 20 ms, edge_count == 0
-  localparam [31:0] HARD_TIMEOUT = `CLK_HZ / 4;    // 250 ms, any state
-  localparam [31:0] NUM6 = 32'd6 * `SPEED_NUM;
+  localparam [31:0] TIMEOUT = CLK_HZ / 50;        // 20 ms, edge_count == 0
+  localparam [31:0] HARD_TIMEOUT = CLK_HZ / 4;    // 250 ms, any state
+  localparam [31:0] NUM6 = 32'd6 * SPEED_NUM;
 
   reg [2:0]  prev_sector;
   reg [2:0]  edge_count;

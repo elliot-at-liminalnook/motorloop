@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:circle_limit:0.1.0
+description: "Voltage-circle magnitude limiter (isqrt), combinational"
+filesets:
+  rtl:
+    files:
+      - ../rtl/circle_limit.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: circle_limit
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

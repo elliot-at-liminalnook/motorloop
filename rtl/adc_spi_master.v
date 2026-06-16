@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // SPI master for the MCP3208: mode 0,0. The device samples DIN on rising
 // edges and shifts DOUT on falling edges, so the master drives MOSI during
 // the low half and samples MISO at the end of the high half (data set up by
@@ -7,9 +8,9 @@
 // device's hold aperture is the falling edge of the 5th clock after start;
 // data bits B11..B0 are collected on clocks 7..18 (1-based).
 
-`include "rtl_params.vh"
-
-module adc_spi_master (
+module adc_spi_master #(
+    parameter [7:0] ADC_SPI_DIV = 8'd26   // SCLK = clk / ADC_SPI_DIV (<= 255)
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        start,
@@ -23,7 +24,7 @@ module adc_spi_master (
     input  wire        miso
 );
 
-  localparam [7:0] HALF_DIV = `ADC_SPI_DIV / 2;
+  localparam [7:0] HALF_DIV = ADC_SPI_DIV >> 1;
   localparam [4:0] TOTAL_CLOCKS = 5'd20;
 
   localparam [2:0] S_IDLE = 3'd0, S_LEAD = 3'd1, S_LOW = 3'd2,

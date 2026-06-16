@@ -1,11 +1,15 @@
+// SPDX-License-Identifier: MIT
 // Speed PI controller, updated on each speed measurement.
 // duty = clamp(KP * (err + integ >> KI_SHIFT)), conditional integration
 // for anti-windup. Gains are placeholder-grade until motor identification
 // (rtl.speed_pi_* in params.toml, blocked by Q1).
 
-`include "rtl_params.vh"
-
-module speed_pi (
+module speed_pi #(
+    parameter integer SPEED_PI_KP       = 12,
+    parameter integer SPEED_PI_KI_SHIFT = 4,
+    parameter integer PWM_HALF_PERIOD   = 625,
+    parameter [15:0]  DUTY_DOWN_SLEW    = 16'd40
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        enable,        // freeze + reset integrator when low
@@ -16,8 +20,9 @@ module speed_pi (
     output reg  [15:0] duty_compare
 );
 
-  localparam signed [31:0] KP = `SPEED_PI_KP;
-  localparam [15:0] DUTY_MAX = (`PWM_HALF_PERIOD * 49) / 50;  // 98%
+  localparam signed [31:0] KP = SPEED_PI_KP;
+  localparam [31:0] DUTY_MAX_FULL = (PWM_HALF_PERIOD * 49) / 50;  // 98%
+  localparam [15:0] DUTY_MAX = DUTY_MAX_FULL[15:0];
 
   reg signed [31:0] integ;
 
@@ -28,7 +33,7 @@ module speed_pi (
                                         : $signed({2'b00, speed});
   wire signed [17:0] err = $signed({2'b00, target_speed}) - measured;
   wire signed [31:0] p_term = KP * err;
-  wire signed [31:0] i_term = (KP * integ) >>> `SPEED_PI_KI_SHIFT;
+  wire signed [31:0] i_term = (KP * integ) >>> SPEED_PI_KI_SHIFT;
   wire signed [31:0] raw = p_term + i_term;
 
   wire saturated_high = raw > $signed({16'd0, DUTY_MAX});
@@ -58,8 +63,8 @@ module speed_pi (
 
   function [15:0] clamp_down(input [15:0] requested);
     begin
-      if (requested + `DUTY_DOWN_SLEW < duty_compare)
-        clamp_down = duty_compare - `DUTY_DOWN_SLEW;
+      if (requested + DUTY_DOWN_SLEW < duty_compare)
+        clamp_down = duty_compare - DUTY_DOWN_SLEW;
       else
         clamp_down = requested;
     end

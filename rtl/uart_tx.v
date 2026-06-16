@@ -1,8 +1,9 @@
-// 8N1 UART transmitter at `UART_DIV clocks per bit.
+// SPDX-License-Identifier: MIT
+// 8N1 UART transmitter at UART_DIV clocks per bit.
 
-`include "rtl_params.vh"
-
-module uart_tx (
+module uart_tx #(
+    parameter [15:0] UART_DIV = 16'd217   // clocks per bit (clk / baud)
+) (
     input  wire       clk,
     input  wire       rst_n,
     input  wire       start,
@@ -11,7 +12,7 @@ module uart_tx (
     output reg        tx
 );
 
-  localparam [15:0] DIV = `UART_DIV;
+  localparam [15:0] DIV = UART_DIV;
 
   reg [15:0] cnt;
   reg [3:0]  bit_idx;   // 0 start, 1..8 data, 9 stop
@@ -27,12 +28,12 @@ module uart_tx (
         busy <= 1'b1;
         shreg <= data;
         bit_idx <= 4'd0;
-        cnt <= DIV - 1;
+        cnt <= DIV - 16'd1;
         tx <= 1'b0;  // start bit
       end
     end else begin
       if (cnt == 16'd0) begin
-        cnt <= DIV - 1;
+        cnt <= DIV - 16'd1;
         if (bit_idx < 4'd8) begin
           tx <= shreg[0];
           shreg <= {1'b0, shreg[7:1]};

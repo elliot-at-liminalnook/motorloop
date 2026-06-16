@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Six-step commutation table. Sector -> per-leg PWM modes plus the analog
 // bookkeeping the ADC sequencer needs (which phase floats, which low-side
 // shunt conducts solidly).

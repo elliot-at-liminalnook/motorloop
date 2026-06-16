@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Inverse Park: rotor (d,q) voltage -> stationary (alpha,beta).
 //   valpha = vd*cos + vq*sin
 //   vbeta  = vd*sin - vq*cos

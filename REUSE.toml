@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: MIT
+version = 1
+
+# Copyright for everything authored in this repo. The per-file
+# SPDX-License-Identifier headers declare the license on text sources; this
+# annotation supplies the copyright (REUSE requires both) and covers the
+# generated/binary files I authored (e.g. figures rendered by the bench).
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Elliot <elliot@liminalnook.com>"
+SPDX-License-Identifier = "MIT"
+
+# Third-party vendor reference documents (datasheets, schematics, app notes,
+# sim models) - copyright their respective owners, NOT this project's MIT.
+# This annotation comes last, so it takes precedence for these paths.
+[[annotations]]
+path = "**/*.pdf"
+precedence = "override"
+SPDX-FileCopyrightText = "Copyright the respective vendors (Texas Instruments, ams-OSRAM, Microchip, Lattice, Gowin, Sipeed)"
+SPDX-License-Identifier = "LicenseRef-Proprietary-Reference"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Space-vector PWM by min/max common-mode injection. Given the stationary
 // frame voltage (valpha, vbeta) in duty units (signed, +-PWM_HALF_PERIOD for
 // full half-bus phase drive), produce three per-leg duty compares in
@@ -12,17 +13,17 @@
 // Combinational. Arithmetic mirrors sim/scripts/foc_reference.svpwm_fx
 // exactly (see notes/foc-fixed-point.md); test_foc_math.py enforces parity.
 
-`include "rtl_params.vh"
-
-module svpwm (
+module svpwm #(
+    parameter integer PWM_HALF_PERIOD = 625   // half PWM period in clocks
+) (
     input  wire signed [17:0] valpha,
     input  wire signed [17:0] vbeta,
     output wire [47:0]        duty3     // {leg C, leg B, leg A}, 16 bits each
 );
 
   localparam signed [31:0] SQRT3_OVER_2 = 32'sd28378;  // round(sqrt(3)/2 * 2^15)
-  localparam signed [31:0] HALF   = `PWM_HALF_PERIOD;
-  localparam signed [31:0] CENTER = `PWM_HALF_PERIOD >>> 1;  // 50% duty
+  localparam signed [31:0] HALF   = PWM_HALF_PERIOD;
+  localparam signed [31:0] CENTER = PWM_HALF_PERIOD >>> 1;  // 50% duty
 
   wire signed [31:0] va = {{14{valpha[17]}}, valpha};
   wire signed [31:0] vb = {{14{vbeta[17]}}, vbeta};

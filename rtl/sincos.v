@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Quarter-wave sin/cos lookup. 16-bit electrical angle (0..65535 = 0..2pi)
 // in; Q15 signed sin and cos out. A 2^SINCOS_TABLE_BITS-entry table holds
 // sin over [0, pi/2); the top two angle bits fold the quadrant, cos reuses
@@ -5,10 +6,10 @@
 // rule as sim/scripts/foc_reference.sincos_table (gen_rtl_params.py writes
 // rtl/gen/sincos_init.vh), so RTL and reference agree bit-for-bit.
 
-`include "rtl_params.vh"
-
 module sincos #(
-    parameter integer BITS = `SINCOS_TABLE_BITS
+    parameter integer BITS = 8   // 2^BITS-entry quarter-wave table; the table
+                                 // data (rtl/gen/sincos_init.vh) is generated
+                                 // for this BITS, so change them together
 ) (
     input  wire [15:0]        theta,
     output wire signed [15:0] sin_out,

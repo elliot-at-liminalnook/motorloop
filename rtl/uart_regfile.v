@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // UART command/telemetry register file (realism stage 6).
 //
 // Protocol (host -> device):
@@ -10,9 +11,10 @@
 // Read registers: 0-8 echo, 16 speed, 17 {fault,mismatch} counts, 18 angle,
 //   19 nOCTW count, 20 {configured, sector}.
 
-`include "rtl_params.vh"
-
-module uart_regfile (
+module uart_regfile #(
+    parameter [15:0]  UART_DIV         = 16'd217,
+    parameter integer UART_TIMEOUT_CYC = 50000
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        uart_rx_pin,
@@ -39,13 +41,13 @@ module uart_regfile (
 
   wire [7:0] rx_data;
   wire       rx_valid;
-  uart_rx u_rx (.clk(clk), .rst_n(rst_n), .rx(uart_rx_pin),
+  uart_rx #(.UART_DIV(UART_DIV)) u_rx (.clk(clk), .rst_n(rst_n), .rx(uart_rx_pin),
                 .data(rx_data), .valid(rx_valid));
 
   reg        tx_start;
   reg [7:0]  tx_data;
   wire       tx_busy;
-  uart_tx u_tx (.clk(clk), .rst_n(rst_n), .start(tx_start),
+  uart_tx #(.UART_DIV(UART_DIV)) u_tx (.clk(clk), .rst_n(rst_n), .start(tx_start),
                 .data(tx_data), .busy(tx_busy), .tx(uart_tx_pin));
 
   localparam [2:0] S_CMD = 3'd0, S_WHI = 3'd1, S_WLO = 3'd2,
@@ -94,7 +96,7 @@ module uart_regfile (
       // follows. Mid-frame silence resets to command state.
       if (state == S_WHI || state == S_WLO) begin
         if (rx_valid) idle_timer <= 32'd0;
-        else if (idle_timer >= `UART_TIMEOUT_CYC) begin
+        else if (idle_timer >= UART_TIMEOUT_CYC) begin
           idle_timer <= 32'd0;
           state <= S_CMD;
         end else begin

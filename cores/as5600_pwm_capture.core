@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:as5600_pwm_capture:0.1.0
+description: "AS5600 PWM-output angle capture"
+filesets:
+  rtl:
+    files:
+      - ../rtl/as5600_pwm_capture.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: as5600_pwm_capture
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

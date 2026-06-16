@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Center-aligned three-phase PWM with per-leg complementary drive, dead-time
 // insertion, and minimum-pulse enforcement.
 //
@@ -16,9 +17,11 @@
 // centered on counter == 0, so the off-window is centered on the peak
 // (where the ADC samples the floating-phase EMF / FOC samples phase current).
 
-`include "rtl_params.vh"
-
-module pwm_generator (
+module pwm_generator #(
+    parameter [15:0] PWM_HALF_PERIOD  = 16'd625,
+    parameter [15:0] DEAD_CYCLES      = 16'd25,
+    parameter [15:0] MIN_PULSE_CYCLES = 16'd2
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        kill,            // force all gates off immediately
@@ -31,9 +34,9 @@ module pwm_generator (
     output reg         period_start     // pulse at counter wrap through 0
 );
 
-  localparam [15:0] HALF = `PWM_HALF_PERIOD;
-  localparam [15:0] DEAD = `DEAD_CYCLES;
-  localparam [15:0] MINP = `MIN_PULSE_CYCLES;
+  localparam [15:0] HALF = PWM_HALF_PERIOD;
+  localparam [15:0] DEAD = DEAD_CYCLES;
+  localparam [15:0] MINP = MIN_PULSE_CYCLES;
 
   reg [15:0] counter;
   reg up;

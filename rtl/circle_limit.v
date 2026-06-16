@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Voltage-circle limiter: cap the (vd, vq) vector magnitude to the SVPWM
 // inscribed-circle radius (V_CIRCLE_LIMIT, duty units), prioritizing nothing
 // (uniform scale) - field-weakening priority on vd is handled by the caller
@@ -8,16 +9,16 @@
 // uniform rescale: vd_out = vd*VLIM/|v|. The per-axis inputs are pre-clamped
 // to V_RAW_MAX by current_pi.v so vd^2+vq^2 fits 32 bits.
 
-`include "rtl_params.vh"
-
-module circle_limit (
+module circle_limit #(
+    parameter integer V_CIRCLE_LIMIT = 594   // SVPWM inscribed-circle radius (duty units)
+) (
     input  wire signed [17:0] vd_in,
     input  wire signed [17:0] vq_in,
     output wire signed [17:0] vd_out,
     output wire signed [17:0] vq_out,
     output wire               sat
 );
-  localparam signed [31:0] VLIM = `V_CIRCLE_LIMIT;
+  localparam signed [31:0] VLIM = V_CIRCLE_LIMIT;
 
   wire signed [31:0] d = {{14{vd_in[17]}}, vd_in};
   wire signed [31:0] q = {{14{vq_in[17]}}, vq_in};

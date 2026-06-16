@@ -1,0 +1,14 @@
+LicenseRef-Proprietary-Reference
+
+The files marked with this identifier are THIRD-PARTY reference documents
+(vendor datasheets, evaluation-board schematics, application notes, and
+simulation models) included in this repository for engineering reference only.
+
+They are copyright their respective owners — including but not limited to Texas
+Instruments, ams-OSRAM, Microchip Technology, Lattice Semiconductor, and Gowin
+Semiconductor — and are NOT covered by this project's MIT license. They are not
+redistributed under any grant from the project; consult each vendor's terms for
+the document's own redistribution conditions.
+
+No part of these reference documents is, or should be treated as, original work
+of this project.

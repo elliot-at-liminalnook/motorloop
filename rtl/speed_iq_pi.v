@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // FOC outer speed loop: speed error -> q-axis current command iq* (signed
 // LSB). Parallel-form PI with conditional-integration anti-windup and a
 // symmetric clamp to +-IQ_MAX. The signed output lets the loop command
@@ -9,9 +10,11 @@
 //
 // Gains are placeholder-grade (foc.speed_*, blocked by Q1).
 
-`include "rtl_params.vh"
-
-module speed_iq_pi (
+module speed_iq_pi #(
+    parameter integer SPEED_IQ_KP   = 4,
+    parameter integer SPEED_IQ_KISH = 5,
+    parameter integer IQ_MAX        = 300
+) (
     input  wire               clk,
     input  wire               rst_n,
     input  wire               enable,        // reset integrator when low
@@ -21,9 +24,9 @@ module speed_iq_pi (
     input  wire               reverse,       // measured rotation is backward
     output reg signed [17:0]  iq_target
 );
-  localparam signed [31:0] KP   = `SPEED_IQ_KP;
-  localparam integer       KISH = `SPEED_IQ_KISH;
-  localparam signed [31:0] IQMAX = `IQ_MAX;
+  localparam signed [31:0] KP   = SPEED_IQ_KP;
+  localparam integer       KISH = SPEED_IQ_KISH;
+  localparam signed [31:0] IQMAX = IQ_MAX;
 
   reg signed [31:0] integ;
 
