@@ -7,8 +7,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 RULES="rtl/lint/.rules.verible_lint"
-# foc_math.v is a verification harness, not shipped IP.
-FILES=$(ls rtl/*.v | grep -v foc_math)
+# foc_math.v is a verification harness, not shipped IP. Includes the bus
+# wrappers (rtl/bus/) and the reference-SoC wrapper (rtl/soc/).
+FILES=$(ls rtl/*.v rtl/bus/*.v rtl/soc/*.v 2>/dev/null | grep -v foc_math)
 
 echo "[verible] lint (enforced)"
 verible-verilog-lint --rules_config "$RULES" $FILES

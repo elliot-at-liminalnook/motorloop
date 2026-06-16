@@ -22,8 +22,9 @@
 //   PIs drive (vd, vq) toward (id_target, iq_target);
 //   the voltage-circle limiter bounds the vector and freezes the integrators
 //   (anti-windup) while clamped; inverse Park + SVPWM produce the per-leg duties.
-//   Latency: `update` -> duty3 valid after ~10 clocks (unsaturated) or ~58
-//   (saturated: the sequential isqrt + divisions); both << the sample period.
+//   Latency: `update` -> duty3 valid after ~14 clocks (unsaturated) or ~62
+//   (saturated: the sequential isqrt + divisions + the sequential SVPWM); both
+//   << the sample period.
 //
 // Surface-PMSM convention: id_target = 0 (no reluctance torque); iq_target is
 // the torque command. See notes/foc-fixed-point.md.
@@ -57,15 +58,16 @@ module foc_core #(
   // starts a walk from IDLE. The LIMIT stage is the multi-cycle sequential
   // circle limiter (~2 clocks unsaturated, ~50 saturated); a walk always
   // finishes far inside the sample period, so mid-walk strobes are ignored.
-  localparam [2:0] S_IDLE    = 3'd0,
-                   S_CLARKE  = 3'd1,   // clarke + sincos
-                   S_PARK    = 3'd2,   // park -> id, iq
-                   S_PI      = 3'd3,   // current PIs -> vd_raw, vq_raw (integ held)
-                   S_LIMSTRT = 3'd4,   // launch the sequential circle limiter
-                   S_LIMWAIT = 3'd5,   // await limiter done + integrator update
-                   S_INVP    = 3'd6,   // inverse Park
-                   S_SVPWM   = 3'd7;   // SVPWM -> duty3
-  reg [2:0] state;
+  localparam [3:0] S_IDLE    = 4'd0,
+                   S_CLARKE  = 4'd1,   // clarke + sincos
+                   S_PARK    = 4'd2,   // park -> id, iq
+                   S_PI      = 4'd3,   // current PIs -> vd_raw, vq_raw (integ held)
+                   S_LIMSTRT = 4'd4,   // launch the sequential circle limiter
+                   S_LIMWAIT = 4'd5,   // await limiter done + integrator update
+                   S_INVP    = 4'd6,   // inverse Park
+                   S_SVPSTRT = 4'd7,   // launch the sequential SVPWM
+                   S_SVPWAIT = 4'd8;   // await SVPWM done -> duty3
+  reg [3:0] state;
 
   // Inputs latched on `update`, held stable across the walk.
   reg signed [17:0] in_cur_a, in_cur_b, in_idt, in_iqt;
@@ -130,10 +132,15 @@ module foc_core #(
                        .cos_q15(cos_r), .sin_q15(sin_r),
                        .valpha(valpha), .vbeta(vbeta));
 
-  // Stage 6: SVPWM (from the stage-5 registers).
-  wire [47:0] duty3_comb;
-  svpwm #(.PWM_HALF_PERIOD(PWM_HALF_PERIOD)) u_svpwm (
-      .valpha(valpha_r), .vbeta(vbeta_r), .duty3(duty3_comb));
+  // Stage 6: SVPWM (sequential, bit-exact to svpwm.v - was foc_core's longest
+  // combinational arc / Fmax cap). Same start/done handshake as the limiter.
+  wire [47:0] duty3_seq;
+  wire svp_busy, svp_done;
+  wire svp_start = (state == S_SVPSTRT) && !svp_busy;
+  svpwm_seq #(.PWM_HALF_PERIOD(PWM_HALF_PERIOD)) u_svpwm (
+      .clk(clk), .rst_n(rst_n), .start(svp_start),
+      .valpha(valpha_r), .vbeta(vbeta_r),
+      .duty3(duty3_seq), .busy(svp_busy), .done(svp_done));
 
   always @(posedge clk or negedge rst_n) begin
     if (!rst_n) begin
@@ -176,14 +183,17 @@ module foc_core #(
             end
         S_INVP: begin
             valpha_r <= valpha; vbeta_r <= vbeta;
-            state <= S_SVPWM;
+            state <= S_SVPSTRT;
           end
-        S_SVPWM: begin
-            duty3  <= duty3_comb;
-            dbg_id <= id_r;     dbg_iq <= iq_r;
-            dbg_vd <= vd_lim_r; dbg_vq <= vq_lim_r;
-            state  <= S_IDLE;
-          end
+        S_SVPSTRT:
+            if (!svp_busy) state <= S_SVPWAIT;
+        S_SVPWAIT:
+            if (svp_done) begin
+              duty3  <= duty3_seq;
+              dbg_id <= id_r;     dbg_iq <= iq_r;
+              dbg_vd <= vd_lim_r; dbg_vq <= vq_lim_r;
+              state  <= S_IDLE;
+            end
         default: state <= S_IDLE;
       endcase
     end

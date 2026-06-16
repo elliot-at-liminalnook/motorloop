@@ -34,6 +34,7 @@ sources:
       - rtl/speed_pi.v
       - rtl/spi_drv_master.v
       - rtl/svpwm.v
+      - rtl/svpwm_seq.v
       - rtl/uart_regfile.v
       - rtl/uart_rx.v
       - rtl/uart_tx.v

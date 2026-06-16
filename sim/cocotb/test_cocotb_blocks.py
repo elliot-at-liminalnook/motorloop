@@ -38,13 +38,27 @@ BLOCKS = [
      "tb_circle_limit_seq", {}),
     ("as5047p_spi_master", ["rtl/as5047p_spi_master.v"],
      "tb_as5047p_spi_master", {"DRV_SPI_DIV": 4}),
+    ("speed_iq_pi", ["rtl/speed_iq_pi.v"], "tb_speed_iq_pi", {}),
+    # svpwm_seq vs combinational svpwm: bit-exact equivalence (task 4).
+    ("eq_svpwm",
+     ["sim/cocotb/eq_svpwm.v", "rtl/svpwm.v", "rtl/svpwm_seq.v"],
+     "tb_svpwm_seq", {}),
     # the pipelined FOC datapath, latency-aware (stages 4 + 6.5).
     ("foc_core",
      ["rtl/foc_core.v", "rtl/sincos.v", "rtl/clarke.v", "rtl/park.v",
       "rtl/inv_park.v", "rtl/current_pi.v", "rtl/circle_limit_seq.v",
-      "rtl/divider32.v", "rtl/svpwm.v"],
+      "rtl/divider32.v", "rtl/svpwm_seq.v"],
      "tb_foc_core", {}),
 ]
+
+# The reference-SoC wrapper (tier2-adoption §2) needs the full controller_top
+# hierarchy, so its source list is the whole rtl tree (minus the foc_math test
+# harness) + the AXI-Lite slave + the wrapper.
+import glob  # noqa: E402
+_SOC_SRC = ["rtl/soc/motorloop_axil_top.v", "rtl/bus/axil_regfile.v"] + [
+    f"rtl/{Path(p).name}" for p in sorted(glob.glob(str(ROOT / "rtl" / "*.v")))
+    if "foc_math" not in p]
+BLOCKS.append(("motorloop_axil_top", _SOC_SRC, "tb_motorloop_axil_top", {}))
 
 
 @pytest.mark.parametrize(

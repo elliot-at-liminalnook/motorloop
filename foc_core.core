@@ -1,7 +1,7 @@
 CAPI=2:
 # SPDX-License-Identifier: MIT
 name: motorloop:ip:foc_core:0.1.0
-description: "FOC datapath: Clarke/Park/PI/circle-limit/inv-Park/SVPWM (pipelined, sequential limiter)"
+description: "FOC datapath: Clarke/Park/PI/circle-limit/inv-Park/SVPWM (pipelined; sequential limiter + sequential SVPWM)"
 filesets:
   rtl:
     files:
@@ -13,7 +13,7 @@ filesets:
       - rtl/current_pi.v
       - rtl/circle_limit_seq.v
       - rtl/divider32.v
-      - rtl/svpwm.v
+      - rtl/svpwm_seq.v
     file_type: verilogSource
   gen:
     files:

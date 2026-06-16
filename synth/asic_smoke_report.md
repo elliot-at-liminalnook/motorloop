@@ -11,7 +11,7 @@ Each reusable block driven to gate-level synthesis with yosys and checked for AS
 | `commutation` | yes ✓ | 0 ✓ | none ✓ | 15 |
 | `svpwm` | yes ✓ | 0 ✓ | none ✓ | 2042 |
 | `current_pi` | yes ✓ | 0 ✓ | none ✓ | 546 |
-| `circle_limit_seq` | yes ✓ | 0 ✓ | none ✓ | 5976 |
+| `circle_limit_seq` | yes ✓ | 0 ✓ | none ✓ | 6029 |
 | `divider32` | yes ✓ | 0 ✓ | none ✓ | 528 |
 | `spi_drv_master` | yes ✓ | 0 ✓ | none ✓ | 156 |
 | `as5047p_spi_master` | yes ✓ | 0 ✓ | none ✓ | 172 |
@@ -20,6 +20,6 @@ Each reusable block driven to gate-level synthesis with yosys and checked for AS
 | `axil_regfile` | yes ✓ | 0 ✓ | none ✓ | 571 |
 | `wb_regfile` | yes ✓ | 0 ✓ | none ✓ | 545 |
 | `axis_sampler` | yes ✓ | 0 ✓ | none ✓ | 85 |
-| `foc_core` | yes ✓ | 0 ✓ | none ✓ | 27699 |
+| `foc_core` | yes ✓ | 0 ✓ | none ✓ | 28491 |
 
 **Result:** 14/14 blocks ASIC-synthesizable and structurally clean — all clean.

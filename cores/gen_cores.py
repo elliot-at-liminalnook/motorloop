@@ -58,11 +58,12 @@ LEAVES = {
                      ["rtl/uart_rx.v", "rtl/uart_tx.v"], []),
     "circle_limit_seq": ("Sequential voltage-circle limiter (multi-cycle, "
                          "bit-exact to circle_limit)", ["rtl/divider32.v"], []),
+    "svpwm_seq":    ("Sequential SVPWM (multi-cycle, bit-exact to svpwm)", [], []),
     "foc_core":     ("FOC datapath: Clarke/Park/PI/circle-limit/inv-Park/SVPWM "
-                     "(pipelined, sequential limiter)",
+                     "(pipelined; sequential limiter + sequential SVPWM)",
                      ["rtl/sincos.v", "rtl/clarke.v", "rtl/park.v",
                       "rtl/inv_park.v", "rtl/current_pi.v", "rtl/circle_limit_seq.v",
-                      "rtl/divider32.v", "rtl/svpwm.v"],
+                      "rtl/divider32.v", "rtl/svpwm_seq.v"],
                      ["rtl/gen/sincos_init.vh"]),
 }
 

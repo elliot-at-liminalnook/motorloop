@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:svpwm_seq:0.1.0
+description: "Sequential SVPWM (multi-cycle, bit-exact to svpwm)"
+filesets:
+  rtl:
+    files:
+      - rtl/svpwm_seq.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: svpwm_seq
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

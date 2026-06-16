@@ -9,8 +9,11 @@ read_verilog -I rtl -I rtl/gen \
   rtl/adc_spi_master.v rtl/divider32.v rtl/as5600_pwm_capture.v \
   rtl/as5047p_spi_master.v rtl/ads9224r_master.v rtl/speed_meter.v rtl/speed_pi.v \
   rtl/open_loop_ramp.v rtl/drv_manager.v rtl/adc_sequencer.v rtl/sincos.v \
-  rtl/clarke.v rtl/park.v rtl/inv_park.v rtl/svpwm.v rtl/current_pi.v \
+  rtl/clarke.v rtl/park.v rtl/inv_park.v rtl/svpwm.v rtl/svpwm_seq.v rtl/current_pi.v \
   rtl/circle_limit.v rtl/circle_limit_seq.v rtl/foc_core.v rtl/speed_iq_pi.v rtl/uart_regfile.v \
   rtl/uart_rx.v rtl/uart_tx.v
+# NOTE: -retime requires -noabc9, which loses more (abc9 mapping) than retiming
+# gains here (noabc9+retime measured 33.3 MHz vs 41.3 MHz with abc9). So the
+# default abc9 path is kept; real Fmax gains come from RTL pipelining (Tasks 1+).
 synth_ecp5 -top board_top -json synth/work/board_top.json
 tee -o synth/work/stat.txt stat

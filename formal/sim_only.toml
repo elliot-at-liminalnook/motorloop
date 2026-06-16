@@ -39,3 +39,5 @@ reason = "command/telemetry FSM; exercised end-to-end over the UART link"
 reason = "FOC datapath (pipelined, stage 6.5); composes PROVEN sub-blocks (svpwm/current_pi) + the bit-exact circle_limit_seq, covered by the top composition proof + the FOC sim tier (test_foc_scenarios, latency-aware)"
 [circle_limit_seq]
 reason = "sequential, multi-cycle limiter; bit-exact to circle_limit (itself DOCUMENTED - the isqrt+divide is intractable for the open SMT engines) by the cocotb equivalence test (tb_circle_limit_seq, ~1000 cases incl. the saturation boundary) + the in-system FOC regression"
+[svpwm_seq]
+reason = "sequential, multi-cycle SVPWM (FOC Fmax task 4); bit-exact to the PROVEN svpwm by the cocotb equivalence test (tb_svpwm_seq, ~670 cases incl. the clamp boundary) + the in-system FOC regression"
