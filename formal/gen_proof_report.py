@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Render formal/proof_report.md from manifest.toml + work/results.json.
 
 The proof report is the project's "what we have proven, and under what

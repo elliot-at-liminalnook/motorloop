@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Why This Exists
 
 This project grew out of a very ordinary feeling: coming from software into

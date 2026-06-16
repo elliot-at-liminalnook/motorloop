@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # ZONRI DRV8301 Power Board Notes
 
 ## Current Identification

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Motor parameter-fit bootstrap (realism-checklist 7.4): the exact fitting
 toolchain the Q1 identification session will use, self-tested against
 synthetic bench traces so motor-ID day is measurement, not development.

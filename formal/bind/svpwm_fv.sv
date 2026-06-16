@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Formal wrapper for svpwm (combinational): every per-leg duty stays within
 // [0, PWM_HALF_PERIOD] for all inputs in the legal range. The legal range is
 // an ASSUMPTION (the design feeds svpwm from inv_park of the circle-limited

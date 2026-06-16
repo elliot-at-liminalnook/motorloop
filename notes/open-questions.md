@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Open Questions
 
 Consolidated from the docs deep-read ([docs-digest](docs-digest.md)) and the

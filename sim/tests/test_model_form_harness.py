@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Realism-checklist stage 7: the model-form validation harness.
 
 7.1 stimulus round-trip and direct-vs-UART equivalence, 7.3 comparator

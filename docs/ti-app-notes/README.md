@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # TI Application Note Index
 
 These notes are not board schematics, but they are useful for safe bring-up, modeling assumptions, and controller validation.

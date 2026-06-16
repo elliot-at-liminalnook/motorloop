@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Formal wrapper for circle_limit (combinational): the limited voltage vector
 // magnitude never exceeds the inscribed-circle radius (plus a small slack from
 // the integer isqrt/divide). Input range is an ASSUMPTION - the design clamps

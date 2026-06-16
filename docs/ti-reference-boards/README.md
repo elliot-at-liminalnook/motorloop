@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # TI Reference Board Index
 
 These files are the authoritative reference-board collateral most relevant to the ZONRI DRV8301 board.

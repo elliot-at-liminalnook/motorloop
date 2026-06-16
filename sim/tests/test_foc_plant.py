@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 1: sinusoidal-PMSM plant configuration and the dq cross-check.
 
 Confirms the abc plant (emf_trapezoid_blend = 0) and the dq control math

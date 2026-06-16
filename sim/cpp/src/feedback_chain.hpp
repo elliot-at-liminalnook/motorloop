@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <array>
@@ -23,10 +24,28 @@ namespace bldcsim {
 //
 // All outputs clamp to [0, rail].
 
+// Where the current-sense amplifier lives (platform-abstraction stage 4): for
+// the DRV8301 the shunt is external and the amp is in the driver, digitized by
+// the MCP3208; for an integrated-CSA part (DRV8316) the amp is inside the
+// driver model and the ADC just digitizes its output. The chain's current-
+// channel math (offset + gain*shunt*i) is the same; this records which part
+// owns the amp so a platform profile can route it. Default = external shunt +
+// driver amp (the current ZONRI/DRV8301 path).
+enum class CurrentSenseSource {
+  kExternalShuntDriverAmp = 0,  // DRV8301: shunt + driver CSA -> MCP3208
+  kIntegratedDriverCsa = 1,     // DRV8316: integrated CSA -> ADS9224R
+};
+
 struct FeedbackChainConfig {
   double shunt_ohm = 2.0e-3;
   double amp_gain = 10.0;
   double amp_offset_v = 1.65;
+  CurrentSenseSource current_sense_source =
+      CurrentSenseSource::kExternalShuntDriverAmp;
+  // Integrated-CSA transconductance (DRV8316R: Vo = VREF/2 +/- GCSA*I), used
+  // only when current_sense_source = kIntegratedDriverCsa. Replaces the
+  // amp_gain*shunt product of the external path.
+  double csa_gain_v_per_a = 0.15;
   double emf_divider = 0.095;
   double emf_rc_cutoff_hz = 1.6e3;
   double bus_divider = 0.157;
@@ -95,7 +114,14 @@ class FeedbackChain {
       double vo = config_.amp_offset_v;
       const bool calibrating = (k < 2) && dc_cal_[k];
       if (low_conducting && !calibrating) {
-        vo += config_.amp_gain * config_.shunt_ohm * state.current_a[k];
+        // External shunt + driver/discrete amp (DRV8301/8302/8323), or the
+        // integrated CSA (DRV8316R: gain in V/A, no external shunt).
+        if (config_.current_sense_source ==
+            CurrentSenseSource::kIntegratedDriverCsa) {
+          vo += config_.csa_gain_v_per_a * state.current_a[k];
+        } else {
+          vo += config_.amp_gain * config_.shunt_ohm * state.current_a[k];
+        }
       }
       channels_[k] = clamp(vo + cm + spike);
 

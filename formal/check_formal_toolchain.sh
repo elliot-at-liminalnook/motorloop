@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # Verify the open-source formal toolchain (foc/formal-checklist stage 0.2).
 # Required: yosys + sby (SymbiYosys) + yosys-smtbmc + at least one SMT solver.
 # The YosysHQ OSS CAD Suite bundles all of these; if it is installed at

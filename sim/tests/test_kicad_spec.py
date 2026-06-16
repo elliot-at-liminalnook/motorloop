@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Derivation-checklist stage 3: the generated KiCad schematic mirror.
 
 The [circuit.*] tables stay the primary source; the schematic is generated

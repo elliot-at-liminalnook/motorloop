@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Architecture Decision Record: Lockstep Verilator Bench
 
 Date: 2026-06-12. Status: adopted and **implemented** (same date) —
@@ -336,6 +337,52 @@ or the real motor — that still needs hardware (the model-form harness). The
 formal layer closes the half we *can* close completely; bringing FOC up
 through it also flushed out a non-synthesizable `isqrt` (data-dependent loop
 bounds), now fixed.
+
+## Platform abstraction (implemented 2026-06-14)
+
+Peripheral models are selected by name so a future BOM change is a *platform
+profile*, not a rewrite, and every model stays in the tree (old parts double as
+a "cheap-out" regression). Build record: `platform-abstraction-checklist.md`.
+
+The swap boundary is the **pin-level protocol** (SPI bytes, gate bits, the
+analog node) — stable across parts — while register maps and fault behavior
+live inside each model. Three role interfaces (`i_gate_driver.hpp`,
+`i_current_adc.hpp`, `i_angle_sensor.hpp`) capture the bench↔model call surface;
+`Drv8301`/`Mcp3208`/`As5600` implement them; `Bench` holds
+`unique_ptr<IGateDriver>` etc. built by `peripheral_factory.cpp` from a config
+name (default = the current ZONRI/MCP/AS parts). `bench_factory.platform(name)`
+bundles the model set; `test_platforms.py` runs a smoke set over every
+registered platform and auto-extends as the registry grows. The **plant, FOC
+core, and formal proofs are platform-agnostic** and untouched — peripherals are
+just the transducers between the plant's analog reality and the RTL's digital
+world.
+
+Abstracted by **role, not chip**: between BOMs the current-sense amp migrates
+(DRV8301's amp + external shunt → MCP3208, vs DRV8316R's integrated CSA), so
+`FeedbackChain` routes the amp to whichever part owns it (`CurrentSenseSource`).
+
+**Registered platforms (Phase A/B + Phase C, datasheet-backed):**
+
+| Platform | Driver | Current sense | Angle | Notable |
+| --- | --- | --- | --- | --- |
+| `zonri_drv8301` | DRV8301 (SPI) | ext shunt + amp → MCP3208 | AS5600 PWM | default / cheap-out regression |
+| `zonri_drv8302` | DRV8302 (HW strap) | ext shunt + amp → MCP3208 | AS5600 PWM | no SPI (`drv_manager` hw_mode) |
+| `zonri_drv8323rs` | DRV8323RS (SPI) | ext shunt + amp → MCP3208 | AS5600 PWM | external-FET; reuses the DRV8301 frame |
+| `zonri_drv8316r` | DRV8316R (HW) | **integrated CSA** → MCP3208 | AS5600 PWM | integrated FET+CSA (retires Q7) |
+| `zonri_as5047p` | DRV8301 | ext shunt + amp → MCP3208 | **AS5047P SPI** | DAEC angle (retires Q22) |
+| `zonri_ads9224r` | DRV8301 | **ADS9224R** 16-bit dual | AS5600 PWM | simultaneous sampling (retires Q21) |
+| `ti_reference` | DRV8316R | integrated CSA → MCP3208 | AS5047P SPI | clean BOM (fewest passives) |
+| `ti_reference_hp` | DRV8323RS | **ADS9224R** 16-bit dual | AS5047P SPI | external-FET, premium ADC |
+
+A swap is one config string. Protocol variants are runtime straps muxed into one
+bitstream: `drv_hw_mode` (skip SPI config), `angle_spi_mode` (AS5047P SPI master
+vs AS5600 PWM capture), `adc_dual_mode` (ADS9224R FOC current vs MCP3208
+sequencer), and `cur_norm_shift` (renormalize per-platform codes/A). The
+**plant, FOC core, and formal proofs stay platform-agnostic**; each new bus
+master (AS5047P SPI, ADS9224R eSPI) carries its own framing proof, and the
+top-level no-shoot-through composition proof is re-verified with every variant
+wired in. Every part's protection/scaling values are sourced from its datasheet
+in `docs/datasheets/` — none fabricated.
 
 ## First slice
 

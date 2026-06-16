@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # motorloop
 
 **Motor-in-the-loop verification for Verilog.** Run your controller RTL
@@ -78,7 +79,17 @@ stimulus-replay testbenches:
 - **Protocol fidelity at the boundaries.** The DRV8301 model implements the
   N+1 pipelined SPI response, register semantics, and fault behavior from
   the datasheet; the ADC model samples during the real aperture window with
-  charge-sharing residual from the previous channel.
+  charge-sharing residual from the previous channel. Peripherals sit behind
+  role interfaces (gate driver / current ADC / angle sensor) selected by a
+  config name, so a BOM is a *platform profile*, not a rewrite — the plant,
+  control law, and formal proofs are part-agnostic. Eight datasheet-backed
+  platforms ship today (DRV8301/DRV8302/DRV8323RS/DRV8316R, AS5600/AS5047P,
+  MCP3208/ADS9224R), each retiring a specific open question in hardware: the
+  AS5047P's DAEC angle (latency, Q22), the ADS9224R's dual-simultaneous sampling
+  (Q21), the DRV8316R's integrated FET+CSA (clone-passive uncertainty, Q7).
+  Protocol variants are runtime straps muxed into one bitstream. The same RTL
+  also runs the open synthesis flow (yosys → nextpnr-ecp5 → ecppack, targeting a
+  ULX3S/ECP5) under `synth/`.
 - **Physics where it matters.** Switched bridge with body-diode conduction,
   event-to-event RK4 integration, and optional realism layers (all
   default-off, enabled per scenario): supply CV/CC/no-sink dynamics, cogging

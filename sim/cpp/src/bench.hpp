@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <array>
@@ -8,6 +9,7 @@
 
 #include <random>
 
+#include "ads9224r.hpp"
 #include "as5600.hpp"
 #include "drv8301.hpp"
 #include "feedback_chain.hpp"
@@ -77,6 +79,16 @@ struct FocConfig {
 struct BenchConfig {
   double clk_hz = 25e6;
   double vbus_v = 12.0;
+  // Platform peripheral selection (platform-abstraction): which concrete model
+  // the factory builds for each role. Defaults are the current ZONRI/MCP/AS
+  // parts; a platform profile overrides them.
+  std::string driver_name = "drv8301";
+  std::string adc_name = "mcp3208";
+  std::string angle_name = "as5600";
+  bool drv_hw_mode = false;   // DRV8302-style hardware config (RTL skips SPI)
+  bool angle_spi_mode = false;  // AS5047P SPI angle (RTL uses the SPI master)
+  int cur_norm_shift = 0;       // FOC current right-shift (per-platform codes/A)
+  bool adc_dual_mode = false;   // FOC current from the ADS9224R (simultaneous)
   ThreePhaseMotorParams motor{};
   BridgeParams bridge{};
   PlantConfig plant{};
@@ -116,10 +128,10 @@ class Bench {
   void run_cycles(std::uint64_t cycles);
 
   // -- injections --
-  void inject_drv_register_reset() { drv_.inject_register_reset(); }
-  void inject_drv_latched_fault() { drv_.inject_latched_fault(); }
-  void inject_drv_otw(bool active) { drv_.inject_otw(active); }
-  void inject_magnet_loss(bool lost) { encoder_.inject_magnet_loss(lost); }
+  void inject_drv_register_reset() { drv_->inject_register_reset(); }
+  void inject_drv_latched_fault() { drv_->inject_latched_fault(); }
+  void inject_drv_otw(bool active) { drv_->inject_otw(active); }
+  void inject_magnet_loss(bool lost) { encoder_->inject_magnet_loss(lost); }
   void set_load_torque(double n_m) {
     base_load_nm_ = n_m;
     plant_.set_load_torque(n_m);
@@ -150,8 +162,8 @@ class Bench {
   // -- probes --
   double time_s() const { return time_s_; }
   const ThreePhasePlant& plant() const { return plant_; }
-  const Drv8301& drv() const { return drv_; }
-  const As5600& encoder() const { return encoder_; }
+  const IGateDriver& drv() const { return *drv_; }
+  const IAngleSensor& encoder() const { return *encoder_; }
   std::array<double, 3> currents() const { return plant_.state().current_a; }
   double omega() const { return plant_.state().omega_rad_s; }
   double theta() const { return plant_.state().theta_rad; }
@@ -187,7 +199,7 @@ class Bench {
   double bus_v_min() const { return bus_v_min_; }
   double bus_v_max() const { return bus_v_max_; }
   bool supply_in_cc() const { return plant_.supply_in_cc(); }
-  bool drv_pvdd_uv() const { return drv_.pvdd_uv_active(); }
+  bool drv_pvdd_uv() const { return drv_->pvdd_uv_active(); }
   long pvdd_uv_events() const { return pvdd_uv_events_; }
   double fet_tj_max_c() const { return thermal_.fet_tj_max_c(); }
   double drv_t_c() const { return thermal_.drv_t_c(); }
@@ -221,10 +233,11 @@ class Bench {
   std::unique_ptr<VerilatedVcdC> vcd_;
 
   ThreePhasePlant plant_;
-  Drv8301 drv_;
-  Mcp3208 adc_;
-  As5600 encoder_;
   FeedbackChain chain_;
+  std::unique_ptr<IGateDriver> drv_;
+  std::unique_ptr<ICurrentAdc> adc_;
+  std::unique_ptr<IAngleSensor> encoder_;
+  Ads9224r adc2_;             // FOC dual-simultaneous ADC (active in adc_dual_mode)
   ThermalModel thermal_;
 
   double time_s_ = 0.0;
@@ -241,6 +254,7 @@ class Bench {
   bool last_pvdd_uv_ = false;
   long pvdd_uv_events_ = 0;
   bool last_pwm_up_ = true;     // peak detection for the FOC current S/H
+  bool last_adc2_convst_ = false;  // ADS9224R CONVST edge detect
   long config_window_gate_activity_ = 0;
   double base_load_nm_ = 0.0;
   double load_osc_amp_ = 0.0;

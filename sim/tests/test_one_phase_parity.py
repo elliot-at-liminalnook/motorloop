@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 1.4/1.5: C++ vs Python one-phase parity and analytic sanity."""
 
 from __future__ import annotations

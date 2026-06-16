@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "one_phase_plant.hpp"
 
 #include <algorithm>

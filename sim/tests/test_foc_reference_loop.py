@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 8.1: the Python FOC controller reference closed around the C++
 plant, and its agreement with the RTL FOC loop at the loop level.
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Edge-case scenario coverage (notes/edge-case-scenarios.md, E1-E27).
 
 Each test names the catalog entry it covers. E25 (counter saturation) is

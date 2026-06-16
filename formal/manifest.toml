@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Formal property manifest - the single source of truth for what we prove and
 # under what assumptions (formal-checklist.md). Each [[check]] is one sby task
 # (one checker bound into one module). run_formal.py drives proofs from this;
@@ -105,11 +106,12 @@ engine        = "smtbmc boolector"
 depth         = 6
 expected      = "PROVEN"
 covers        = true
-param_scope   = "config"
+param_scope   = "envelope"
+envelope      = "any V_RAW_MAX (the bound is the module's own parameter, passed through the bind)"
 assumptions   = ["synchronous reset (sby init)"]
-properties    = ["Current-PI output stays within its clamp [-V_RAW_MAX, V_RAW_MAX] for any error/integrator state"]
+properties    = ["Current-PI output stays within its clamp [-V_RAW_MAX, V_RAW_MAX] for any error/integrator state AND any V_RAW_MAX parameter (parameter-generic)"]
 cover_props   = ["the clamp is reachable (PI can demand max and min drive)"]
-justification = "The output sat() clamps praw regardless of the (possibly overflowed) integrator term; this bounds the input the circle limiter assumes."
+justification = "The output sat() clamps praw to the module's V_RAW_MAX regardless of the (possibly overflowed) integrator term; the checker asserts the SAME parameter (passed through the bind), so the bound is generic over V_RAW_MAX. Bounds the input the circle limiter assumes."
 
 [[check]]
 id            = "speed_iq_pi"
@@ -122,11 +124,12 @@ engine        = "smtbmc boolector"
 depth         = 6
 expected      = "PROVEN"
 covers        = true
-param_scope   = "config"
+param_scope   = "envelope"
+envelope      = "any IQ_MAX (the bound is the module's own parameter, passed through the bind)"
 assumptions   = ["synchronous reset (sby init)"]
-properties    = ["FOC torque command iq_target stays within [-IQ_MAX, IQ_MAX] for any speed error/integrator state"]
+properties    = ["FOC torque command iq_target stays within [-IQ_MAX, IQ_MAX] for any speed error/integrator state AND any IQ_MAX parameter (parameter-generic)"]
 cover_props   = ["the clamp is reachable (loop can demand max/min torque current)"]
-justification = "The output clamp bounds iq_target by construction; bounds the inner current loop's command."
+justification = "The output clamp bounds iq_target to the module's IQ_MAX by construction; the checker asserts the SAME parameter (passed through the bind), so the bound is generic over IQ_MAX."
 
 [[check]]
 id            = "pwm_deadtime"
@@ -185,7 +188,7 @@ justification = "Async reset holds the gate FFs at 0; the post-release cycle is 
 id            = "controller_top_composition"
 module        = "controller_top"
 checker       = "formal/bind/controller_top_fv.sv"
-rtl           = ["rtl/controller_top.v", "rtl/pwm_generator.v", "rtl/commutation.v", "rtl/spi_drv_master.v", "rtl/adc_spi_master.v", "rtl/divider32.v", "rtl/as5600_pwm_capture.v", "rtl/speed_meter.v", "rtl/speed_pi.v", "rtl/open_loop_ramp.v", "rtl/drv_manager.v", "rtl/adc_sequencer.v", "rtl/sincos.v", "rtl/clarke.v", "rtl/park.v", "rtl/inv_park.v", "rtl/svpwm.v", "rtl/current_pi.v", "rtl/circle_limit.v", "rtl/foc_core.v", "rtl/speed_iq_pi.v", "rtl/uart_regfile.v", "rtl/uart_rx.v", "rtl/uart_tx.v"]
+rtl           = ["rtl/controller_top.v", "rtl/pwm_generator.v", "rtl/commutation.v", "rtl/spi_drv_master.v", "rtl/adc_spi_master.v", "rtl/divider32.v", "rtl/as5600_pwm_capture.v", "rtl/as5047p_spi_master.v", "rtl/ads9224r_master.v", "rtl/speed_meter.v", "rtl/speed_pi.v", "rtl/open_loop_ramp.v", "rtl/drv_manager.v", "rtl/adc_sequencer.v", "rtl/sincos.v", "rtl/clarke.v", "rtl/park.v", "rtl/inv_park.v", "rtl/svpwm.v", "rtl/current_pi.v", "rtl/circle_limit.v", "rtl/foc_core.v", "rtl/speed_iq_pi.v", "rtl/uart_regfile.v", "rtl/uart_rx.v", "rtl/uart_tx.v"]
 includes      = ["rtl/gen/sincos_init.vh"]
 category      = "safety"
 method        = "prove"
@@ -215,6 +218,52 @@ assumptions   = ["rst_n is the design reset"]
 properties    = ["Shoot-through freedom proven via the reusable formal/lib/no_shoot_through checker (parameter-generic over leg count N)"]
 cover_props   = ["each leg actually drives (bundled by the library checker)"]
 justification = "Demonstrates the reusable checker library: the same parameterized checker binds to any N-leg half-bridge; the property references no design constants, so it is parameter-generic."
+
+[[check]]
+id            = "as5047p_spi_master"
+module        = "as5047p_spi_master"
+checker       = "formal/bind/as5047p_spi_master_fv.sv"
+rtl           = ["rtl/as5047p_spi_master.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 20
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = [
+  "FSM legality: the SPI master state register only ever holds one of the 6 defined states S_IDLE..S_GAP",
+  "new_sample is a well-formed single-cycle pulse - one event per latched angle",
+]
+cover_props   = [
+  "a read frame actually starts (ncs asserts low)",
+  "the SPI clock actually toggles",
+]
+justification = "1-/k-inductive: every case arm assigns a defined next state (reset at S_IDLE), and new_sample defaults to 0 and is set for at most one cycle. The full 16-bit read that fires new_sample is ~280 cycles deep (sim-tier coverage); the shallow covers prove the FSM is live."
+
+[[check]]
+id            = "ads9224r_master"
+module        = "ads9224r_master"
+checker       = "formal/bind/ads9224r_master_fv.sv"
+rtl           = ["rtl/ads9224r_master.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 20
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = [
+  "FSM legality: the ADS9224R master state register only ever holds one of the 7 defined states S_IDLE..S_DONE",
+  "foc_valid is a well-formed single-cycle pulse - one current update per conversion",
+]
+cover_props   = [
+  "a conversion actually triggers (CONVST asserts)",
+  "a readout frame actually starts (ncs asserts low)",
+]
+justification = "1-/k-inductive: every case arm assigns a defined next state (reset at S_IDLE), and foc_valid defaults to 0 and is set for at most one cycle. The full CONVST->READY->16-bit read is sim-tier coverage; the shallow covers prove the FSM is live."
 
 [[check]]
 id            = "adc_sequencer"

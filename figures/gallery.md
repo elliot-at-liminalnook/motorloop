@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Figure Gallery
 
 Every image here is rendered from a live bench run by

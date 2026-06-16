@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # OpenModelica Example Tour
 
 > **Architecture note (2026-06-12):** since this tour was written, the project

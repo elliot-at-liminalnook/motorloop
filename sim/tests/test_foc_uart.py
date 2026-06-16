@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 9.1: a closed-loop FOC run driven end-to-end over the UART
 register file (mirrors the six-step S11 scenario). The host writes the FOC
 align, the speed target, takes over the control mux, and commands mode 3; the

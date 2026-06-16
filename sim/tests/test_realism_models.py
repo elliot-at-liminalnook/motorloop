@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Realism-checklist unit tier: supply/bus physics, mechanical terms,
 correlated disturbances, ADC nonidealities, thermal lumps, sensor
 imperfection — each validated in isolation against hand calcs."""

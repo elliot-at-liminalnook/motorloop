@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Run the Modelica oracle (three-phase averaged open-loop) through omc.
 
 Every parameter is overridden at simulate time from sim/config/params.toml,

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 6: the full cascade - closed-loop speed control spinning the
 simulated PMSM. The outer speed PI commands iq*; the inner current loop holds
 id=0 and regulates iq; the modulator drives the bridge. Placeholder motor

@@ -1,6 +1,9 @@
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <random>
+
+#include "i_angle_sensor.hpp"
 
 namespace bldcsim {
 
@@ -34,7 +37,7 @@ struct As5600Config {
   unsigned noise_seed = 0xa5c0;
 };
 
-class As5600 {
+class As5600 : public IAngleSensor {
  public:
   explicit As5600(const As5600Config& config);
 

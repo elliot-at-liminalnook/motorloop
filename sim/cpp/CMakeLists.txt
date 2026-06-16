@@ -27,8 +27,14 @@ pybind11_add_module(bldcsim
   src/three_phase_plant.cpp
   src/three_phase_scenario.cpp
   src/drv8301.cpp
+  src/drv8302.cpp
+  src/drv8323.cpp
+  src/drv8316r.cpp
   src/mcp3208.cpp
+  src/ads9224r.cpp
   src/as5600.cpp
+  src/as5047p.cpp
+  src/peripheral_factory.cpp
   src/bench.cpp
 )
 target_include_directories(bldcsim PRIVATE src)
@@ -43,6 +49,8 @@ verilate(bldcsim
     ${RTL_DIR}/adc_spi_master.v
     ${RTL_DIR}/divider32.v
     ${RTL_DIR}/as5600_pwm_capture.v
+    ${RTL_DIR}/as5047p_spi_master.v
+    ${RTL_DIR}/ads9224r_master.v
     ${RTL_DIR}/speed_meter.v
     ${RTL_DIR}/speed_pi.v
     ${RTL_DIR}/open_loop_ramp.v

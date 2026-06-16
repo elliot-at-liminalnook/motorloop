@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Loader for sim/config/params.toml with provenance-aware assumption flags.
 
 Every simulation parameter carries a `status` describing how trustworthy it

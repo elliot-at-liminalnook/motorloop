@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Derive simulation parameters from the codified circuit specifications.
 
 The source of truth for circuit-derived parameters is the component level:

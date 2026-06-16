@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Hardware Photo Inventory
 
 Photo source: a local photo directory (not included in this repo); the

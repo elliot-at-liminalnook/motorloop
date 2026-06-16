@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Reference FOC math: a floating-point executable spec and a bit-faithful
 fixed-point twin of the RTL, plus a steady-state dq PMSM model.
 

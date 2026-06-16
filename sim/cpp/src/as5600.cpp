@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "as5600.hpp"
 
 #include <cmath>

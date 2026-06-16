@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
@@ -191,6 +192,13 @@ bldcsim::FeedbackChainConfig chain_config_from_dict(const py::dict& d) {
   if (d.contains("edge_spike_tau_s")) {
     c.edge_spike_tau_s = d["edge_spike_tau_s"].cast<double>();
   }
+  if (d.contains("current_sense_source")) {
+    c.current_sense_source = static_cast<bldcsim::CurrentSenseSource>(
+        d["current_sense_source"].cast<int>());
+  }
+  if (d.contains("csa_gain_v_per_a")) {
+    c.csa_gain_v_per_a = d["csa_gain_v_per_a"].cast<double>();
+  }
   return c;
 }
 
@@ -221,6 +229,21 @@ bldcsim::BenchConfig bench_config_from_dict(const py::dict& d) {
   bldcsim::BenchConfig c;
   c.clk_hz = d["clk_hz"].cast<double>();
   c.vbus_v = d["vbus_v"].cast<double>();
+  // Platform peripheral selection (default = current parts).
+  if (d.contains("driver_name"))
+    c.driver_name = d["driver_name"].cast<std::string>();
+  if (d.contains("adc_name"))
+    c.adc_name = d["adc_name"].cast<std::string>();
+  if (d.contains("angle_name"))
+    c.angle_name = d["angle_name"].cast<std::string>();
+  if (d.contains("drv_hw_mode"))
+    c.drv_hw_mode = d["drv_hw_mode"].cast<bool>();
+  if (d.contains("angle_spi_mode"))
+    c.angle_spi_mode = d["angle_spi_mode"].cast<bool>();
+  if (d.contains("cur_norm_shift"))
+    c.cur_norm_shift = d["cur_norm_shift"].cast<int>();
+  if (d.contains("adc_dual_mode"))
+    c.adc_dual_mode = d["adc_dual_mode"].cast<bool>();
   c.trace_interval_s = d["trace_interval_s"].cast<double>();
   c.motor = motor_params_from_dict(d["motor"].cast<py::dict>());
   c.bridge = bridge_params_from_dict(d["bridge"].cast<py::dict>());

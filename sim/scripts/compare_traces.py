@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Hardware-vs-simulation trace comparator (realism-checklist 7.2).
 
 Aligns two shared-schema trace CSVs (optional time-shift search), resamples

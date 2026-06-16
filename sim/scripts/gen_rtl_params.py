@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Render rtl/gen/rtl_params.vh from sim/config/params.toml.
 
 Single source of truth: the RTL never hardcodes a value that exists in the

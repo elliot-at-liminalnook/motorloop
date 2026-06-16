@@ -1,8 +1,11 @@
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <array>
 #include <cstdint>
 #include <functional>
+
+#include "i_current_adc.hpp"
 
 namespace bldcsim {
 
@@ -35,14 +38,11 @@ struct Mcp3208Config {
   double inl_bow_lsb = 0.0;
 };
 
-struct Mcp3208Sample {
-  double time_s = -1.0;
-  int channel = -1;
-  double analog_v = 0.0;
-  int code = 0;
-};
+// The completed-conversion struct is the generic AdcSample (i_current_adc.hpp);
+// the alias keeps existing call sites compiling.
+using Mcp3208Sample = AdcSample;
 
-class Mcp3208 {
+class Mcp3208 : public ICurrentAdc {
  public:
   using AnalogSource = std::function<double(int channel)>;
 

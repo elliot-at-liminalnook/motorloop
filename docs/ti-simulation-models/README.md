@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # TI Simulation Model Index
 
 TI publishes several DRV8301 electrical model files. These are not FMUs and will not drop directly into the OpenModelica plant, but they are useful references for validating simplified behavioral models.

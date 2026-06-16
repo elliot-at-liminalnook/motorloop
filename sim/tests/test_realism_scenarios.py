@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Realism-checklist scenario tier (S6-S13): emergent brownout, regen
 pump-up, detent starts, correlated disturbances, thermal runaway, sensor
 eccentricity + calibration, UART control, digital corruption, and the

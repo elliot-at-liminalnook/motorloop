@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 7: AS5600 angle-latency compensation (Q22).
 
 The AS5600's frame + filter latency makes the reported angle lag the true

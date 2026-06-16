@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 5: the current loop (torque control at a fixed angle).
 
 With the rotor clamped (dyno) the FOC datapath regulates the dq currents to

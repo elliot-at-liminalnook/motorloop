@@ -1,0 +1,54 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:bldc:controller:0.1.0
+description: BLDC FOC + six-step motor controller (the integrated motorloop system)
+
+filesets:
+  rtl:
+    files:
+      - rtl/controller_top.v
+      - rtl/pwm_generator.v
+      - rtl/commutation.v
+      - rtl/spi_drv_master.v
+      - rtl/adc_spi_master.v
+      - rtl/divider32.v
+      - rtl/as5600_pwm_capture.v
+      - rtl/as5047p_spi_master.v
+      - rtl/ads9224r_master.v
+      - rtl/speed_meter.v
+      - rtl/speed_pi.v
+      - rtl/open_loop_ramp.v
+      - rtl/drv_manager.v
+      - rtl/adc_sequencer.v
+      - rtl/sincos.v
+      - rtl/clarke.v
+      - rtl/park.v
+      - rtl/inv_park.v
+      - rtl/svpwm.v
+      - rtl/current_pi.v
+      - rtl/circle_limit.v
+      - rtl/foc_core.v
+      - rtl/speed_iq_pi.v
+      - rtl/uart_regfile.v
+      - rtl/uart_rx.v
+      - rtl/uart_tx.v
+    file_type: verilogSource
+  gen:
+    # The system config (gen_rtl_params.py from sim/config/params.toml) + the
+    # generated sin/cos table. Leaf IP cores do NOT depend on rtl_params.vh -
+    # only the system top consumes it (see trusted-library-checklist).
+    files:
+      - rtl/gen/rtl_params.vh: {is_include_file: true}
+      - rtl/gen/sincos_init.vh: {is_include_file: true}
+    file_type: verilogSource
+
+targets:
+  default: &default
+    filesets: [rtl, gen]
+    toplevel: controller_top
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

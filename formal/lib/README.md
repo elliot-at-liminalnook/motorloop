@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Reusable Formal Checkers
 
 Parameterized, bindable property checkers — the building blocks of the

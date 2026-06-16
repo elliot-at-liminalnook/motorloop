@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Generate the feedback-circuits KiCad schematic from sim/config/params.toml.
 
 Tier 3 of the derivation layer (notes/derivation-checklist.md): the schematic

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Reset / initialization safety for pwm_generator (formal-checklist stage 2).
 // During reset and on the first cycle after reset deasserts, every gate is
 // off - the power stage can never glitch into an illegal drive out of reset.

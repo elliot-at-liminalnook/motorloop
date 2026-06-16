@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Run a named lockstep-bench scenario and write trace artifacts.
 
 Scenarios: init, open_loop, closed_loop.

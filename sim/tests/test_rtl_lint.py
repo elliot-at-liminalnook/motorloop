@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 5.1: Verilator lint gate over the RTL."""
 
 from __future__ import annotations

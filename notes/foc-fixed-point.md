@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # FOC Fixed-Point Convention
 
 The single source of truth for the Q-format and saturation rules used by the

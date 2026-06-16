@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Dead-time minimum (formal-checklist 4.2). For each leg, a gate may only
 // assert once its complement has been off for >= DEAD_CYCLES. The design
 // enforces this with per-leg off-time counters (leg[k].off_time_h/l); by

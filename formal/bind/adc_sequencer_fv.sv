@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Datapath integrity for adc_sequencer (formal-checklist stage 6): the sample
 // strobes are well-formed single-cycle pulses - foc_valid / cur_valid / the
 // adc_start request never stay asserted two cycles in a row, so a downstream

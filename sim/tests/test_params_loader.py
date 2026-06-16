@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Loader and convention tests for sim/config/params.toml (stage 1.3)."""
 
 from __future__ import annotations

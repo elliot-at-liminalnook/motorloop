@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Cached ngspice batch runner for the codified circuit netlists.
 
 Each run gets a working directory under sim/build/spice keyed by the hash of

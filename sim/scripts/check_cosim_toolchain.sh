@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # Toolchain check for the lockstep verification bench (see notes/architecture.md).
 # Required: everything the C++ bench, RTL verilation, and pytest suite need.
 # Optional: oracle and debug tooling that the critical path can run without.

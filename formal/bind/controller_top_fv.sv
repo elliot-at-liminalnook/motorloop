@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Top-level composition (formal-checklist stage 9): the integrated controller
 // never commands shoot-through at its DRV-gate outputs (inh/inl), across every
 // mode and the FOC/six-step duty/leg-mode muxing. This confirms the

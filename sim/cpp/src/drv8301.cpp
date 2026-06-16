@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "drv8301.hpp"
 
 #include <cmath>

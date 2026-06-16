@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Dogfood: prove pwm_generator shoot-through freedom using the *reusable*
 // formal/lib/no_shoot_through checker (formal-checklist 8.2), demonstrating the
 // library checker binds to a real driver and carries its own non-vacuity

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # FOC Conversion Checklist
 
 Ordered tasks and code to convert the controller from sensored six-step

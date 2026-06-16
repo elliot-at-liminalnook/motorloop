@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Edge-Case Scenario Catalog
 
 Edge cases the system should be tested against, beyond the S0–S13 scenario

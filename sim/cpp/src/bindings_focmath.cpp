@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // pybind module exposing the combinational FOC math harness (rtl/foc_math.v)
 // so the RTL primitives can be checked bit-for-bit against
 // sim/scripts/foc_reference.py (sim/tests/test_foc_math.py).

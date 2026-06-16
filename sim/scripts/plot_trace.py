@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Plot one or more shared-schema trace CSVs (phase currents, speed, and
 whatever other known columns are present) for human review.
 

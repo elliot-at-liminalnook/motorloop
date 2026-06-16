@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 6: closed-loop system scenarios on the lockstep bench.
 
 S0 init sequencing, S1 open-loop spin, S2 closed-loop sensored six-step,

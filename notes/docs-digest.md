@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Docs Digest: Extracted Facts From docs/
 
 Deep read of the PDF collateral in `docs/`, 2026-06-12. Numbers below are from the

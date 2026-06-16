@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Formal checker for pwm_generator, bound into the DUT (formal-checklist
 // stages 3-4). Properties + non-vacuity covers.
 //

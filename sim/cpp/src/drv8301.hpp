@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: MIT
 #pragma once
 
 #include <array>
 #include <cstdint>
+
+#include "i_gate_driver.hpp"
 
 namespace bldcsim {
 
@@ -42,17 +45,11 @@ struct Drv8301Config {
   double otsd_c = 150.0;
 };
 
-struct Drv8301Inputs {
-  bool en_gate = false;
-  bool dc_cal = false;
-  std::array<bool, 3> inh{false, false, false};
-  std::array<bool, 3> inl{false, false, false};
-  bool nscs = true;
-  bool sclk = false;
-  bool sdi = false;
-};
+// Pin inputs are the generic DriverInputs (i_gate_driver.hpp); the alias keeps
+// existing call sites compiling.
+using Drv8301Inputs = DriverInputs;
 
-class Drv8301 {
+class Drv8301 : public IGateDriver {
  public:
   explicit Drv8301(const Drv8301Config& config);
 

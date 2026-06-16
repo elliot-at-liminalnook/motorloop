@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Shared stimulus format (realism-checklist 7.1): a scenario described as
 a JSON-serializable timeline, runnable identically against the lockstep
 bench (direct ports or the UART path) and — once hardware exists — against

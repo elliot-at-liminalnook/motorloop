@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # Formal property verification (formal-checklist stage 11.2).
 # Notably, unlike proprietary DV, the open formal stack runs in CI: this
 # proves the plant-independent safety properties on every push and publishes

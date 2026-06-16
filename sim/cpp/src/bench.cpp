@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "bench.hpp"
 
 #include <algorithm>
@@ -7,6 +8,7 @@
 #include <verilated_vcd_c.h>
 
 #include "Vcontroller_top.h"
+#include "peripheral_factory.hpp"
 
 namespace bldcsim {
 
@@ -14,10 +16,13 @@ Bench::Bench(const BenchConfig& config)
     : config_(config),
       ctx_(std::make_unique<VerilatedContext>()),
       plant_(config.motor, config.bridge, config.plant, config.supply),
-      drv_(config.drv),
-      adc_(config.adc, [this](int ch) { return chain_.channel(ch); }),
-      encoder_(config.encoder),
       chain_(config.chain),
+      drv_(make_gate_driver(config.driver_name, config.drv)),
+      adc_(make_current_adc(config.adc_name, config.adc,
+                            [this](int ch) { return chain_.channel(ch); })),
+      encoder_(make_angle_sensor(config.angle_name, config.encoder)),
+      adc2_(Ads9224rConfig{config.adc.vref_v, 4.096,
+                           config.chain.amp_offset_v, 315e-9}),
       thermal_(config.thermal) {
   ctx_->traceEverOn(true);
   top_ = std::make_unique<Vcontroller_top>(ctx_.get());
@@ -37,11 +42,19 @@ Bench::Bench(const BenchConfig& config)
   top_->ctrl_iq_target = 0;
   top_->ctrl_foc_speed_loop = 0;
   top_->ctrl_foc_extrap = config_.foc.angle_extrap_enable ? 1 : 0;
+  top_->ctrl_drv_hw_mode = config_.drv_hw_mode ? 1 : 0;
+  top_->ctrl_angle_spi_mode = config_.angle_spi_mode ? 1 : 0;
+  top_->ctrl_cur_norm_shift = config_.cur_norm_shift & 0x7;
+  top_->ctrl_adc_dual_mode = config_.adc_dual_mode ? 1 : 0;
+  top_->adc2_sdo_a = 0;
+  top_->adc2_sdo_b = 0;
+  top_->adc2_ready = 0;
   top_->nfault = 1;
   top_->noctw = 1;
   top_->drv_miso = 0;
   top_->adc_miso = 0;
   top_->angle_pwm = 0;
+  top_->angle_miso = 0;
   top_->uart_rx_pin = 1;  // idle high
   // FOC phase-current sampling scheme (Q21): simultaneous (scheme 0) freezes
   // the low-side-shunt currents at the PWM peak via an external S/H.
@@ -216,11 +229,11 @@ void Bench::run_config_window(double seconds, bool en_gate_pulldown,
     in.nscs = coin(rng) != 0;
     in.sclk = coin(rng) != 0;
     in.sdi = coin(rng) != 0;
-    drv_.update(t, in, plant_.state().current_a,
+    drv_->update(t, in, plant_.state().current_a,
                 config_.supply.enabled ? plant_.bus_v() : config_.vbus_v,
                 thermal_.drv_t_c());
-    const auto& gh = drv_.gate_high();
-    const auto& gl = drv_.gate_low();
+    const auto& gh = drv_->gate_high();
+    const auto& gl = drv_->gate_low();
     bool any = false;
     for (int k = 0; k < 3; ++k) any = any || gh[k] || gl[k];
     if (any) ++config_window_gate_activity_;
@@ -262,18 +275,18 @@ void Bench::tick() {
   drv_in.sdi = glitched(3, top_->drv_mosi);
   const double pvdd =
       config_.supply.enabled ? plant_.bus_v() : config_.vbus_v;
-  drv_.update(time_s_, drv_in, plant_.state().current_a, pvdd,
+  drv_->update(time_s_, drv_in, plant_.state().current_a, pvdd,
               thermal_.drv_t_c());
-  if (drv_.pvdd_uv_active() && !last_pvdd_uv_) ++pvdd_uv_events_;
-  last_pvdd_uv_ = drv_.pvdd_uv_active();
+  if (drv_->pvdd_uv_active() && !last_pvdd_uv_) ++pvdd_uv_events_;
+  last_pvdd_uv_ = drv_->pvdd_uv_active();
 
   // DC_CAL state flows into the feedback chain.
-  chain_.set_dc_cal(0, drv_.dc_cal_active(0));
-  chain_.set_dc_cal(1, drv_.dc_cal_active(1));
+  chain_.set_dc_cal(0, drv_->dc_cal_active(0));
+  chain_.set_dc_cal(1, drv_->dc_cal_active(1));
 
   // Gate edges force a plant sync; otherwise cap the lag.
-  const auto& gh = drv_.gate_high();
-  const auto& gl = drv_.gate_low();
+  const auto& gh = drv_->gate_high();
+  const auto& gl = drv_->gate_low();
   bool gates_changed = false;
   for (int k = 0; k < 3; ++k) {
     if (gh[k] != last_gh_[k] || gl[k] != last_gl_[k]) gates_changed = true;
@@ -332,31 +345,45 @@ void Bench::tick() {
         top_->dbg_pwm_up
             ? static_cast<double>(top_->dbg_pwm_counter) / (2.0 * half)
             : 1.0 - static_cast<double>(top_->dbg_pwm_counter) / (2.0 * half);
-    adc_.set_live_vref(config_.adc.vref_v +
+    adc_->set_live_vref(config_.adc.vref_v +
                        config_.vref_ripple_v *
                            std::sin(2.0 * M_PI * phase));
   }
-  adc_.update(time_s_, top_->adc_ncs, top_->adc_sclk, top_->adc_mosi);
-  if (adc_.conversions() != last_adc_conversions_) {
-    last_adc_conversions_ = adc_.conversions();
-    const auto& s = adc_.last_sample();
+  adc_->update(time_s_, top_->adc_ncs, top_->adc_sclk, top_->adc_mosi);
+  if (adc_->conversions() != last_adc_conversions_) {
+    last_adc_conversions_ = adc_->conversions();
+    const auto& s = adc_->last_sample();
     adc_log_.push_back(AdcSampleLog{s.time_s, s.channel, s.analog_v, s.code,
                                     static_cast<int>(top_->dbg_pwm_counter),
                                     static_cast<bool>(top_->dbg_pwm_up),
                                     static_cast<int>(top_->dbg_duty)});
     // Reservoir-cap channels see the sampling charge theft.
-    chain_.apply_sample_theft(s.channel, adc_.last_sample_theft_v());
+    chain_.apply_sample_theft(s.channel, adc_->last_sample_theft_v());
   }
 
-  // AS5600.
-  encoder_.update(time_s_, plant_.state().theta_rad);
+  // ADS9224R dual-simultaneous current ADC (FOC path). On a CONVST edge it
+  // latches both phase-current channels at the same instant; refresh the chain
+  // first so the sampled currents are fresh at that instant.
+  if (top_->adc2_convst && !last_adc2_convst_) sync_plant();
+  last_adc2_convst_ = top_->adc2_convst;
+  adc2_.update(time_s_, top_->adc2_convst, top_->adc2_ncs, top_->adc2_sclk,
+               chain_.channel(0), chain_.channel(1));
+
+  // Angle sensor: advance the physical angle, then service the SPI bus (the
+  // AS5047P path; a no-op for the AS5600 PWM part).
+  encoder_->update(time_s_, plant_.state().theta_rad);
+  encoder_->spi_io(top_->angle_ncs, top_->angle_sclk, top_->angle_mosi);
 
   // Peripheral outputs -> RTL inputs (with optional line corruption).
-  top_->drv_miso = glitched(0, drv_.sdo());
-  top_->nfault = drv_.nfault();
-  top_->noctw = drv_.noctw();
-  top_->adc_miso = glitched(1, adc_.dout());
-  top_->angle_pwm = glitched(2, encoder_.out());
+  top_->drv_miso = glitched(0, drv_->sdo());
+  top_->nfault = drv_->nfault();
+  top_->noctw = drv_->noctw();
+  top_->adc_miso = glitched(1, adc_->dout());
+  top_->angle_pwm = glitched(2, encoder_->out());
+  top_->angle_miso = encoder_->miso();
+  top_->adc2_sdo_a = adc2_.sdo_a();
+  top_->adc2_sdo_b = adc2_.sdo_b();
+  top_->adc2_ready = adc2_.ready();
 
   // UART host model: serialize queued bytes onto the RTL's RX pin and
   // decode its TX pin (8N1).

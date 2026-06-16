@@ -1,6 +1,10 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Datasheet Index
 
-Local copies were saved in this directory on 2026-06-08.
+Local copies were saved in this directory on 2026-06-08. Reference-platform
+candidate parts (DRV8316R / DRV8323 / ADS9224R / AS5047P) were added 2026-06-14
+to unblock faithful modelling of the proposed `ti_reference` BOM — see
+`notes/platform-abstraction-checklist.md`.
 
 ## FPGA Board
 
@@ -18,6 +22,8 @@ Local copies were saved in this directory on 2026-06-08.
 | TI DRV8301 gate driver datasheet | `ti-drv8301-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/drv8301.pdf |
 | DRV8301 product page | Not a PDF | https://www.ti.com/product/DRV8301 |
 | TI DRV8302 gate driver datasheet | `ti-drv8302-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/drv8302.pdf |
+| TI DRV8316R integrated-FET driver datasheet (Rev. B, 95 p) — reference-platform "clean BOM" driver: integrated FETs + CSA, 16-bit SPI | `ti-drv8316r-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/drv8316.pdf |
+| TI DRV832x smart-gate-driver datasheet (Rev. D, 97 p) — reference-platform "external-FET BOM" driver (DRV8323/DRV8323RS) | `ti-drv8323-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/drv8323.pdf |
 | CR Micro CRSS052N08N MOSFET datasheet | `crmicro-crss052n08n-datasheet.pdf` | https://file2.dzsc.com/icpdf/25/02/19/52172_163600637.pdf |
 | TI CSD18540Q5B MOSFET datasheet, reference-design comparison part | `ti-csd18540q5b-reference-design-mosfet-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/csd18540q5b.pdf |
 | DRV8301 module product notes | Not a PDF | https://www.thanksbuyer.com/drv8301-motor-drive-module-high-power-st-foc-vector-control-bldc-pmsm-drive-62948 |
@@ -30,6 +36,7 @@ For the ZONRI power board, prefer the TI reference-board files in `../ti-referen
 | --- | --- | --- |
 | Microchip MCP3208 product page | Not a PDF | https://www.microchip.com/en-us/product/MCP3208 |
 | Microchip MCP3204/3208 datasheet | `microchip-mcp3208-datasheet.pdf` | https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21298e.pdf |
+| TI ADS9224R dual simultaneous-sampling SAR ADC datasheet (Rev. C, 66 p) — reference-platform external current ADC: 16-bit, 3 MSPS, simultaneous (retires Q21) | `ti-ads9224r-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/ads9224r.pdf |
 
 ## Rotor Angle Sensor
 
@@ -37,6 +44,7 @@ For the ZONRI power board, prefer the TI reference-board files in `../ti-referen
 | --- | --- | --- |
 | ams OSRAM AS5600 product page | Not a PDF | https://ams-osram.com/products/sensor-solutions/position-sensors/ams-as5600-position-sensor |
 | ams OSRAM AS5600 datasheet | `ams-osram-as5600-datasheet.pdf` | https://look.ams-osram.com/m/7059eac7531a86fd/original/AS5600-DS000365.pdf |
+| ams OSRAM AS5047P datasheet (DS000324, 41 p) — reference-platform SPI angle sensor: 14-bit, 4-wire SPI, low latency (retires Q22) | `ams-osram-as5047p-datasheet.pdf` | https://look.ams-osram.com/m/d05ee39221f9857/original/AS5047P-DS000324.pdf |
 
 ## Level Shifter
 

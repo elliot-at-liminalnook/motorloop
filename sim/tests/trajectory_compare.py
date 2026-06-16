@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Tolerance-based trajectory comparison shared by parity tests.
 
 Trajectories are dicts of equal-length lists keyed by column name, always

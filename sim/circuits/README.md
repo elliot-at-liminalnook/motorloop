@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Codified Circuit Specifications
 
 SPICE netlists for the measurement channels between the power stage and the

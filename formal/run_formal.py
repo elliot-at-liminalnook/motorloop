@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Drive the open-source formal flow from formal/manifest.toml.
 
 For each [[check]] in the manifest, generate a SymbiYosys (.sby) job, run it,

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // BLDC controller top level.
 //
 // Modes (ctrl_mode):
@@ -24,13 +25,26 @@ module controller_top (
     input  wire        drv_miso,
     input  wire        nfault,
     input  wire        noctw,
-    // MCP3208
+    // MCP3208 (EMF / bus / six-step current)
     output wire        adc_sclk,
     output wire        adc_mosi,
     output wire        adc_ncs,
     input  wire        adc_miso,
-    // AS5600
+    // ADS9224R dual-simultaneous current ADC (FOC) - active when
+    // ctrl_adc_dual_mode = 1
+    output wire        adc2_convst,
+    output wire        adc2_ncs,
+    output wire        adc2_sclk,
+    input  wire        adc2_sdo_a,
+    input  wire        adc2_sdo_b,
+    input  wire        adc2_ready,
+    // AS5600 (PWM angle)
     input  wire        angle_pwm,
+    // AS5047P (SPI angle) - active when ctrl_angle_spi_mode = 1
+    output wire        angle_sclk,
+    output wire        angle_mosi,
+    output wire        angle_ncs,
+    input  wire        angle_miso,
     // UART command/telemetry link (overrides ctrl_* when enabled via reg 8)
     input  wire        uart_rx_pin,
     output wire        uart_tx_pin,
@@ -46,6 +60,13 @@ module controller_top (
     input  wire signed [17:0] ctrl_iq_target,  // FOC q-axis (torque) command
     input  wire        ctrl_foc_speed_loop,    // 1: iq* from speed PI, 0: direct
     input  wire        ctrl_foc_extrap,        // 1: angle-latency extrapolation
+    input  wire        ctrl_drv_hw_mode,       // 1: DRV8302 hardware-config (no SPI)
+    input  wire        ctrl_angle_spi_mode,    // 1: AS5047P SPI angle, 0: AS5600 PWM
+    input  wire [2:0]  ctrl_cur_norm_shift,    // FOC current arithmetic right-shift
+                                               // (normalizes per-platform codes/A;
+                                               // 0 = unchanged)
+    input  wire        ctrl_adc_dual_mode,     // 1: FOC current from ADS9224R
+                                               // (simultaneous 16-bit), 0: MCP3208
     // Debug
     output wire [2:0]  dbg_sector,
     output wire [15:0] dbg_duty,
@@ -111,7 +132,7 @@ module controller_top (
   wire [15:0] drv_spi_tx, drv_spi_rx;
   wire        configured, gate_kill;
 
-  spi_drv_master u_drv_spi (
+  spi_drv_master #(.DRV_SPI_DIV(`DRV_SPI_DIV)) u_drv_spi (
       .clk(clk), .rst_n(rst_n),
       .start(drv_spi_start), .tx(drv_spi_tx),
       .busy(drv_spi_busy), .done(drv_spi_done), .rx(drv_spi_rx),
@@ -119,10 +140,16 @@ module controller_top (
   );
 
   wire lockout_clear;
-  drv_manager u_drv_mgr (
+  drv_manager #(
+      .CLK_HZ(`CLK_HZ), .EN_READY_CYCLES(`EN_READY_CYCLES),
+      .QUICK_RESET_CYC(`QUICK_RESET_CYC), .DRV_REFRESH_CYC(`DRV_REFRESH_CYC),
+      .HEALTHY_RUN_CYC(`HEALTHY_RUN_CYC), .LOCKOUT_N(`LOCKOUT_N),
+      .DRV_DEAD_N(`DRV_DEAD_N), .OC_ADJ_CODE(`OC_ADJ_CODE),
+      .AMP_GAIN_CODE(`AMP_GAIN_CODE)) u_drv_mgr (
       .clk(clk), .rst_n(rst_n),
       .nfault_sync(nfault_sync),
       .lockout_clear(lockout_clear),
+      .hw_mode(ctrl_drv_hw_mode),
       .en_gate(en_gate), .dc_cal(dc_cal),
       .configured(configured), .gate_kill(gate_kill),
       .drv_dead(dbg_drv_dead), .locked_out(dbg_locked_out),
@@ -132,13 +159,23 @@ module controller_top (
   );
   assign dbg_configured = configured;
 
-  // ---- Angle capture ---------------------------------------------------------
-  wire [11:0] angle;
-  wire        angle_valid, angle_sample;
-  as5600_pwm_capture u_angle (
+  // ---- Angle capture: AS5600 PWM or AS5047P SPI, by strap --------------------
+  // Both capture blocks run; ctrl_angle_spi_mode selects which feeds the
+  // controller. With the strap low the AS5600 path is byte-identical to before.
+  wire [11:0] angle_p, angle_s;
+  wire        angle_valid_p, angle_valid_s, angle_sample_p, angle_sample_s;
+  as5600_pwm_capture #(.ANGLE_CARRIER_CYC(`ANGLE_CARRIER_CYC)) u_angle (
       .clk(clk), .rst_n(rst_n), .pwm_in(angle_pwm),
-      .angle(angle), .angle_valid(angle_valid), .new_sample(angle_sample)
+      .angle(angle_p), .angle_valid(angle_valid_p), .new_sample(angle_sample_p)
   );
+  as5047p_spi_master #(.DRV_SPI_DIV(`DRV_SPI_DIV)) u_angle_spi (
+      .clk(clk), .rst_n(rst_n),
+      .angle(angle_s), .angle_valid(angle_valid_s), .new_sample(angle_sample_s),
+      .sclk(angle_sclk), .mosi(angle_mosi), .ncs(angle_ncs), .miso(angle_miso)
+  );
+  wire [11:0] angle        = ctrl_angle_spi_mode ? angle_s : angle_p;
+  wire        angle_valid  = ctrl_angle_spi_mode ? angle_valid_s : angle_valid_p;
+  wire        angle_sample = ctrl_angle_spi_mode ? angle_sample_s : angle_sample_p;
   assign dbg_angle = angle;
   assign dbg_angle_valid = angle_valid;
 
@@ -317,7 +354,8 @@ module controller_top (
   wire eff_foc_speed_loop = use_uart ? (eff_mode == 2'd3)
                                      : ctrl_foc_speed_loop;
   wire signed [17:0] speed_iq_cmd;
-  speed_iq_pi u_speed_iq (
+  speed_iq_pi #(.SPEED_IQ_KP(`SPEED_IQ_KP), .SPEED_IQ_KISH(`SPEED_IQ_KISH),
+               .IQ_MAX(`IQ_MAX)) u_speed_iq (
       .clk(clk), .rst_n(rst_n),
       .enable(foc_enable && eff_foc_speed_loop),
       .update(speed_update),
@@ -329,10 +367,44 @@ module controller_top (
   wire signed [17:0] foc_iq_target =
       eff_foc_speed_loop ? speed_iq_cmd : ctrl_iq_target;
 
-  foc_core u_foc (
+  // ADS9224R dual-simultaneous current ADC (FOC current path). It triggers one
+  // conversion per period at the off-window center, so both phase currents are
+  // sampled at the same instant (Q21, in hardware), and returns signed 16-bit
+  // codes (no offset subtraction needed).
+  wire signed [17:0] adc2_foc_cur_a, adc2_foc_cur_b;
+  wire               adc2_foc_valid;
+  ads9224r_master #(.ADC_SPI_DIV(`ADC_SPI_DIV), .PWM_HALF_PERIOD(`PWM_HALF_PERIOD),
+                    .ADC_EMF_LEAD(`ADC_EMF_LEAD)) u_adc2 (
       .clk(clk), .rst_n(rst_n),
-      .enable(foc_enable), .update(dbg_foc_valid),
-      .cur_a(dbg_foc_cur_a), .cur_b(dbg_foc_cur_b),
+      .pwm_counter(pwm_counter), .pwm_up(pwm_up),
+      .foc_mode(foc_sample),
+      .convst(adc2_convst), .ncs(adc2_ncs), .sclk(adc2_sclk),
+      .sdo_a(adc2_sdo_a), .sdo_b(adc2_sdo_b), .ready(adc2_ready),
+      .foc_cur_a(adc2_foc_cur_a), .foc_cur_b(adc2_foc_cur_b),
+      .foc_valid(adc2_foc_valid)
+  );
+
+  // FOC current source mux: the ADS9224R (simultaneous 16-bit) or the MCP3208
+  // sequencer (sequential 12-bit). Per-platform current normalization then
+  // renormalizes the codes/A into the canonical FOC fixed-point scale (an
+  // integrated CSA or a 16-bit ADC produces many more codes/A than the external
+  // shunt path). Dual-mode 0 + shift 0 (the ZONRI/DRV8301 default) leaves the
+  // datapath byte-identical.
+  wire signed [17:0] foc_cur_a_sel =
+      ctrl_adc_dual_mode ? adc2_foc_cur_a : dbg_foc_cur_a;
+  wire signed [17:0] foc_cur_b_sel =
+      ctrl_adc_dual_mode ? adc2_foc_cur_b : dbg_foc_cur_b;
+  wire               foc_valid_sel =
+      ctrl_adc_dual_mode ? adc2_foc_valid : dbg_foc_valid;
+  wire signed [17:0] foc_cur_a_norm = foc_cur_a_sel >>> ctrl_cur_norm_shift;
+  wire signed [17:0] foc_cur_b_norm = foc_cur_b_sel >>> ctrl_cur_norm_shift;
+
+  foc_core #(.PWM_HALF_PERIOD(`PWM_HALF_PERIOD), .SINCOS_TABLE_BITS(`SINCOS_TABLE_BITS),
+             .V_CIRCLE_LIMIT(`V_CIRCLE_LIMIT), .CUR_PI_KP(`CUR_PI_KP),
+             .CUR_PI_KI_SHIFT(`CUR_PI_KI_SHIFT), .V_RAW_MAX(`V_RAW_MAX)) u_foc (
+      .clk(clk), .rst_n(rst_n),
+      .enable(foc_enable), .update(foc_valid_sel),
+      .cur_a(foc_cur_a_norm), .cur_b(foc_cur_b_norm),
       .theta_e(theta_e16),
       .id_target(ctrl_id_target), .iq_target(foc_iq_target),
       .duty3(foc_duty3),
@@ -347,7 +419,8 @@ module controller_top (
       !run_gates ? 6'b000000
                  : (eff_mode == 2'd3) ? 6'b010101 : leg_mode;
 
-  pwm_generator u_pwm (
+  pwm_generator #(.PWM_HALF_PERIOD(`PWM_HALF_PERIOD), .DEAD_CYCLES(`DEAD_CYCLES),
+                  .MIN_PULSE_CYCLES(`MIN_PULSE_CYCLES)) u_pwm (
       .clk(clk), .rst_n(rst_n),
       .kill(gate_kill || !run_gates || stall_latched),
       .duty3(pwm_duty3),
@@ -367,7 +440,7 @@ module controller_top (
   // it does not use the commutation sector.
   wire [15:0] speed;
   wire        speed_valid, speed_update, speed_reverse;
-  speed_meter u_speed (
+  speed_meter #(.CLK_HZ(`CLK_HZ), .SPEED_NUM(`SPEED_NUM)) u_speed (
       .clk(clk), .rst_n(rst_n), .sector(sensored_sector),
       .speed(speed), .reverse(speed_reverse),
       .speed_valid(speed_valid), .update(speed_update)
@@ -375,7 +448,8 @@ module controller_top (
   assign dbg_speed = speed;
   assign dbg_reverse = speed_reverse;
 
-  speed_pi u_pi (
+  speed_pi #(.SPEED_PI_KP(`SPEED_PI_KP), .SPEED_PI_KI_SHIFT(`SPEED_PI_KI_SHIFT),
+             .PWM_HALF_PERIOD(`PWM_HALF_PERIOD), .DUTY_DOWN_SLEW(`DUTY_DOWN_SLEW)) u_pi (
       .clk(clk), .rst_n(rst_n),
       .enable(eff_mode == 2'd2 && run_gates),
       .update(speed_update),
@@ -389,7 +463,7 @@ module controller_top (
   wire        adc_start, adc_busy, adc_done;
   wire [2:0]  adc_channel;
   wire [11:0] adc_code;
-  adc_spi_master u_adc_spi (
+  adc_spi_master #(.ADC_SPI_DIV(`ADC_SPI_DIV)) u_adc_spi (
       .clk(clk), .rst_n(rst_n),
       .start(adc_start), .channel(adc_channel),
       .busy(adc_busy), .done(adc_done), .code(adc_code),
@@ -400,7 +474,9 @@ module controller_top (
   wire foc_sample = (eff_mode == 2'd3) || ctrl_foc_sample;
 
   wire [11:0] offset_c_unused;
-  adc_sequencer u_adc_seq (
+  adc_sequencer #(.PWM_HALF_PERIOD(`PWM_HALF_PERIOD), .ADC_EMF_LEAD(`ADC_EMF_LEAD),
+                  .DC_CAL_TOL(`DC_CAL_TOL), .ADC_STUCK_N(`ADC_STUCK_N),
+                  .EMF_SKIP_MARGIN(`EMF_SKIP_MARGIN)) u_adc_seq (
       .clk(clk), .rst_n(rst_n),
       .pwm_counter(pwm_counter), .pwm_up(pwm_up),
       .period_start(period_start),
@@ -421,7 +497,7 @@ module controller_top (
   );
 
   // ---- UART register file instance ---------------------------------------------
-  uart_regfile u_uart (
+  uart_regfile #(.UART_DIV(`UART_DIV), .UART_TIMEOUT_CYC(`UART_TIMEOUT_CYC)) u_uart (
       .clk(clk), .rst_n(rst_n),
       .uart_rx_pin(uart_rx_pin), .uart_tx_pin(uart_tx_pin),
       .use_uart(use_uart),

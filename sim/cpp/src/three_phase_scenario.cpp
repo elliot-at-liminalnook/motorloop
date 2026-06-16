@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 #include "three_phase_scenario.hpp"
 
 #include <cmath>

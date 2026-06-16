@@ -1,6 +1,111 @@
+# SPDX-License-Identifier: MIT
 """Builds Bench configuration dicts from sim/config/params.toml."""
 
 from __future__ import annotations
+
+# Platform profiles (platform-abstraction stage 3): each names the concrete
+# peripheral model the C++ factory builds for every role. The current ZONRI
+# board is the default; a second BOM (the TI reference) registers here when its
+# models land (Phase B). Keep all models in the tree - selection is per
+# scenario, so old parts double as the "cheap-out" regression.
+PLATFORMS = {
+    "zonri_drv8301": {
+        "driver_name": "drv8301",
+        "adc_name": "mcp3208",
+        "angle_name": "as5600",
+        "drv_hw_mode": False,
+    },
+    # The ZONRI board's DRV8302 assembly variant (datasheet-backed, Phase B):
+    # same family, but hardware-configured (no SPI) - the controller skips the
+    # SPI register sequence (drv_manager hw_mode). Demonstrates a genuine model
+    # + RTL swap end to end.
+    "zonri_drv8302": {
+        "driver_name": "drv8302",
+        "adc_name": "mcp3208",
+        "angle_name": "as5600",
+        "drv_hw_mode": True,
+    },
+    # Phase C, stage 14: the assembled reference BOMs.
+    # ti_reference (clean): DRV8316R integrated FET+CSA + AS5047P SPI angle, a
+    # modest MCP3208 reading the integrated CSA. Fewest passives (retires Q7);
+    # runs on the driver's power-on defaults.
+    "ti_reference": {
+        "driver_name": "drv8316r",
+        "adc_name": "mcp3208",
+        "angle_name": "as5047p",
+        "drv_hw_mode": True,
+        "angle_spi_mode": True,
+        "cur_norm_shift": 3,
+        "chain": {"current_sense_source": 1, "csa_gain_v_per_a": 0.15},
+    },
+    # ti_reference_hp (external-FET): DRV8323RS + ADS9224R 16-bit simultaneous
+    # current ADC (retires Q21) + AS5047P SPI angle. Higher power envelope.
+    "ti_reference_hp": {
+        "driver_name": "drv8323rs",
+        "adc_name": "mcp3208",
+        "angle_name": "as5047p",
+        "drv_hw_mode": False,
+        "angle_spi_mode": True,
+        "adc_dual_mode": True,
+        "cur_norm_shift": 3,
+        "foc": {"current_sample_scheme": 1},
+    },
+    # Phase C, stage 11: the external-FET DRV8323RS driver. Same SPI frame
+    # family as the DRV8301, so the controller configures it with the existing
+    # write/verify handshake (no RTL change); the DRV8323 runs on its datasheet
+    # power-on defaults (6x PWM, auto-retry OCP at VDS_LVL=0.75 V).
+    "zonri_drv8323rs": {
+        "driver_name": "drv8323rs",
+        "adc_name": "mcp3208",
+        "angle_name": "as5600",
+        "drv_hw_mode": False,
+    },
+    # Phase C, stage 12: the DRV8316R integrated-FET driver with INTEGRATED
+    # current-sense amplifiers (the clean reference BOM - no external shunts,
+    # retires Q7). The chain routes current sensing through the integrated CSA
+    # (kIntegratedDriverCsa, ~0.15 V/A); cur_norm_shift renormalizes its much
+    # larger codes/A back to the canonical FOC fixed-point scale. The part is
+    # operational on power-on defaults (6x PWM), so the controller runs it via
+    # the hardware path (drv_hw_mode, no SPI reconfiguration).
+    "zonri_drv8316r": {
+        "driver_name": "drv8316r",
+        "adc_name": "mcp3208",
+        "angle_name": "as5600",
+        "drv_hw_mode": True,
+        "cur_norm_shift": 3,
+        "chain": {
+            "current_sense_source": 1,   # kIntegratedDriverCsa
+            "csa_gain_v_per_a": 0.15,
+        },
+    },
+    # Phase C, stage 13: the ADS9224R 16-bit dual-simultaneous current ADC for
+    # the FOC current path (retires Q21 in hardware - one CONVST samples both
+    # phase currents at the same instant). adc_dual_mode routes the FOC currents
+    # from the ADS9224R master; cur_norm_shift renormalizes the 16-bit codes/A;
+    # sample_scheme=1 leaves the chain live so the ADS9224R itself provides the
+    # simultaneity. The EMF/bus path still uses the MCP3208.
+    "zonri_ads9224r": {
+        "driver_name": "drv8301",
+        "adc_name": "mcp3208",
+        "angle_name": "as5600",
+        "drv_hw_mode": False,
+        "adc_dual_mode": True,
+        "cur_norm_shift": 3,
+        "foc": {"current_sample_scheme": 1},
+    },
+    # Phase C, stage 10: swap only the angle sensor to the AS5047P (SPI, 14-bit,
+    # DAEC). The controller uses the SPI angle master instead of the AS5600 PWM
+    # capture (ctrl_angle_spi_mode). Isolates the angle-role swap for testing;
+    # the assembled reference BOMs (stage 14) combine it with the TI parts.
+    "zonri_as5047p": {
+        "driver_name": "drv8301",
+        "adc_name": "mcp3208",
+        "angle_name": "as5047p",
+        "drv_hw_mode": False,
+        "angle_spi_mode": True,
+    },
+}
+DEFAULT_PLATFORM = "zonri_drv8301"
 
 
 def bench_config(params, **overrides):
@@ -216,6 +321,24 @@ def foc(params, *groups, **extra_overrides):
         else:
             overrides[key] = value
     return bench_config(params, **overrides)
+
+
+def platform(params, name=DEFAULT_PLATFORM, **overrides):
+    """bench_config selecting a named platform's peripheral model set. Unknown
+    name raises (so a typo fails loudly, not silently to the default). Extra
+    overrides deep-merge on top, so realism()/foc()-style sub-dicts still work:
+        platform(params, "zonri_drv8301", motor={"trapezoid_blend": 0.0})"""
+    if name not in PLATFORMS:
+        raise KeyError(f"unknown platform {name!r}; known: {list(PLATFORMS)}")
+    over = dict(PLATFORMS[name])
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(over.get(key), dict):
+            over[key].update(value)
+        else:
+            over[key] = value
+    cfg = bench_config(params, **over)
+    cfg["platform"] = name      # for telemetry / the active-platform banner
+    return cfg
 
 
 def uart_write_frame(addr, value):

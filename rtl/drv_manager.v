@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // DRV8301 management state machine:
 //  - power-up + EN_GATE ready sequencing,
 //  - DC_CAL window for amplifier offset capture,
@@ -10,13 +11,22 @@
 // Reads are pipelined N+1: each verify sends two read frames and checks the
 // second frame's response word {F0, addr, data}.
 
-`include "rtl_params.vh"
-
-module drv_manager (
+module drv_manager #(
+    parameter integer CLK_HZ          = 25000000,
+    parameter integer EN_READY_CYCLES = 300000,
+    parameter integer QUICK_RESET_CYC = 100,
+    parameter integer DRV_REFRESH_CYC = 25000,
+    parameter integer HEALTHY_RUN_CYC = 2500000,
+    parameter [3:0]   LOCKOUT_N       = 4'd4,
+    parameter [3:0]   DRV_DEAD_N      = 4'd8,
+    parameter integer OC_ADJ_CODE     = 16,
+    parameter integer AMP_GAIN_CODE   = 0
+) (
     input  wire        clk,
     input  wire        rst_n,
     input  wire        nfault_sync,     // synchronized, active low
     input  wire        lockout_clear,   // host acknowledgement (>=100ms idle)
+    input  wire        hw_mode,         // DRV8302: hardware-configured, no SPI
     output reg         en_gate,
     output reg         dc_cal,
     output reg         configured,
@@ -33,12 +43,14 @@ module drv_manager (
     input  wire [15:0] spi_rx
 );
 
-  localparam [10:0] CR1_VALUE = `OC_ADJ_CODE << 6;    // current-limit, 6-PWM
-  localparam [10:0] CR2_VALUE = `AMP_GAIN_CODE << 2;  // report OT+OC
+  localparam [31:0] CR1_FULL = OC_ADJ_CODE << 6;
+  localparam [31:0] CR2_FULL = AMP_GAIN_CODE << 2;
+  localparam [10:0] CR1_VALUE = CR1_FULL[10:0];       // current-limit, 6-PWM
+  localparam [10:0] CR2_VALUE = CR2_FULL[10:0];       // report OT+OC
 
-  localparam [31:0] PWRUP_CYC = `CLK_HZ / 1000;       // 1 ms settle
-  localparam [31:0] DCCAL_CYC = `CLK_HZ / 5000;       // 200 us
-  localparam [31:0] FLT_WAIT_CYC = `CLK_HZ / 5000;    // 200 us post-reset
+  localparam [31:0] PWRUP_CYC = CLK_HZ / 1000;        // 1 ms settle
+  localparam [31:0] DCCAL_CYC = CLK_HZ / 5000;        // 200 us
+  localparam [31:0] FLT_WAIT_CYC = CLK_HZ / 5000;     // 200 us post-reset
 
   localparam [4:0]
       S_PWRUP   = 5'd0,  S_EN_WAIT = 5'd1,  S_DCCAL   = 5'd2,
@@ -117,7 +129,7 @@ module drv_manager (
         end
         S_EN_WAIT: begin
           timer <= timer + 32'd1;
-          if (timer >= `EN_READY_CYCLES) begin
+          if (timer >= EN_READY_CYCLES) begin
             timer <= 32'd0;
             dc_cal <= 1'b1;
             state <= S_DCCAL;
@@ -128,7 +140,9 @@ module drv_manager (
           if (timer >= DCCAL_CYC) begin
             timer <= 32'd0;
             dc_cal <= 1'b0;
-            state <= S_CFG_W1;
+            // Hardware-configured drivers (DRV8302) have no SPI register step:
+            // go straight to RUN after EN_GATE + DC_CAL.
+            state <= hw_mode ? S_RUN : S_CFG_W1;
           end
         end
         S_CFG_W1: send_frame(frame_write_cr1, S_CFG_W2);
@@ -155,12 +169,12 @@ module drv_manager (
                 if (fault_count != 8'hFF) fault_count <= fault_count + 8'd1;
                 timer <= 32'd0;
                 healthy_timer <= 32'd0;
-                if (consec_faults >= `LOCKOUT_N - 1) state <= S_LOCKOUT;
+                if (consec_faults >= LOCKOUT_N - 1) state <= S_LOCKOUT;
                 else begin
                   consec_faults <= consec_faults + 4'd1;
                   state <= S_FLT_KILL;
                 end
-              end else if (consec_mismatch >= `DRV_DEAD_N - 1) begin
+              end else if (consec_mismatch >= DRV_DEAD_N - 1) begin
                 // E13: never verifies while otherwise healthy = dead.
                 state <= S_DEAD;
               end else begin
@@ -191,12 +205,12 @@ module drv_manager (
                 if (fault_count != 8'hFF) fault_count <= fault_count + 8'd1;
                 timer <= 32'd0;
                 healthy_timer <= 32'd0;
-                if (consec_faults >= `LOCKOUT_N - 1) state <= S_LOCKOUT;
+                if (consec_faults >= LOCKOUT_N - 1) state <= S_LOCKOUT;
                 else begin
                   consec_faults <= consec_faults + 4'd1;
                   state <= S_FLT_KILL;
                 end
-              end else if (consec_mismatch >= `DRV_DEAD_N - 1) begin
+              end else if (consec_mismatch >= DRV_DEAD_N - 1) begin
                 state <= S_DEAD;
               end else begin
                 consec_mismatch <= consec_mismatch + 4'd1;
@@ -211,7 +225,7 @@ module drv_manager (
           configured <= 1'b1;
           refresh_timer <= refresh_timer + 32'd1;
           // E20: a sustained healthy run clears the repeated-fault counter.
-          if (healthy_timer < `HEALTHY_RUN_CYC) begin
+          if (healthy_timer < HEALTHY_RUN_CYC) begin
             healthy_timer <= healthy_timer + 32'd1;
           end else begin
             consec_faults <= 4'd0;
@@ -223,15 +237,15 @@ module drv_manager (
             healthy_timer <= 32'd0;
             // E20: too many recoveries without a healthy interval = latch
             // lockout instead of retrying forever.
-            if (consec_faults >= `LOCKOUT_N - 1) begin
+            if (consec_faults >= LOCKOUT_N - 1) begin
               state <= S_LOCKOUT;
             end else begin
               consec_faults <= consec_faults + 4'd1;
               state <= S_FLT_KILL;
             end
-          end else if (refresh_timer >= `DRV_REFRESH_CYC) begin
+          end else if (!hw_mode && refresh_timer >= DRV_REFRESH_CYC) begin
             refresh_timer <= 32'd0;
-            state <= S_VER1A;  // periodic verify; configured stays set
+            state <= S_VER1A;  // periodic SPI verify (not in hardware mode)
           end
         end
         S_DEAD: begin
@@ -267,7 +281,7 @@ module drv_manager (
         end
         S_FLT_QR: begin
           timer <= timer + 32'd1;
-          if (timer >= `QUICK_RESET_CYC) begin
+          if (timer >= QUICK_RESET_CYC) begin
             timer <= 32'd0;
             en_gate <= 1'b1;
             state <= S_FLT_WAIT;
@@ -277,7 +291,8 @@ module drv_manager (
           timer <= timer + 32'd1;
           if (timer >= FLT_WAIT_CYC) begin
             timer <= 32'd0;
-            state <= S_CFG_W1;  // reconfigure + verify, then resume
+            // Hardware-configured drivers need no reconfigure: resume directly.
+            state <= hw_mode ? S_RUN : S_CFG_W1;
           end
         end
         default: state <= S_PWRUP;

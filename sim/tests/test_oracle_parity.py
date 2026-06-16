@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 7.2: three-way plant parity — C++ vs Python vs Modelica oracle.
 
 The C++/Python pair share the integrator and match to ~1e-8 (stage 2 test).

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Derivation-as-verification (derivation-checklist stage 1.4): every
 parameter with a derived_from reference must re-derive from its circuit
 spec; the registry and the specs must stay in sync both directions."""

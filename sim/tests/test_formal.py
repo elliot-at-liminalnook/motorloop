@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Formal verification regression tier (formal-checklist stage 11).
 
 Gates on the formal proof results: every safety-category property must be

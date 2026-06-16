@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Three-phase averaged reference simulation (executable spec).
 
 Mirrors the averaged mode of sim/cpp/src/three_phase_plant.cpp and the

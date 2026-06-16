@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Hardware Bring-Up Notes
 
 Early cautions collected before first power-up, moved here from the project

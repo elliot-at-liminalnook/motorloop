@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 2: three-phase plant — parity, analytic sanity, switched-bridge
 behavior, and integrator convergence."""
 

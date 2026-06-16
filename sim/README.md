@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Simulation Workspace
 
 The lockstep verification bench is **built and running**: the Verilated

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Using The TI Reference Files
 
 This note explains what the downloaded TI collateral gives us, whether each format is an industry standard, and how to inspect or use it with open-source tools where possible.

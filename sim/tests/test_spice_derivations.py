@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Derivation-checklist stage 2: ngspice cross-checks of the closed-form
 derivations, plus the TI vendor-model comparison. Results are cached in
 sim/build/spice, so a warm run costs milliseconds."""

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Shared fixtures for the simulation verification suite.
 
 - Loads sim/config/params.toml once and prints the assumption banner before
@@ -16,9 +17,10 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = PROJECT_ROOT / "sim" / "scripts"
+TESTS_DIR = Path(__file__).resolve().parent
 BUILD_DIR = PROJECT_ROOT / "sim" / "build" / "cpp"
 
-for path in (SCRIPTS_DIR,):
+for path in (SCRIPTS_DIR, TESTS_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
@@ -29,6 +31,17 @@ def pytest_configure(config):
     params = sim_params.load()
     print()
     print(params.banner_text())
+    # Name the active platform set (platform-abstraction stage 3.2): the
+    # registered BOMs and the default. A scenario selects one via
+    # bench_factory.platform(); cfg["platform"] then carries the active name.
+    try:
+        from bench_factory import PLATFORMS, DEFAULT_PLATFORM
+        print(f"  Platforms: {', '.join(PLATFORMS)}")
+        print(f"  Default platform (active unless a scenario overrides): "
+              f"{DEFAULT_PLATFORM}")
+        print("=" * 78)
+    except Exception:
+        pass
 
 
 @pytest.fixture(scope="session")

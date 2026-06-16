@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stages 2-3: bit-for-bit parity of the RTL math primitives against the
 Python reference (sim/scripts/foc_reference.py).
 

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 3.1/3.2: DRV8301 behavioral model against datasheet golden values
 (register map and SPI behavior verified in notes/docs-digest.md)."""
 

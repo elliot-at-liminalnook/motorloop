@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // Reusable formal checker: no complementary gate pair is ever both asserted.
 // Bind to any N-leg half-bridge driver. Parameterized by leg count.
 //

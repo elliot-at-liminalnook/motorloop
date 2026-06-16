@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Simulation Build Checklist
 
 Ordered list of everything that must exist before the simulation runs and

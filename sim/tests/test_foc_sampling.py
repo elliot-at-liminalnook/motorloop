@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 4: phase-current sampling architecture (Q21).
 
 The RTL FOC sequencer samples ch0 (ia) then ch1 (ib) near the PWM-counter

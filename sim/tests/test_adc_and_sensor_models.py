@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """Stage 3.3-3.6: MCP3208, AS5600, and feedback-chain models."""
 
 from __future__ import annotations

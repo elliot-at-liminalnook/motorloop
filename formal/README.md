@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Formal Property Verification
 
 Open-source formal proofs of the RTL's plant-independent safety properties.

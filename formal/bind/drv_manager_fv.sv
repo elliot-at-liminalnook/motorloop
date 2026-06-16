@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 // FSM legality for drv_manager (formal-checklist 5.1): the 5-bit state
 // register never holds an undefined value - it is always one of the 17 defined
 // states S_PWRUP(0)..S_LOCKOUT(16). k-inductive: from any legal state the case

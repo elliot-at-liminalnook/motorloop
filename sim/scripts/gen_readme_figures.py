@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
 """Generate the README and gallery figures from live bench runs.
 
 Every image embedded in README.md, sim/README.md, and figures/gallery.md is

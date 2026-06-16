@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 """FOC stage 8: scenario findings.
 
 8.3 dead-time distortion: FOC chops all three legs continuously (no floating

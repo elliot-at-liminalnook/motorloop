@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
 # Configure + build the C++ bench module into sim/build/cpp.
 set -eu
 

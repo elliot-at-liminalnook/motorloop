@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: MIT -->
 # Realism Checklist
 
 Ordered tasks and code to close the environment-realism gaps identified
