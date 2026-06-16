@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Dead-time minimum (formal-checklist 4.2). For each leg, a gate may only
 // assert once its complement has been off for >= DEAD_CYCLES. The design
-// enforces this with per-leg off-time counters (leg[k].off_time_h/l); by
+// enforces this with per-leg off-time counters (g_leg[k].off_time_h/l); by
 // referencing those real counters in the bind, the edge property is
 // 1-inductive (a gate rises only when the relevant off-time counter was
 // already >= DEAD). Plant-independent safety, paired with shoot-through.
@@ -40,6 +40,6 @@ endmodule
 
 bind pwm_generator pwm_deadtime_fv dt_i (
     .clk(clk), .rst_n(rst_n), .gate_high(gate_high), .gate_low(gate_low),
-    .off_h0(leg[0].off_time_h), .off_l0(leg[0].off_time_l),
-    .off_h1(leg[1].off_time_h), .off_l1(leg[1].off_time_l),
-    .off_h2(leg[2].off_time_h), .off_l2(leg[2].off_time_l));
+    .off_h0(g_leg[0].off_time_h), .off_l0(g_leg[0].off_time_l),
+    .off_h1(g_leg[1].off_time_h), .off_l1(g_leg[1].off_time_l),
+    .off_h2(g_leg[2].off_time_h), .off_l2(g_leg[2].off_time_l));

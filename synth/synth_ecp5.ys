@@ -10,7 +10,7 @@ read_verilog -I rtl -I rtl/gen \
   rtl/as5047p_spi_master.v rtl/ads9224r_master.v rtl/speed_meter.v rtl/speed_pi.v \
   rtl/open_loop_ramp.v rtl/drv_manager.v rtl/adc_sequencer.v rtl/sincos.v \
   rtl/clarke.v rtl/park.v rtl/inv_park.v rtl/svpwm.v rtl/current_pi.v \
-  rtl/circle_limit.v rtl/foc_core.v rtl/speed_iq_pi.v rtl/uart_regfile.v \
+  rtl/circle_limit.v rtl/circle_limit_seq.v rtl/foc_core.v rtl/speed_iq_pi.v rtl/uart_regfile.v \
   rtl/uart_rx.v rtl/uart_tx.v
 synth_ecp5 -top board_top -json synth/work/board_top.json
 tee -o synth/work/stat.txt stat

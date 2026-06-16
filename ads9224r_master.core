@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:ads9224r_master:0.1.0
+description: "ADS9224R dual-simultaneous 16-bit ADC master (framing PROVEN)"
+filesets:
+  rtl:
+    files:
+      - rtl/ads9224r_master.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: ads9224r_master
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

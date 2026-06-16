@@ -1,0 +1,25 @@
+{
+  "//1": "OpenLane 2 config for the pipelined foc_core (robotics-ip stage 10).",
+  "//2": "Full sky130 RTL-to-GDS smoke: synth -> floorplan -> place -> CTS ->",
+  "//3": "route -> STA. Run where OpenLane + the sky130 PDK are installed:",
+  "//4": "  openlane synth/openlane/foc_core.json",
+  "//5": "The 50 ns (20 MHz) period is a conservative ASIC smoke target; the",
+  "//6": "open ECP5 FPGA flow already meets 25 MHz post-route (41 MHz Fmax).",
+  "DESIGN_NAME": "foc_core",
+  "VERILOG_FILES": [
+    "dir::../../rtl/sincos.v",
+    "dir::../../rtl/clarke.v",
+    "dir::../../rtl/park.v",
+    "dir::../../rtl/inv_park.v",
+    "dir::../../rtl/current_pi.v",
+    "dir::../../rtl/divider32.v",
+    "dir::../../rtl/circle_limit_seq.v",
+    "dir::../../rtl/svpwm.v",
+    "dir::../../rtl/foc_core.v"
+  ],
+  "VERILOG_INCLUDE_DIRS": ["dir::../../rtl", "dir::../../rtl/gen"],
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 50,
+  "FP_CORE_UTIL": 40,
+  "PL_TARGET_DENSITY_PCT": 45
+}

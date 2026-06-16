@@ -266,6 +266,67 @@ cover_props   = [
 justification = "1-/k-inductive: every case arm assigns a defined next state (reset at S_IDLE), and foc_valid defaults to 0 and is set for at most one cycle. The full CONVST->READY->16-bit read is sim-tier coverage; the shallow covers prove the FSM is live."
 
 [[check]]
+id            = "axil_regfile"
+module        = "axil_regfile"
+checker       = "formal/bind/axil_regfile_fv.sv"
+rtl           = ["rtl/bus/axil_regfile.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = [
+  "AXI4-Lite: B/R valid holds until its ready (no withdrawn response)",
+  "Read data/resp stable while RVALID && !RREADY",
+  "Write/read responses are always OKAY",
+]
+cover_props   = ["a read response actually completes (RVALID && RREADY)"]
+justification = "1-inductive via $past on the AXI handshake regs; the slave only asserts a response after a fired transaction and clears it on ready, so the master-facing contract cannot be violated."
+
+[[check]]
+id            = "wb_regfile"
+module        = "wb_regfile"
+checker       = "formal/bind/wb_regfile_fv.sv"
+rtl           = ["rtl/bus/wb_regfile.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = [
+  "Wishbone B4: ACK only follows an accepted strobe (no spurious ACK)",
+  "ACK is a single-cycle pulse (classic registered ack)",
+]
+cover_props   = ["a Wishbone access is actually acknowledged"]
+justification = "1-inductive: ack is registered from cyc&stb&!ack and defaults to 0, so it pulses exactly once per access."
+
+[[check]]
+id            = "axis_sampler"
+module        = "axis_sampler"
+checker       = "formal/bind/axis_sampler_fv.sv"
+rtl           = ["rtl/bus/axis_sampler.v"]
+category      = "safety"
+method        = "prove"
+engine        = "smtbmc boolector"
+depth         = 8
+expected      = "PROVEN"
+covers        = true
+param_scope   = "config"
+assumptions   = ["synchronous reset (sby init)"]
+properties    = [
+  "AXI4-Stream: TVALID holds until TREADY (no withdrawn beat)",
+  "TDATA stable while TVALID && !TREADY (backpressure-safe drop)",
+]
+cover_props   = ["a stream beat is actually accepted"]
+justification = "1-inductive: the drop logic only overwrites TDATA when the beat is free or being accepted this cycle, so a held beat is never disturbed."
+
+[[check]]
 id            = "adc_sequencer"
 module        = "adc_sequencer"
 checker       = "formal/bind/adc_sequencer_fv.sv"

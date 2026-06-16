@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:axis_sampler:0.1.0
+description: "AXI4-Stream telemetry sampler (protocol PROVEN)"
+filesets:
+  rtl:
+    files:
+      - rtl/bus/axis_sampler.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: axis_sampler
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Verible lint ruleset for the motorloop RTL (robotics-ip-checklist stage 3).
+# The default ruleset, minus the SystemVerilog-style rules that conflict with
+# this library's deliberate Verilog-2005 idioms (for max tool compatibility:
+# Vivado/Quartus/Verilator/yosys), plus the constant naming set to ALL_CAPS
+# (the convention this codebase + the parameterization use).
+
+# Verilog-2005 idioms we keep on purpose (these rules want SystemVerilog):
+-always-comb                        # we use always @(*)
+-explicit-parameter-storage-type    # we use `parameter [15:0] X` / `integer`
+-explicit-function-task-parameter-type
+-explicit-function-lifetime         # VL-2005 functions have no automatic/static kw needed here
+-unpacked-dimensions-range-ordering # [0:N-1] is valid VL-2005
+
+# Keep naming consistency, but to the ALL_CAPS convention we actually use:
+parameter-name-style=localparam_style:ALL_CAPS;parameter_style:ALL_CAPS

@@ -37,6 +37,9 @@ jobs:
       - name: Toolchain check
         run: bash formal/check_formal_toolchain.sh
 
+      - name: Coverage gate (every reusable block is proven or declared sim-only)
+        run: python3 formal/check_coverage.py
+
       - name: Run formal proofs and gate
         run: |
           python3 formal/run_formal.py --check

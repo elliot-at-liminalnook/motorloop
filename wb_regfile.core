@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:wb_regfile:0.1.0
+description: "Wishbone B4 register slave for the controller (protocol PROVEN)"
+filesets:
+  rtl:
+    files:
+      - rtl/bus/wb_regfile.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: wb_regfile
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

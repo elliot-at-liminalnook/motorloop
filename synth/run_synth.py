@@ -115,16 +115,27 @@ def write_report(util, fmax, timing_met, bit):
               f"- Post-route Fmax estimate: **{fmax if fmax else 'n/a'} MHz** "
               f"(target 25 MHz: {'MET' if timing_met else 'NOT met'})",
               f"- Bitstream: `{bit.relative_to(ROOT) if bit else 'n/a'}`",
-              "",
-              "**Finding:** the design synthesizes and fits, but the unpipelined "
-              "FOC datapath (the `circle_limit` 16-iteration isqrt and the "
-              "chained Clarke/Park/PI/SVPWM evaluated in one update) is a long "
-              "combinational path that caps Fmax well below 25 MHz. A real "
-              "25 MHz board build needs that datapath pipelined (multi-cycle / "
-              "registered stages); the simulator is cycle-accurate regardless. "
-              "This is the synth flow surfacing exactly the RTL that won't map "
-              "well at speed (stage 15.4).",
               ""]
+    if timing_met:
+        lines += [
+            "**Finding:** the FOC datapath is pipelined (robotics-ip stage 6.5): "
+            "the Clarke/Park/PI/circle-limit/inv-Park/SVPWM chain is walked over "
+            "registered stages, and the former Fmax bottleneck - `circle_limit`'s "
+            "combinational 16-iteration isqrt + two 32-bit divisions - is now the "
+            "sequential, bit-exact `circle_limit_seq` (one op per clock, reusing "
+            "`divider32`). Post-route Fmax rose from ~3.3 MHz (unpipelined) to "
+            f"~{fmax} MHz, clearing the 25 MHz target, while LUT usage dropped "
+            "(the huge combinational divide/sqrt logic became a small reused "
+            "datapath). The simulator stays cycle-accurate; the FOC duties simply "
+            "appear a fixed, sub-sample-period latency later.",
+            ""]
+    else:
+        lines += [
+            "**Finding:** the design synthesizes and fits but does not yet meet "
+            f"25 MHz (Fmax ~{fmax} MHz). Inspect `nextpnr.log` for the critical "
+            "path; the FOC datapath multiply/limiter stages are the usual "
+            "candidates for further pipelining.",
+            ""]
     (ROOT / "synth" / "synth_report.md").write_text("\n".join(lines))
     print(f"[synth] wrote {ROOT/'synth'/'synth_report.md'}")
 

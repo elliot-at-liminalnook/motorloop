@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:commutation:0.1.0
+description: "Six-step sector -> per-leg drive decode, combinational"
+filesets:
+  rtl:
+    files:
+      - rtl/commutation.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: commutation
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

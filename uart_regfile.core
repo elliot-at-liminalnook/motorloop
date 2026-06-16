@@ -1,0 +1,21 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:uart_regfile:0.1.0
+description: "UART command/telemetry register file"
+filesets:
+  rtl:
+    files:
+      - rtl/uart_regfile.v
+      - rtl/uart_rx.v
+      - rtl/uart_tx.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: uart_regfile
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

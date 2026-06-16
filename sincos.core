@@ -1,0 +1,23 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:sincos:0.1.0
+description: "Quarter-wave sin/cos LUT (Q15), 16-bit angle in"
+filesets:
+  rtl:
+    files:
+      - rtl/sincos.v
+    file_type: verilogSource
+  gen:
+    files:
+      - rtl/gen/sincos_init.vh: {is_include_file: true}
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl, gen]
+    toplevel: sincos
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

@@ -67,7 +67,7 @@ module pwm_generator #(
   // Per-leg complementary drive with dead time and min-pulse enforcement.
   genvar g;
   generate
-    for (g = 0; g < 3; g = g + 1) begin : leg
+    for (g = 0; g < 3; g = g + 1) begin : g_leg
       wire [1:0]  mode = leg_mode[2*g+1:2*g];
       wire [15:0] duty = duty3[16*g +: 16];
 

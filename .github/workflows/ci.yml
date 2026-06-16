@@ -39,12 +39,26 @@ jobs:
           echo "$HOME/oss-cad-suite/bin" >> "$GITHUB_PATH"
 
       - name: Python deps
-        run: pip install pybind11 pytest
+        run: pip install pybind11 pytest reuse
 
-      - name: Lint (Verilator --lint-only on the system top)
+      - name: Install Verible (lint + format)
         run: |
+          V=v0.0-4075-g795c204a
+          curl -sL -o verible.tar.gz \
+            "https://github.com/chipsalliance/verible/releases/download/${V}/verible-${V}-linux-static-x86_64.tar.gz"
+          mkdir -p "$HOME/verible" && tar xzf verible.tar.gz -C "$HOME/verible" --strip-components=1
+          echo "$HOME/verible/bin" >> "$GITHUB_PATH"
+
+      - name: Lint - Verilator (system top, advisory) + Verible (enforced)
+        run: |
+          # Verilator -Wall is a REPORT (intentional wide-intermediate
+          # truncations, BLKSEQ, MODDUP); Verible is the enforced style gate.
           verilator --lint-only -Wall -Irtl -Irtl/gen rtl/controller_top.v \
-            $(ls rtl/*.v | grep -v foc_math) || true   # report; do not fail the gate on style-only
+            $(ls rtl/*.v | grep -v foc_math) || true
+          bash rtl/lint/run_verible.sh
+
+      - name: License gate (REUSE)
+        run: reuse lint
 
       - name: Build the co-sim bench
         run: bash sim/scripts/build_bench.sh
@@ -57,8 +71,32 @@ jobs:
             sim/tests/test_ads9224r.py sim/tests/test_drv8323.py
           # The full realism/edge tiers run nightly (they are ~30 min).
 
+      - name: cocotb block tests (standalone, per-block)
+        run: |
+          pip install cocotb        # CI Python is 3.12, within cocotb's support
+          python3 -m pytest sim/cocotb/test_cocotb_blocks.py -q
+
       - name: Synth gate (ECP5 maps + fits)
         run: python3 synth/run_synth.py --check
+
+      - name: ASIC-readiness smoke (yosys: gates, no latches/loops/multidriver)
+        run: python3 synth/asic_smoke.py --check
+
+      - name: Package resolves (Bender) - same source map as FuseSoC
+        run: |
+          B=0.32.0
+          curl -sL -o bender.tar.xz \
+            "https://github.com/pulp-platform/bender/releases/download/v${B}/bender-x86_64-unknown-linux-gnu.tar.xz"
+          mkdir -p "$HOME/bender" && tar xJf bender.tar.xz -C "$HOME/bender"
+          BIN="$HOME/bender/bender-x86_64-unknown-linux-gnu/bender"
+          "$BIN" script flist > /dev/null
+          echo "bender resolved $("$BIN" script flist | wc -l) sources"
+
+      - name: Docs build (mkdocs + WaveDrom timing)
+        run: |
+          pip install mkdocs mkdocs-material pymdown-extensions
+          python3 scripts/gen_docs.py
+          mkdocs build --strict
 
       - name: Status matrix artifact
         if: always()

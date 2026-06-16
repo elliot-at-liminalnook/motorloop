@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+# Docs site (robotics-ip-checklist stage 7). Assemble site-src/ with
+# `scripts/gen_docs.py`, then `mkdocs build`. WaveDrom timing diagrams render
+# client-side from ```wavedrom code blocks. docs_dir is site-src/ (generated);
+# docs/ holds the vendor datasheets and is NOT the mkdocs source.
+site_name: motorloop
+site_description: Robotics HDL blocks with claims, proofs, tests, timing, wrappers
+docs_dir: site-src
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: wavedrom
+          class: wavedrom
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra_javascript:
+  - https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js
+  - https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js
+  - js/wavedrom-init.js
+
+nav:
+  - Home: index.md
+  - Status matrix: status-matrix.md
+  - Verification plan: verification-plan.md
+  - Timing diagrams: timing.md
+  - Contracts:
+      - pwm_generator: contracts/pwm_generator.md
+      - foc_core: contracts/foc_core.md

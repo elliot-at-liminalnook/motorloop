@@ -24,9 +24,14 @@ duties hold. Surface-PMSM convention (`id_target = 0`).
 ## Clocking & reset
 
 - **Single clock**; async active-low reset → duty3 = 50% (zero voltage).
-- **Latency:** the Clarke→…→SVPWM chain is **combinational**; results register
-  on `update`. So the input-to-duty path is one long combinational chain (see
-  Synthesis).
+- **Latency (pipelined, stage 6.5):** `update` starts a sequencer that walks the
+  Clarke→Park→PI→limit→inv-Park→SVPWM chain over **registered stages**, one op
+  per clock. `duty3`/`dbg_*` update **~10 clocks** after `update` (or **~58**
+  when the limiter saturates: the sequential isqrt + two divides). `update` is
+  sparse (1/PWM period, hundreds–thousands of clocks), so the walk always
+  finishes well inside the sample period and the loop is unaffected; the PI
+  integrators still advance exactly once per `update`, with the **same error and
+  freeze(sat)** as the combinational core (bit-identical integrator state).
 
 ## Parameters
 
@@ -34,7 +39,7 @@ duties hold. Surface-PMSM convention (`id_target = 0`).
 | --- | --- | --- |
 | `PWM_HALF_PERIOD` | `625` | duty center / SVPWM scale (threaded to `svpwm`) |
 | `SINCOS_TABLE_BITS` | `8` | sin/cos LUT size (threaded to `sincos`; table regenerated if changed) |
-| `V_CIRCLE_LIMIT` | `594` | inscribed-circle radius (threaded to `circle_limit`) |
+| `V_CIRCLE_LIMIT` | `594` | inscribed-circle radius (threaded to `circle_limit_seq`) |
 | `CUR_PI_KP`,`CUR_PI_KI_SHIFT` | `2`,`4` | current-PI gains (threaded to both `current_pi`) |
 | `V_RAW_MAX` | `2500` | per-axis PI clamp (threaded to `current_pi`) |
 
@@ -44,22 +49,27 @@ duties hold. Surface-PMSM convention (`id_target = 0`).
   clamp, **parameter-generic**), `speed_iq_pi` (outer clamp, parameter-generic).
   The top-level `controller_top_composition` proves no-shoot-through through this
   datapath's mux.
-- **Documented, not machine-proven:** `circle_limit` magnitude bound (an integer
-  divide + isqrt; intractable for the open SMT engines — bounded by construction
-  + validated by the FOC sim tier).
+- **Documented, not machine-proven:** the `circle_limit` magnitude bound (an
+  integer divide + isqrt; intractable for the open SMT engines — bounded by
+  construction + validated by the FOC sim tier).
+- **Bit-exact equivalence:** `circle_limit_seq` (the sequential limiter foc_core
+  uses) is proven bit-exact to `circle_limit` by the cocotb test
+  `tb_circle_limit_seq` (~1000 cases incl. the saturation boundary).
 - **Bit-exact sim:** `test_foc_math.py` checks Clarke/Park/inv-Park/SVPWM/sincos
   against the Python fixed-point reference.
 
 ## Synthesis fit
 
-- **Device:** ECP5. **Finding:** the unpipelined combinational chain (notably
-  `circle_limit`'s 16-iteration isqrt) caps **Fmax ≈ 3.3 MHz** in the system
-  build — *below* the 25 MHz sim clock. A real high-speed board build must
-  **pipeline this datapath** (registered stages). See `synth/synth_report.md`.
-  The simulator is cycle-accurate regardless.
+- **Device:** ECP5. **Finding:** pipelining the datapath and replacing the
+  combinational limiter with the sequential `circle_limit_seq` raised the system
+  build from **Fmax ≈ 3.3 MHz** to **≈ 41.3 MHz** (clears the 25 MHz target),
+  while LUT usage *dropped* (the big combinational divide/sqrt became a small
+  reused datapath). See `synth/synth_report.md`. The simulator is cycle-accurate
+  regardless.
 
 ## Reuse notes
 
 - **Language:** Verilog-2005. **Dependencies:** instantiates `sincos`, `clarke`,
-  `park`, `inv_park`, `current_pi`×2, `circle_limit`, `svpwm` (all in the core).
+  `park`, `inv_park`, `current_pi`×2, `circle_limit_seq` (→ `divider32`), `svpwm`
+  (all in the core).
 - **Pull it:** `fusesoc run motorloop:ip:foc_core` (core in `cores/`).

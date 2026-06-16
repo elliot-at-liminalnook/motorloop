@@ -1,18 +1,17 @@
-<!-- SPDX-License-Identifier: MIT -->
 # ECP5 synthesis report
 
 Open flow (yosys -> nextpnr-ecp5 -> ecppack), board wrapper `synth/board_top.v` on the ULX3S (LFE5U-85F, CABGA381). Regenerate with `synth/run_synth.py`.
 
 ## Utilization (synth_ecp5, raw cell counts)
-- TRELLIS_FF: 1902
-- LUT4: 14320
-- CCU2C: 2783
-- MULT18X18D: 22
+- TRELLIS_FF: 2634
+- LUT4: 3914
+- CCU2C: 1607
+- MULT18X18D: 24
 
 The design fits the -85F with wide margin (the parsed counts above are indicative; see `synth/work/stat.txt` and `nextpnr.log` for the authoritative post-pack utilisation).
 
 ## Timing
-- Post-route Fmax estimate: **3.29 MHz** (target 25 MHz: NOT met)
+- Post-route Fmax estimate: **41.27 MHz** (target 25 MHz: MET)
 - Bitstream: `synth/work/board_top.bit`
 
-**Finding:** the design synthesizes and fits, but the unpipelined FOC datapath (the `circle_limit` 16-iteration isqrt and the chained Clarke/Park/PI/SVPWM evaluated in one update) is a long combinational path that caps Fmax well below 25 MHz. A real 25 MHz board build needs that datapath pipelined (multi-cycle / registered stages); the simulator is cycle-accurate regardless. This is the synth flow surfacing exactly the RTL that won't map well at speed (stage 15.4).
+**Finding:** the FOC datapath is pipelined (robotics-ip stage 6.5): the Clarke/Park/PI/circle-limit/inv-Park/SVPWM chain is walked over registered stages, and the former Fmax bottleneck - `circle_limit`'s combinational 16-iteration isqrt + two 32-bit divisions - is now the sequential, bit-exact `circle_limit_seq` (one op per clock, reusing `divider32`). Post-route Fmax rose from ~3.3 MHz (unpipelined) to ~41.27 MHz, clearing the 25 MHz target, while LUT usage dropped (the huge combinational divide/sqrt logic became a small reused datapath). The simulator stays cycle-accurate; the FOC duties simply appear a fixed, sub-sample-period latency later.

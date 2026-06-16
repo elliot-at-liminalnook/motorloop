@@ -5,6 +5,11 @@ rtl/gen/
 synth/work/
 fusesoc.conf
 
+# Generated docs site (robotics-ip stage 7): site-src/ is assembled by
+# scripts/gen_docs.py from notes/ + rtl/contracts/; site/ is the mkdocs render.
+site-src/
+site/
+
 # Vendor collateral: TI/Sipeed/Gowin/etc. datasheets, reference designs, and
 # SPICE models are copyrighted and not redistributable. The README.md index
 # in each docs/ subdirectory lists what to download and from where.
@@ -33,3 +38,9 @@ __pycache__/
 # checkers, and the generated proof_report.md are tracked, the work dir is not.
 formal/work/
 formal/sby/*.sby
+
+# cocotb block-test artifacts (robotics-ip)
+sim/cocotb/build/
+sim/cocotb/sim_build/
+sim/cocotb/*.result.xml
+*.vcd

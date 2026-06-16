@@ -18,12 +18,18 @@ module commutation (
 
   always @(*) begin
     case (sector)
-      3'd0: begin leg_mode = {MODE_OFF, MODE_LOW, MODE_PWM}; low_phase = 2'd1; float_phase = 2'd2; end
-      3'd1: begin leg_mode = {MODE_LOW, MODE_OFF, MODE_PWM}; low_phase = 2'd2; float_phase = 2'd1; end
-      3'd2: begin leg_mode = {MODE_LOW, MODE_PWM, MODE_OFF}; low_phase = 2'd2; float_phase = 2'd0; end
-      3'd3: begin leg_mode = {MODE_OFF, MODE_PWM, MODE_LOW}; low_phase = 2'd0; float_phase = 2'd2; end
-      3'd4: begin leg_mode = {MODE_PWM, MODE_OFF, MODE_LOW}; low_phase = 2'd0; float_phase = 2'd1; end
-      3'd5: begin leg_mode = {MODE_PWM, MODE_LOW, MODE_OFF}; low_phase = 2'd1; float_phase = 2'd0; end
+      3'd0: begin leg_mode = {MODE_OFF, MODE_LOW, MODE_PWM};
+                  low_phase = 2'd1; float_phase = 2'd2; end
+      3'd1: begin leg_mode = {MODE_LOW, MODE_OFF, MODE_PWM};
+                  low_phase = 2'd2; float_phase = 2'd1; end
+      3'd2: begin leg_mode = {MODE_LOW, MODE_PWM, MODE_OFF};
+                  low_phase = 2'd2; float_phase = 2'd0; end
+      3'd3: begin leg_mode = {MODE_OFF, MODE_PWM, MODE_LOW};
+                  low_phase = 2'd0; float_phase = 2'd2; end
+      3'd4: begin leg_mode = {MODE_PWM, MODE_OFF, MODE_LOW};
+                  low_phase = 2'd0; float_phase = 2'd1; end
+      3'd5: begin leg_mode = {MODE_PWM, MODE_LOW, MODE_OFF};
+                  low_phase = 2'd1; float_phase = 2'd0; end
       default: begin leg_mode = 6'b000000; low_phase = 2'd0; float_phase = 2'd0; end
     endcase
   end

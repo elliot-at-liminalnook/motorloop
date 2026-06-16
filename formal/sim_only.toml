@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT
+# Reusable blocks that are intentionally NOT formally proven, with the reason.
+# The coverage gate (formal/check_coverage.py) requires every block in cores/ to
+# be EITHER in formal/manifest.toml OR declared here - no silent unproven block
+# (robotics-ip-checklist stage 2). This file + the manifest are the single truth
+# source for "what is proven vs simulated."
+
+[clarke]
+reason = "pure combinational transform; bit-exact vs the Python fixed-point reference (test_foc_math)"
+[park]
+reason = "pure combinational transform; bit-exact (test_foc_math)"
+[inv_park]
+reason = "pure combinational transform; bit-exact (test_foc_math)"
+[sincos]
+reason = "quarter-wave LUT; bit-exact vs the reference table (test_foc_math)"
+[commutation]
+reason = "combinational sector->drive decode; covered by the top no-shoot-through composition proof + six-step sim"
+[open_loop_ramp]
+reason = "phase-accumulator ramp; covered by the open-loop spin sim tier"
+[divider32]
+reason = "sequential divider; covered by the speed-measurement sim tier"
+[speed_pi]
+reason = "six-step duty PI; clamp behaviour exercised by the closed-loop sim (the FOC analogue speed_iq_pi IS proven, param-generic)"
+[speed_meter]
+reason = "sector-edge speed measurement; covered by the speed sim tier"
+[spi_drv_master]
+reason = "SPI master; protocol exercised against the golden DRV8301 model in the co-sim"
+[adc_spi_master]
+reason = "SPI master; protocol exercised against the golden MCP3208 model in the co-sim"
+[as5600_pwm_capture]
+reason = "PWM duty capture; exercised against the AS5600 model in the co-sim"
+[uart_rx]
+reason = "8N1 receiver; exercised end-to-end against the host UART model"
+[uart_tx]
+reason = "8N1 transmitter; exercised end-to-end against the host UART model"
+[uart_regfile]
+reason = "command/telemetry FSM; exercised end-to-end over the UART link"
+[foc_core]
+reason = "FOC datapath (pipelined, stage 6.5); composes PROVEN sub-blocks (svpwm/current_pi) + the bit-exact circle_limit_seq, covered by the top composition proof + the FOC sim tier (test_foc_scenarios, latency-aware)"
+[circle_limit_seq]
+reason = "sequential, multi-cycle limiter; bit-exact to circle_limit (itself DOCUMENTED - the isqrt+divide is intractable for the open SMT engines) by the cocotb equivalence test (tb_circle_limit_seq, ~1000 cases incl. the saturation boundary) + the in-system FOC regression"

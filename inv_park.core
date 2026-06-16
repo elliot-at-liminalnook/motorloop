@@ -1,0 +1,19 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:inv_park:0.1.0
+description: "Inverse Park (d/q -> alpha/beta), combinational"
+filesets:
+  rtl:
+    files:
+      - rtl/inv_park.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: inv_park
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only

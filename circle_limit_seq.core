@@ -1,0 +1,20 @@
+CAPI=2:
+# SPDX-License-Identifier: MIT
+name: motorloop:ip:circle_limit_seq:0.1.0
+description: "Sequential voltage-circle limiter (multi-cycle, bit-exact to circle_limit)"
+filesets:
+  rtl:
+    files:
+      - rtl/circle_limit_seq.v
+      - rtl/divider32.v
+    file_type: verilogSource
+targets:
+  default: &default
+    filesets: [rtl]
+    toplevel: circle_limit_seq
+  lint:
+    <<: *default
+    default_tool: verilator
+    tools:
+      verilator:
+        mode: lint-only
