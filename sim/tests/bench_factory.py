@@ -107,6 +107,30 @@ PLATFORMS = {
 }
 DEFAULT_PLATFORM = "zonri_drv8301"
 
+# Part-comparison study (notes/part-comparison-checklist.md): one source of
+# truth for each comparison and the single part it isolates. Verified clean:
+#   * angle sensor - zonri_drv8301 vs zonri_as5047p differ ONLY in angle_name
+#     (driver, ADC, drv_hw_mode all equal), so the pair isolates the sensor.
+#   * current sampling - the whole-BOM adc_dual_mode swap (zonri_ads9224r /
+#     ti_reference_hp) also shifts the operating point of the shared placeholder
+#     loop (a confound), so Q21 skew is isolated by the foc current_sample_scheme
+#     toggle on a fixed stable platform instead (0 = simultaneous / ADS9224R,
+#     1 = sequential skew / MCP3208). See part_compare.py.
+COMPARISONS = {
+    "angle_sensor": {"kind": "platform", "a": "zonri_drv8301",
+                     "b": "zonri_as5047p",
+                     "labels": ("AS5600", "AS5047P"), "varies": "angle_name"},
+    "current_sampling": {"kind": "scheme", "base": "zonri_drv8301",
+                         "a": 1, "b": 0,
+                         "labels": ("MCP3208 (sequential skew)",
+                                    "ADS9224R (simultaneous)"),
+                         "varies": "foc.current_sample_scheme"},
+    "whole_bom": {"kind": "platform", "a": "zonri_drv8301",
+                  "b": "ti_reference_hp",
+                  "labels": ("default BOM", "TI HP BOM"),
+                  "varies": "driver+adc+angle (system snapshot only)"},
+}
+
 
 def bench_config(params, **overrides):
     cfg = {

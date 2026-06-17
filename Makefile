@@ -15,7 +15,7 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
 
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
         contracts version portability formal synth synth-check asic fmax ipxact \
-        bender docs clean soc-sim soc-build
+        bender docs clean soc-sim soc-build compare
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -54,6 +54,8 @@ test: bench  ## full pytest regression (system python3 + numpy)
 	python3 -m pytest sim/tests -q
 cocotb:  ## per-block cocotb suite
 	$(COCOTB_PY) -m pytest sim/cocotb/test_cocotb_blocks.py -q
+compare: bench  ## part-comparison study: render the 10 sensor/ADC figures
+	python3 sim/scripts/gen_comparison_figures.py
 
 ## --- proofs / synthesis / ASIC (need the OSS CAD Suite, sourced in-recipe) ---
 formal:  ## run + check all formal proofs
