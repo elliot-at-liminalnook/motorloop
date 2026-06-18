@@ -1,0 +1,17 @@
+* ADS9224R input charge-bucket settling. The THS4551 (modeled as a stiff source
+* behind flt_r) recharges the bucket cap flt_c after each conversion; the held
+* sample must settle within the acquisition window. A worst-case step (the bucket
+* starting at a stale voltage) settles single-pole through flt_r*flt_c; the
+* transient residual at adc_acq_window_ads9224r cross-checks the derived
+* adc.acq_settle_residual_ads9224r.
+.include components.param
+
+Vfda fda 0 PWL(0 1.0  1p 4.0)
+Rflt fda buck {ads9224r_module_flt_r}
+Cbuck buck 0 {ads9224r_module_flt_c} ic=1.0
+
+.control
+tran 0.2n 1u uic
+wrdata ads9224r_settle.out v(buck)
+.endc
+.end

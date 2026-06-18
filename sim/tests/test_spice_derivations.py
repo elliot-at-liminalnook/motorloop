@@ -59,6 +59,44 @@ def test_emf_channel_ac(params):
 
 
 @needs_ngspice
+def test_ads9224r_frontend_dc(params):
+    """Open ADS9224R module: the THS4551 differential transfer slope ==
+    fda_gain*shunt, and the codes/A it implies matches the derived
+    feedback.current_ads9224r.codes_per_amp; the output clamps at +/- ref."""
+    data = spice_runner.run_netlist("ads9224r_frontend",
+                                    params)["ads9224r_dc.out"]
+    lin = [(i, v) for i, v in data if abs(i) < 50]
+    slope, intercept = linear_fit(lin)
+    gain = params.value("feedback.current_ads9224r.fda_gain")
+    shunt = params.value("circuit.ads9224r_module.shunt")
+    ref = params.value("circuit.ads9224r_module.ref_v")
+    assert math.isclose(slope, gain * shunt, rel_tol=1e-6)
+    assert intercept == pytest.approx(0.0, abs=1e-9)
+    codes_per_amp = slope / ref * 32768.0
+    assert math.isclose(codes_per_amp,
+                        params.value("feedback.current_ads9224r.codes_per_amp"),
+                        rel_tol=1e-6)
+    assert math.isclose(max(v for _, v in data), ref, rel_tol=5e-3)
+    assert math.isclose(min(v for _, v in data), -ref, rel_tol=5e-3)
+
+
+@needs_ngspice
+def test_ads9224r_settle_transient(params):
+    """The ADC charge-bucket settles single-pole through flt_r*flt_c; the
+    residual at the acquisition window matches the derived
+    adc.acq_settle_residual_ads9224r and clears the 0.5-LSB (1.5e-5) target."""
+    rows = spice_runner.run_netlist("ads9224r_settle",
+                                    params)["ads9224r_settle.out"]
+    t_acq = params.value("adc.ads9224r_acq_window_s")
+    probe = min(rows, key=lambda r: abs(r[0] - t_acq))
+    residual = (4.0 - probe[1]) / 3.0   # netlist steps 1 V -> 4 V
+    assert math.isclose(residual,
+                        params.value("adc.acq_settle_residual_ads9224r"),
+                        rel_tol=0.05)
+    assert residual < 1.0 / 65536.0, f"settling {residual:.2e} exceeds 0.5 LSB"
+
+
+@needs_ngspice
 def test_iout_channel_dc(params):
     """DC sweep: slope == gain*shunt, intercept == offset, swing == rails."""
     data = spice_runner.run_netlist("iout_channel", params)["iout_dc.out"]

@@ -21,5 +21,7 @@ keywords:
   - Verilog
   - RISC-V
   - LiteX
+  - "open hardware"
+  - ADS9224R
 # After minting the Zenodo DOI (notes/release-checklist.md), uncomment + fill:
 # doi: 10.5281/zenodo.XXXXXXX

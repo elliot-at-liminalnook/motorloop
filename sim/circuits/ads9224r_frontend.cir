@@ -1,0 +1,20 @@
+* ADS9224R module current-sense front-end: low-side shunt -> THS4551 fully-
+* differential driver (gain = fda_rf/fda_rg) -> ADS9224R differential input.
+* DC sweep extracts the differential transfer (V_out_diff per amp), which the
+* derivation test converts to codes/A and cross-checks feedback.current_ads9224r.
+.include components.param
+.param fda_gain={ads9224r_module_fda_rf/ads9224r_module_fda_rg}
+
+I1 0 sp dc 0
+Rsh sp 0 {ads9224r_module_shunt}
+* Differential FDA output (bipolar, zero current -> 0 V differential), clamped
+* to the +/- reference full-scale of the differential ADC.
+Bfda raw 0 v = fda_gain*v(sp)
+Bclamp vod 0 v = min(max(v(raw), -ads9224r_module_ref_v), ads9224r_module_ref_v)
+Rload vod 0 1e9
+
+.control
+dc i1 -150 150 0.5
+wrdata ads9224r_dc.out v(vod)
+.endc
+.end

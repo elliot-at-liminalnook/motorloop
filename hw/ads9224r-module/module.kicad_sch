@@ -1,0 +1,494 @@
+(kicad_sch
+  (version 20250114)
+  (generator "gen_kicad_sch")
+  (generator_version "9.0")
+  (uuid "38398622-f8dc-5e99-8f69-a670e97486aa")
+  (paper "A4")
+  (title_block (title "Open ADS9224R simultaneous current-sense module") (comment 1 "GENERATED from sim/config/params.toml - do not edit"))
+  (lib_symbols
+(symbol "Device:R"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "R"
+			(at 2.032 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "R"
+			(at 0 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" ""
+			(at -1.778 0 90)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "R res resistor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "R_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "R_0_1"
+			(rectangle
+				(start -1.016 -2.54)
+				(end 1.016 2.54)
+				(stroke
+					(width 0.254)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "R_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 1.27)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+(symbol "Device:C"
+		(pin_numbers
+			(hide yes)
+		)
+		(pin_names
+			(offset 0.254)
+		)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(property "Reference" "C"
+			(at 0.635 2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "C"
+			(at 0.635 -2.54 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 0.9652 -3.81 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" "~"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" "Unpolarized capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_keywords" "cap capacitor"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "ki_fp_filters" "C_*"
+			(at 0 0 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(symbol "C_0_1"
+			(polyline
+				(pts
+					(xy -2.032 0.762) (xy 2.032 0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+			(polyline
+				(pts
+					(xy -2.032 -0.762) (xy 2.032 -0.762)
+				)
+				(stroke
+					(width 0.508)
+					(type default)
+				)
+				(fill
+					(type none)
+				)
+			)
+		)
+		(symbol "C_1_1"
+			(pin passive line
+				(at 0 3.81 270)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "1"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+			(pin passive line
+				(at 0 -3.81 90)
+				(length 2.794)
+				(name "~"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+				(number "2"
+					(effects
+						(font
+							(size 1.27 1.27)
+						)
+					)
+				)
+			)
+		)
+		(embedded_fonts no)
+	)
+  )
+  (symbol (lib_id "Device:R") (at 50.8 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "f4e04cee-6c7d-569f-9d96-824978c2844d")
+    (property "Reference" "RSHA" (at 53.339999999999996 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "2m" (at 53.339999999999996 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 50.8 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "4be19e8c-7261-5e39-a296-4c2a0edf2667"))
+    (pin "2" (uuid "b30d7321-98cd-5b44-a623-d37faa72dbaf"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RSHA") (unit 1))))
+  )
+  (global_label "PHA_P" (shape input) (at 50.8 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "e0c8e957-4149-55c2-94bc-b4c73674485f"))
+  (global_label "PHA_N" (shape input) (at 50.8 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "a6f0f6d9-c219-592d-851f-8955e3c01eaa"))
+  (symbol (lib_id "Device:R") (at 76.2 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "0ad1ca00-c6e4-51ea-b092-591cad4e344d")
+    (property "Reference" "RGA" (at 78.74000000000001 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100" (at 78.74000000000001 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 76.2 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "ef5be25f-6d2c-5e8c-8b78-ebb330744aa7"))
+    (pin "2" (uuid "fe6d5419-a020-50c7-bdbb-4dd8de6c220f"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RGA") (unit 1))))
+  )
+  (global_label "PHA_P" (shape input) (at 76.2 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "dea8242f-fa4e-51fb-8e57-24f8da2839f8"))
+  (global_label "FDAA_FB" (shape input) (at 76.2 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "c20ee048-b139-58a4-b7f9-39e198a54568"))
+  (symbol (lib_id "Device:R") (at 101.6 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "26fad4c0-945c-5173-9014-aa0598a7441d")
+    (property "Reference" "RFA" (at 104.14 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "2k" (at 104.14 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 101.6 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "9ae035a1-e9ee-5f7a-8303-7d2342e3615f"))
+    (pin "2" (uuid "c101dddf-6578-58b7-9f1b-73901d28ae61"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RFA") (unit 1))))
+  )
+  (global_label "FDAA_FB" (shape input) (at 101.6 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "e720a44c-84ff-5609-b615-66bcf60fea7d"))
+  (global_label "FDAA_OUT" (shape input) (at 101.6 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "0dd30935-483a-5b16-970a-3a94b28c3691"))
+  (symbol (lib_id "Device:R") (at 127.0 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "b3da4984-3172-5873-a775-c83537560619")
+    (property "Reference" "RFLTA" (at 129.54 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10" (at 129.54 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "dd550277-75ca-5c2b-909b-df1ca289f8f3"))
+    (pin "2" (uuid "9360ea04-d2ae-5ce0-85f2-7d1adbbbb9ee"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RFLTA") (unit 1))))
+  )
+  (global_label "FDAA_OUT" (shape input) (at 127.0 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "6c2e8cc0-cacb-53dd-88e9-1d814fc87e72"))
+  (global_label "AINA" (shape input) (at 127.0 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "0f7ffa1a-d484-52a0-8699-1f955c488286"))
+  (symbol (lib_id "Device:C") (at 127.0 76.19999999999999 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "eb660469-b0e1-59ee-a72d-5137e3bed7c2")
+    (property "Reference" "CFLTA" (at 129.54 74.92999999999999 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1.5n" (at 129.54 77.46999999999998 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 76.19999999999999 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "1b2cf687-cf9a-5d07-b79d-ba532a658024"))
+    (pin "2" (uuid "bb9ec34a-31bc-5d23-a8dd-f291a1ce45c5"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "CFLTA") (unit 1))))
+  )
+  (global_label "AINA" (shape input) (at 127.0 72.38999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "1897f251-3f30-5b7e-86be-0151ebbac230"))
+  (global_label "GND" (shape input) (at 127.0 80.00999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "151905eb-242e-5d32-88ec-f929a640f4e5"))
+  (symbol (lib_id "Device:R") (at 50.8 101.6 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "d9cc082e-c5d2-5470-88e5-83e9b786aab7")
+    (property "Reference" "RSHB" (at 53.339999999999996 100.33 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "2m" (at 53.339999999999996 102.86999999999999 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 50.8 101.6 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "0dc56762-67da-56a3-929f-e431b162a334"))
+    (pin "2" (uuid "1d3aa3b5-2081-5573-ae59-60de1eac48d8"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RSHB") (unit 1))))
+  )
+  (global_label "PHB_P" (shape input) (at 50.8 97.78999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "31649093-3478-584f-ae9a-3d0626705fd0"))
+  (global_label "PHB_N" (shape input) (at 50.8 105.41 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "6db799dc-4d00-50a7-bd02-b3ded4c4a39c"))
+  (symbol (lib_id "Device:R") (at 76.2 101.6 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "c61648e2-1d52-53e5-bc55-5b5d5e4cdffd")
+    (property "Reference" "RGB" (at 78.74000000000001 100.33 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "100" (at 78.74000000000001 102.86999999999999 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 76.2 101.6 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "d4f7b3ae-3251-543f-9db0-4b9aec94eeea"))
+    (pin "2" (uuid "a3ff9bbb-f1ff-5f4f-b460-3f4d3d3c8d29"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RGB") (unit 1))))
+  )
+  (global_label "PHB_P" (shape input) (at 76.2 97.78999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "76f03bc9-0bc3-5e99-855a-6c20a7aced6a"))
+  (global_label "FDAB_FB" (shape input) (at 76.2 105.41 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "755094fc-32bf-5e7a-964c-e9cb8c211bbf"))
+  (symbol (lib_id "Device:R") (at 101.6 101.6 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "6f490541-430a-568a-843f-f6867d493939")
+    (property "Reference" "RFB" (at 104.14 100.33 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "2k" (at 104.14 102.86999999999999 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 101.6 101.6 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "225b8e4e-b762-5020-91ac-90460e7d6c0f"))
+    (pin "2" (uuid "73d4ef38-5825-5aca-bfbe-a2db92d1d13f"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RFB") (unit 1))))
+  )
+  (global_label "FDAB_FB" (shape input) (at 101.6 97.78999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "428977c1-9135-5dba-93ec-1615a69bdf5a"))
+  (global_label "FDAB_OUT" (shape input) (at 101.6 105.41 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "0c382d22-262f-5e12-aee1-4d17e00b2fb7"))
+  (symbol (lib_id "Device:R") (at 127.0 101.6 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "be1381da-5629-5305-90b1-38d1e8d0c8b7")
+    (property "Reference" "RFLTB" (at 129.54 100.33 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10" (at 129.54 102.86999999999999 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 101.6 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "c97debd7-5012-5f52-9c03-d1038a80eafc"))
+    (pin "2" (uuid "af6333d5-64d5-52fb-ba0a-4720160d5015"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "RFLTB") (unit 1))))
+  )
+  (global_label "FDAB_OUT" (shape input) (at 127.0 97.78999999999999 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "b98a306a-42dd-519f-9d28-d7b06ca55328"))
+  (global_label "AINB" (shape input) (at 127.0 105.41 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "032c4faf-820c-5f79-81b0-3f793ed45760"))
+  (symbol (lib_id "Device:C") (at 127.0 127.0 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "adca5652-22c6-50ae-a6fb-88a226568610")
+    (property "Reference" "CFLTB" (at 129.54 125.73 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "1.5n" (at 129.54 128.27 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 127.0 127.0 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "b15ffbcb-823c-5a8d-a20e-2374ed475edb"))
+    (pin "2" (uuid "6b6c26ae-42d5-5ead-8e87-da3de7658d91"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "CFLTB") (unit 1))))
+  )
+  (global_label "AINB" (shape input) (at 127.0 123.19 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "069c2f38-4c89-55a3-8e49-4d9ec44ccae4"))
+  (global_label "GND" (shape input) (at 127.0 130.81 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "e2b5539c-9c42-5cff-ae60-f64d2540c22c"))
+  (symbol (lib_id "Device:C") (at 152.4 50.8 0) (unit 1)
+    (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
+    (uuid "bec5cb98-25bf-59f5-9130-43cd9208168f")
+    (property "Reference" "CREF" (at 154.94 49.529999999999994 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Value" "10u" (at 154.94 52.07 0)
+      (effects (font (size 1.27 1.27)) (justify left)))
+    (property "Footprint" "" (at 152.4 50.8 0)
+      (effects (font (size 1.27 1.27)) (hide yes)))
+    (pin "1" (uuid "82cc3ebe-3781-5e5f-8bb3-23cc8523e41e"))
+    (pin "2" (uuid "01ebb181-6430-52db-bb2d-6befcf38a707"))
+    (instances (project "ads9224r_module"
+      (path "/38398622-f8dc-5e99-8f69-a670e97486aa" (reference "CREF") (unit 1))))
+  )
+  (global_label "VREF" (shape input) (at 152.4 46.989999999999995 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "d33d2f1a-a87a-5faa-9c94-b543db0904de"))
+  (global_label "GND" (shape input) (at 152.4 54.61 0)
+    (effects (font (size 1.27 1.27)) (justify left))
+    (uuid "96a8279c-5e2d-5f73-8be0-177d4062b025"))
+  (sheet_instances (path "/" (page "1")))
+)

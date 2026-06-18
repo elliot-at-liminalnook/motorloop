@@ -79,9 +79,18 @@ def components_from_params(params: sim_params.SimParams):
     ]
 
 
-def render_schematic(params: sim_params.SimParams) -> str:
+def render_schematic(params: sim_params.SimParams, components=None,
+                     title: str = "BLDC feedback measurement circuits",
+                     project: str = "feedback_circuits", uuid_fn=None) -> str:
+    """Render a KiCad schematic of a passive network. Defaults reproduce the
+    feedback-circuits schematic byte-for-byte; pass `components` (the
+    components_from_params tuple list), `title`, `project` and a deterministic
+    `uuid_fn` to render a different board (e.g. the ADS9224R module)."""
+    uuid_fn = uuid_fn or det_uuid
+    if components is None:
+        components = components_from_params(params)
     lib_text = DEVICE_LIB.read_text()
-    root_uuid = det_uuid("root")
+    root_uuid = uuid_fn("root")
     parts = [
         '(kicad_sch',
         '  (version 20250114)',
@@ -89,7 +98,7 @@ def render_schematic(params: sim_params.SimParams) -> str:
         '  (generator_version "9.0")',
         f'  (uuid "{root_uuid}")',
         '  (paper "A4")',
-        '  (title_block (title "BLDC feedback measurement circuits")'
+        f'  (title_block (title "{title}")'
         ' (comment 1 "GENERATED from sim/config/params.toml - do not edit"))',
         '  (lib_symbols',
         extract_symbol(lib_text, "R"),
@@ -98,8 +107,8 @@ def render_schematic(params: sim_params.SimParams) -> str:
     ]
 
     label_done: set[tuple[str, float, float]] = set()
-    for ref, lib, value, net_top, net_bot, x, y in components_from_params(params):
-        sym_uuid = det_uuid(f"sym-{ref}")
+    for ref, lib, value, net_top, net_bot, x, y in components:
+        sym_uuid = uuid_fn(f"sym-{ref}")
         parts.append(f'''  (symbol (lib_id "Device:{lib}") (at {x} {y} 0) (unit 1)
     (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no)
     (uuid "{sym_uuid}")
@@ -109,9 +118,9 @@ def render_schematic(params: sim_params.SimParams) -> str:
       (effects (font (size 1.27 1.27)) (justify left)))
     (property "Footprint" "" (at {x} {y} 0)
       (effects (font (size 1.27 1.27)) (hide yes)))
-    (pin "1" (uuid "{det_uuid(f"pin1-{ref}")}"))
-    (pin "2" (uuid "{det_uuid(f"pin2-{ref}")}"))
-    (instances (project "feedback_circuits"
+    (pin "1" (uuid "{uuid_fn(f"pin1-{ref}")}"))
+    (pin "2" (uuid "{uuid_fn(f"pin2-{ref}")}"))
+    (instances (project "{project}"
       (path "/{root_uuid}" (reference "{ref}") (unit 1))))
   )''')
         # Global labels at the exact pin connection points (pin 1 above the
@@ -124,7 +133,7 @@ def render_schematic(params: sim_params.SimParams) -> str:
             parts.append(
                 f'  (global_label "{net}" (shape input) (at {x} {py_} 0)\n'
                 f'    (effects (font (size 1.27 1.27)) (justify left))\n'
-                f'    (uuid "{det_uuid(f"lbl-{net}-{x}-{py_}")}"))')
+                f'    (uuid "{uuid_fn(f"lbl-{net}-{x}-{py_}")}"))')
 
     parts.append(f'  (sheet_instances (path "/" (page "1")))')
     parts.append(')')
@@ -142,11 +151,14 @@ def parse_spice_netlist(text: str):
     return out
 
 
-def check(params: sim_params.SimParams, netlist_path: Path) -> list[str]:
+def check(params: sim_params.SimParams, netlist_path: Path,
+          components=None) -> list[str]:
     """Compare an exported SPICE netlist against the component tables."""
+    if components is None:
+        components = components_from_params(params)
     exported = parse_spice_netlist(netlist_path.read_text())
     errors = []
-    for ref, _lib, value, net_top, net_bot, _x, _y in components_from_params(params):
+    for ref, _lib, value, net_top, net_bot, _x, _y in components:
         if ref not in exported:
             errors.append(f"{ref} missing from exported netlist")
             continue

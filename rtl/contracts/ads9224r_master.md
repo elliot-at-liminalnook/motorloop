@@ -66,6 +66,20 @@ legality and `foc_valid` well-formedness are proven.**
 - **Device:** ECP5. Small: two 16-bit shift registers, an 8-bit divider, small
   counters and a 7-state FSM (`synth/fmax_module.py ads9224r_master`).
 
+## Physical target — open ADS9224R module (`hw/ads9224r-module/`)
+
+The driver's pins map 1:1 to the **open ADS9224R current-sense module**
+(`notes/ads9224r-open-board-checklist.md`): `convst / ncs / sclk / sdo_a /
+sdo_b / ready` + 3.3 V / GND on the FPGA header (3.3 V digital rail mates the
+ULX3S directly — no level translator). The module's analog front-end
+(low-side shunt → THS4551 fully-differential driver, gain
+`feedback.current_ads9224r.fda_gain` = 20) sets the scaling the two's-complement
+codes carry: **codes/A = `feedback.current_ads9224r.codes_per_amp` = 320**
+(±`full_scale_a` = ±102.4 A over ±32768), derived in `sim/config/params.toml`
+`[circuit.ads9224r_module]` and SPICE-cross-checked (`test_ads9224r_frontend_dc`).
+Other shunt/gain options in `hw/ads9224r-module/bom.csv`. **Board status:
+designed + simulated; hardware bring-up pending (Q23).**
+
 ## Reuse notes
 
 - **Language:** Verilog-2005; accepted by Verilator/yosys/Vivado/Quartus.

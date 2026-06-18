@@ -11,6 +11,15 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Elliot <elliot@liminalnook.com>"
 SPDX-License-Identifier = "MIT"
 
+# Open hardware module: licensed CERN-OHL-S-2.0 (hardware needs an open-hardware
+# licence, distinct from the MIT software). Overrides the MIT catch-all for this
+# tree; covers the generated schematic + BOM that carry no inline header.
+[[annotations]]
+path = "hw/ads9224r-module/**"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Elliot <elliot@liminalnook.com>"
+SPDX-License-Identifier = "CERN-OHL-S-2.0"
+
 # Third-party vendor reference documents (datasheets, schematics, app notes,
 # sim models) - copyright their respective owners, NOT this project's MIT.
 # This annotation comes last, so it takes precedence for these paths.

@@ -147,6 +147,22 @@ l_return = { value = 0.5e-6, unit = "H", status = "assumed", blocked_by = "Q9", 
 [circuit.gate_pulldowns]
 en_gate_pulldown = { value = 10.0e3, unit = "Ohm", status = "assumed", blocked_by = "Q13", note = "planned external pull-down holding EN_GATE low through the FPGA configuration window" }
 
+# Open ADS9224R simultaneous current-sense module (hw/ads9224r-module/). A small
+# open-hardware breakout designed off TI's ADS9224REVM topology (no open ADS9224R
+# board exists to clone): low-side shunt -> THS4551 fully-differential driver ->
+# RC charge-bucket -> ADS9224R AIN+/-, with a buffered reference. Values are
+# EVM-topology baseline / datasheet-typical; promote to 'measured' after the
+# bench bring-up (Q23). Feeds the derived scaling + the SPICE settling check.
+[circuit.ads9224r_module]
+shunt = { value = 2.0e-3, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "default low-side current shunt; other scaling options in hw/ads9224r-module/bom.csv" }
+fda_rf = { value = 2.0e3, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "THS4551 feedback R; differential gain = fda_rf/fda_rg" }
+fda_rg = { value = 100.0, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "THS4551 gain-set R" }
+flt_r = { value = 10.0, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "ADC charge-bucket series R (FDA<->AINx isolation); TI SAR front-end app-note range 10-22 Ohm" }
+flt_c = { value = 1.5e-9, unit = "F", status = "assumed", blocked_by = "Q23", note = "ADC charge-bucket cap; sources the cap-DAC charge each conversion" }
+cdac = { value = 60.0e-12, unit = "F", status = "assumed", blocked_by = "Q23", note = "ADS9224R sampling cap-DAC (datasheet-typical for the SAR class); SPICE-model only" }
+ref_v = { value = 4.096, unit = "V", status = "assumed", blocked_by = "Q23", note = "ADC reference; the EVM uses an external low-noise ref + buffer - confirm value/IC" }
+ref_reservoir_c = { value = 10.0e-6, unit = "F", status = "assumed", blocked_by = "Q23", note = "reference reservoir cap; the SAR draws charge from REF each conversion; SPICE/board only" }
+
 # -----------------------------------------------------------------------------
 # Analog feedback chain - DERIVED from [circuit.*] (verify via
 # `python3 sim/scripts/derive_params.py --check`)
@@ -155,6 +171,12 @@ en_gate_pulldown = { value = 10.0e3, unit = "Ohm", status = "assumed", blocked_b
 [feedback.current]
 shunt = { value = 2.0e-3, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.iout_channel" }
 offset = { value = 1.65, unit = "V", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.iout_channel", note = "= ref_pin_v/2 per DRV8301 amp transfer" }
+
+# Open ADS9224R module current scaling - DERIVED from circuit.ads9224r_module.
+[feedback.current_ads9224r]
+fda_gain = { value = 20.0, unit = "V/V", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "= fda_rf/fda_rg (THS4551 differential gain)" }
+full_scale_a = { value = 102.4, unit = "A", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "differential +/- full-scale = ref_v/(shunt*fda_gain)" }
+codes_per_amp = { value = 320.0, unit = "1/A", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "= 32768/full_scale_a (16-bit signed two's-complement)" }
 
 [feedback.emf]
 divider_ratio = { value = 0.0949667616334283, unit = "1", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.emf_channel", note = "= r_bottom/(r_top+r_bottom)" }
@@ -173,6 +195,8 @@ vref = { value = 3.3, unit = "V", status = "decided", source = "architecture.md 
 sclk = { value = 1.0e6, unit = "Hz", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "2.7 V spec used conservatively at 3.3 V; bench-validate 1.3-1.5 MHz for margin" }
 conversions_per_pwm_period = { value = 2, unit = "1", status = "decided", source = "architecture.md ADC decision", note = "sector-aware schedule: active current + floating EMF" }
 sample_aperture = { value = 2.0e-6, unit = "s", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "~1.5 SCLK cycles early in frame; must land in PWM off-window" }
+ads9224r_acq_window_s = { value = 200.0e-9, unit = "s", status = "assumed", blocked_by = "Q23", note = "ADS9224R acquisition window at the module conversion rate (the charge-bucket settling budget)" }
+acq_settle_residual_ads9224r = { value = 1.6195967923126097e-06, unit = "1", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "single-pole bucket-settling estimate exp(-t_acq/(flt_r*flt_c)); target < 0.5 LSB (1.5e-5); SPICE cross-checks the RC, bench validates ENOB (Q23)" }
 # Shared-sample-cap residual: fraction of (previous cap voltage - target)
 # left at the hold instant, exp(-t_window/((R_source+R_switch)*C_sample)).
 # Worst case = full-scale channel step: residual * 4096 LSB of crosstalk.

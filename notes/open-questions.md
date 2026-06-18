@@ -168,3 +168,12 @@ question here, also flip the matching statuses there.
   modeled range. *Remaining:* confirm with a real motor's base speed and the
   measured sensor latency (the linear extrapolation overshoots past
   ~300 rad/s, irrelevant for this sensor's range). Extends Q18 / feeds Q3.
+- [ ] **Q23 — Open ADS9224R current-sense module bring-up.** The sim resolves
+  Q21 (simultaneous sampling wins) but no open ADS9224R board exists to build
+  it on (researched — TI's EVM is the only reference, not open EDA). The open
+  module (`hw/ads9224r-module/`, `notes/ads9224r-open-board-checklist.md`) is
+  designed off the EVM topology (THS4551 FDA per channel + buffered reference +
+  RC charge-bucket). *To confirm on hardware:* the reference IC/value, the FDA
+  gain + shunt scaling (codes/A), and the acquisition settling / ENOB at the
+  conversion rate — then promote the `assumed` `circuit.ads9224r_module.*`
+  values to `measured`. Closes the loop on Q21 with a real, citable board.

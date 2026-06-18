@@ -104,6 +104,21 @@ def _sample_residual_cap_buffered(p: sim_params.SimParams,
     return c["sample_cap"] / (c["sample_cap"] + local_cap)
 
 
+def _ads9224r_full_scale_a(p: sim_params.SimParams) -> float:
+    """Differential +/- full-scale current of the open ADS9224R module:
+    ref_v / (shunt * FDA gain), FDA gain = fda_rf/fda_rg."""
+    m = p.circuit_values("circuit.ads9224r_module")
+    return m["ref_v"] / (m["shunt"] * (m["fda_rf"] / m["fda_rg"]))
+
+
+def _ads9224r_acq_residual(p: sim_params.SimParams) -> float:
+    """Single-pole charge-bucket settling estimate at the end of the
+    acquisition window: exp(-t_acq / (flt_r * flt_c))."""
+    m = p.circuit_values("circuit.ads9224r_module")
+    tau = m["flt_r"] * m["flt_c"]
+    return math.exp(-p.value("adc.ads9224r_acq_window_s") / tau)
+
+
 DERIVATIONS: list[Derivation] = [
     # Motor (wye-equivalent per-phase from line-to-line measurables).
     Derivation("motor.R",
@@ -173,6 +188,22 @@ DERIVATIONS: list[Derivation] = [
                ("circuit.adc_frontend.sample_switch_r",
                 "circuit.adc_frontend.sample_cap",
                 "circuit.adc_frontend.iout_source_impedance")),
+    # Open ADS9224R module: FDA gain, full-scale current, and the codes/A
+    # scaling all fall out of the shunt + FDA resistors + reference.
+    Derivation("feedback.current_ads9224r.fda_gain",
+               lambda p: p.value("circuit.ads9224r_module.fda_rf")
+               / p.value("circuit.ads9224r_module.fda_rg"),
+               ("circuit.ads9224r_module.fda_rf",
+                "circuit.ads9224r_module.fda_rg")),
+    Derivation("feedback.current_ads9224r.full_scale_a", _ads9224r_full_scale_a,
+               ("circuit.ads9224r_module.shunt", "circuit.ads9224r_module.fda_rf",
+                "circuit.ads9224r_module.fda_rg", "circuit.ads9224r_module.ref_v")),
+    Derivation("feedback.current_ads9224r.codes_per_amp",
+               lambda p: 32768.0 / _ads9224r_full_scale_a(p),
+               ("circuit.ads9224r_module.shunt", "circuit.ads9224r_module.fda_rf",
+                "circuit.ads9224r_module.fda_rg", "circuit.ads9224r_module.ref_v")),
+    Derivation("adc.acq_settle_residual_ads9224r", _ads9224r_acq_residual,
+               ("circuit.ads9224r_module.flt_r", "circuit.ads9224r_module.flt_c")),
     # Ground-shift disturbance coefficients (realism stage 3) come straight
     # from the codified harness components.
     Derivation("disturbance.gnd_shift_r",
@@ -187,6 +218,10 @@ DERIVATIONS: list[Derivation] = [
 # them and the simulation) - exempt from the orphan check.
 DIRECTLY_CONSUMED = {
     "circuit.gate_pulldowns.en_gate_pulldown",  # bench config-window model
+    # ADS9224R front-end SPICE-model components (consumed by the ngspice
+    # netlist transient, not by a closed-form scalar derivation).
+    "circuit.ads9224r_module.cdac",
+    "circuit.ads9224r_module.ref_reservoir_c",
 }
 
 
@@ -290,6 +325,8 @@ def write_spice_params(params: sim_params.SimParams) -> Path:
     lines.append(f".param adc_t_window={1.5 / params.value('adc.sclk'):g}")
     lines.append(f".param drv_amp_gain={params.value('drv8301.amp_gain'):g}")
     lines.append(f".param adc_vref={params.value('adc.vref'):g}")
+    lines.append(f".param adc_acq_window_ads9224r="
+                 f"{params.value('adc.ads9224r_acq_window_s'):g}")
     SPICE_PARAM_PATH.write_text("\n".join(lines) + "\n")
     return SPICE_PARAM_PATH
 
