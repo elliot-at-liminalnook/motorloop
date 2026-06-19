@@ -1,0 +1,39 @@
+* ADS9224R front-end noise -> ENOB (Tier 2). THS4551 as a one-pole opamp
+* macromodel (gm stage -> Ra/Cc dominant pole giving GBW; closed-loop gain set by
+* Rg/Rf). The amp input voltage noise is injected as the Johnson noise of a series
+* resistor Rn = en^2/(4kT) (standard SPICE technique); Rg, Rf and the bucket Rflt
+* add their own thermal noise. .noise integrates the output noise; adc_metrics
+* converts it to a front-end SNR/ENOB and combines it with the ADS9224R SNR.
+.include components.param
+.param GBW={ths4551_gbw}
+.param Aol={10**(ths4551_aol_db/20)}
+.param Cc={1/(2*3.141592653589793*GBW)}
+.param Rn={ths4551_vnoise_density*ths4551_vnoise_density/(4*1.380649e-23*300)}
+.param aacap={ads9224r_module_fda_fb_c}
+
+Vin in 0 dc 0 ac 1
+Rnz in p {Rn}
+* one-pole opamp: I = gm*(V(p)-V(m)), gm = 1 S
+Gm 0 a p m 1
+Ra a 0 {Aol}
+Cca a 0 {Cc}
+Eo aout 0 a 0 1
+* closed-loop feedback (non-inverting gain 1 + Rf/Rg)
+Rg m 0 {ads9224r_module_fda_rg}
+Rf m aout {ads9224r_module_fda_rf}
+* antialiasing feedback cap: rolls off the closed-loop gain (+ amp noise) at
+* 1/(2*pi*Rf*Cfb), bounding the wideband-noise ENOB cost
+Cfb m aout {aacap}
+* charge-bucket pole into the ADC input
+Rflt aout buck {ads9224r_module_flt_r}
+Cflt buck 0 {ads9224r_module_flt_c}
+Rl buck 0 1e9
+
+.control
+ac dec 40 10 1e8
+wrdata ads9224r_ac.out vdb(buck)
+noise v(buck) Vin dec 40 10 1e8
+setplot noise1
+wrdata ads9224r_noise.out onoise_spectrum
+.endc
+.end

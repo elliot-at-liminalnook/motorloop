@@ -1,12 +1,13 @@
 ref,qty,value,mpn,distributor_pn,description,provenance
 U1,1,ADS9224R,ADS9224RIRHBR,296-ADS9224RIRHBRCT-ND,Dual 16-bit 3 MSPS simultaneous SAR ADC (VQFN),datasheet
 U2,2,THS4551,THS4551IRUNR,296-THS4551IRUNRCT-ND,Fully-differential amplifier (one per channel),datasheet
-U3,1,REF6041,REF6041AIDGKR,296-REF6041AIDGKRCT-ND,4.096 V buffered SAR voltage reference,assumed-confirm-vs-EVM
+U3,0,REF6041,REF6041AIDGKR,296-REF6041AIDGKRCT-ND,OPTIONAL external 4.096 V reference (5 ppm/C) - ADC internal ref is default; populate only for low-drift/precision (Tier-3 sec 3.4: internal-ref noise already in the 94.5 dB SNR),assumed-Q23
 RSH,1,2 mOhm,CSS2H-2512R-L500FE,541-CSS2H-2512R-L500FECT-ND,Kelvin current-sense shunt (default scaling),assumed-Q23
 RF1,2,2.0 kOhm,RT0805BRD072KL,YAG2320CT-ND,FDA feedback R 0.1% thin film,assumed-Q23
 RG1,2,100 Ohm,RT0805BRD07100RL,YAG2306CT-ND,FDA gain-set R 0.1% thin film,assumed-Q23
 RFLT,2,10 Ohm,RC0805FR-0710RL,311-10.0CRCT-ND,ADC charge-bucket series R,assumed-Q23
-CFLT,2,1.5 nF,C0805C152J5GACTU,399-C0805C152J5GACTU-ND,ADC charge-bucket cap C0G,assumed-Q23
+CFLT,2,1 nF,C0805C102J5GACTU,399-C0805C102J5GACTU-ND,ADC charge-bucket cap C0G,assumed-Q23
+CAA,2,270 pF,C0805C271J5GACTU,399-C0805C271J5GACTU-ND,FDA feedback antialiasing cap (295 kHz pole),assumed-Q23
 CREF,1,10 uF,GRM21BR61C106KE15L,490-GRM21BR61C106KE15L-ND,Reference reservoir cap X5R,assumed-Q23
 CAVDD,2,1 uF,GRM188R71C105KA12D,490-1318-1-ND,AVDD decoupling,datasheet
 CDVDD,2,1 uF,GRM188R71C105KA12D,490-1318-1-ND,DVDD decoupling (3.3 V to mate ULX3S),datasheet

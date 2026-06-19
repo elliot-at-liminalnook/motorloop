@@ -32,6 +32,14 @@ DRV8301_LIB = (
     / "DRV8301.LIB"
 )
 
+# ADS9224R module vendor macromodels (sim-validation Tier 3). Portal-gated TI
+# downloads (PSpice-for-TI / TINA-TI) - drop the .LIB here and the Tier-3 tests
+# cross-check automatically; absent, they skip (see docs/ti-simulation-models).
+THS4551_LIB = (PROJECT_ROOT / "docs" / "ti-simulation-models" / "ths4551"
+               / "THS4551.LIB")
+REF6041_LIB = (PROJECT_ROOT / "docs" / "ti-simulation-models" / "ref6041"
+               / "REF6041.LIB")
+
 
 class SpiceError(RuntimeError):
     pass

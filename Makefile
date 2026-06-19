@@ -9,13 +9,14 @@ SHELL := /bin/bash
 OSS       ?= $(HOME)/oss-cad-suite/environment        # yosys/sby/nextpnr/verilator
 COCOTB_PY ?= $(HOME)/.local/share/cocotb-venv/bin/python
 MKDOCS    ?= $(HOME)/.local/share/docs-venv/bin/mkdocs
+RL_PY     ?= $(HOME)/rl-venv/bin/python                # MuJoCo+SB3 RL env (sim/rl)
 LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/)
 # Sourcing OSS CAD shadows the system numpy, so the pytest suite uses the system
 # python3 and ONLY the synth/formal targets source $(OSS) (in-recipe).
 
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
         contracts version portability formal synth synth-check asic fmax ipxact \
-        bender docs clean soc-sim soc-build compare ads9224r
+        bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -59,6 +60,22 @@ compare: bench  ## part-comparison study: render the 10 sensor/ADC figures
 ads9224r:  ## open ADS9224R module: regenerate schematic + figures
 	python3 sim/scripts/gen_ads9224r_sch.py
 	python3 sim/scripts/gen_ads9224r_figures.py
+stress: bench  ## extreme-scenario / stress study: render the 11 stress figures
+	python3 sim/scripts/gen_stress_figures.py
+motors:  ## motor-selection study: render the motor-comparison figures
+	python3 sim/scripts/gen_motor_figures.py
+rl-figures:  ## RL motor-coupling figures (system python, no torch)
+	python3 sim/scripts/gen_rl_figures.py
+rl-train:  ## train the RL locomotion policy (needs ~/rl-venv; see requirements-rl.txt)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train.py --steps 1500000 --n-envs 16
+rl-eval:  ## eval + render the trained RL policy
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval.py --model sim/build/rl/ppo_HalfCheetah-v5_db42s03.zip --video --tag halfcheetah_db42
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/halfcheetah_db42_traj.npz --tag halfcheetah_db42
+rl-dodge-train:  ## train the dodge-balance quadruped (perception + threats + curriculum)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_dodge.py --steps 2000000 --n-envs 16 --max-difficulty 0.6
+rl-dodge-eval:  ## eval + render the dodge policy (objects flying at the legs)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_dodge.py --model sim/build/rl/ppo_dodge.zip --difficulty 0.6 --video --tag dodge_after
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/dodge_after_traj.npz --tag dodge_after
 
 ## --- proofs / synthesis / ASIC (need the OSS CAD Suite, sourced in-recipe) ---
 formal:  ## run + check all formal proofs

@@ -9,6 +9,7 @@ config. Run by sim/scripts/build_bench.sh before cmake.
 from __future__ import annotations
 
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -54,7 +55,12 @@ def main() -> int:
     refresh_cycles = int(round(p.value("rtl.drv_refresh_period") * clk_hz))
     carrier_period_cycles = int(round(
         clk_hz / p.value("angle_sensor.pwm_carrier")))
-    pole_pairs = int(p.value("motor.pole_pairs"))
+    # Pole pairs are build-time (they set POLE_PAIRS, speed_num, EXTRAP_NUM). The
+    # motor-selection study (build_motor.sh) overrides them per motor via the env
+    # var so a motor with a different pole count re-Verilates correctly; normal
+    # builds use motor.pole_pairs.
+    pole_pairs = int(os.environ.get("MOTORLOOP_POLE_PAIRS")
+                     or p.value("motor.pole_pairs"))
     # speed [rad/s] = SPEED_NUM / sector_period_cycles (60 elec deg/sector).
     speed_num = int(round(clk_hz * 2.0 * math.pi / (6.0 * pole_pairs)))
 
@@ -72,7 +78,7 @@ def main() -> int:
         f"`define EN_READY_CYCLES  {en_ready_cycles}",
         f"`define QUICK_RESET_CYC  {quick_reset_cycles}",
         f"`define DRV_REFRESH_CYC  {refresh_cycles}",
-        f"`define POLE_PAIRS       {int(p.value('motor.pole_pairs'))}",
+        f"`define POLE_PAIRS       {pole_pairs}",
         f"`define OC_ADJ_CODE      {int(p.value('rtl.oc_adj_code'))}",
         f"`define AMP_GAIN_CODE    {int(p.value('rtl.amp_gain_code'))}",
         f"`define SPEED_PI_KP      {int(p.value('rtl.speed_pi_kp'))}",

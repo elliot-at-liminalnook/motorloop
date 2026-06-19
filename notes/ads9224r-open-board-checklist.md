@@ -230,7 +230,7 @@ green; REUSE compliant (372/372); 21 derived params consistent.**
   all registered in `derive_params.py` (no orphans). SPICE front-end
   `sim/circuits/ads9224r_frontend.cir` (DC scaling) + `ads9224r_settle.cir`
   (settling); ngspice cross-checks in `test_spice_derivations.py`
-  (slope = gain·shunt → 320 codes/A; settling 1.6e-6 < 0.5 LSB).
+  (slope = gain·shunt → 320 codes/A; settling < 0.5 LSB).
 - **§3 schematic:** `gen_ads9224r_sch.py` → `hw/ads9224r-module/module.kicad_sch`
   (passive network from params; reuses the refactored `gen_kicad_sch.render_schematic`,
   existing schematic still byte-identical). kicad-cli SPICE round-trip + committed-current

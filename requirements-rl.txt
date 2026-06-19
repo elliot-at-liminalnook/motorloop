@@ -1,0 +1,14 @@
+# RL environment (notes/rl-environment-checklist.md). Needs Python 3.12 (torch
+# has no 3.14 wheels); set up with uv, NOT the system 3.14:
+#   uv venv ~/rl-venv --python 3.12
+#   uv pip install --python ~/rl-venv/bin/python -r requirements-rl.txt
+#   uv pip install --python ~/rl-venv/bin/python --reinstall-package torch \
+#       torch --index-url https://download.pytorch.org/whl/cpu   # CPU build (no GPU)
+# Headless render needs OSMesa: sudo apt install libosmesa6 ; MUJOCO_GL=osmesa
+gymnasium>=1.0
+mujoco>=3.0
+stable-baselines3>=2.3
+tensorboard
+imageio
+imageio-ffmpeg
+numpy

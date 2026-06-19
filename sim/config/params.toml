@@ -140,6 +140,30 @@ sample_switch_r = { value = 1.0e3, unit = "Ohm", status = "datasheet", source = 
 sample_cap = { value = 20.0e-12, unit = "F", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf fig 4-1" }
 iout_source_impedance = { value = 10.0, unit = "Ohm", status = "ti-evm-baseline", blocked_by = "Q7", note = "OPA365-buffered IOUT outputs: near-zero closed-loop impedance" }
 
+# THS4551 fully-differential ADC driver (the module's per-channel amp). Datasheet
+# values (SBOS778D) for the Tier-2/3 sim-validation models (ths4551_model.cir,
+# ads9224r_noise.cir). Consumed by the SPICE netlists + the ENOB helper.
+[circuit.ths4551]
+vnoise_density = { value = 3.3e-9, unit = "V/sqrtHz", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (f>500Hz)", note = "input voltage-noise density; 1/f corner <150 Hz" }
+inoise_density = { value = 0.5e-12, unit = "A/sqrtHz", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (f>20kHz)", note = "input current-noise density" }
+gbw = { value = 135.0e6, unit = "Hz", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (GBP)" }
+slew = { value = 220.0e6, unit = "V/s", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (220 V/us)" }
+zout = { value = 0.02, unit = "Ohm", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (closed-loop, f=100kHz)" }
+vos = { value = 50.0e-6, unit = "V", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (typ +/-50uV)" }
+aol_db = { value = 125.0, unit = "dB", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5 (AOL)" }
+iq = { value = 1.37e-3, unit = "A", status = "datasheet", source = "ti-ths4551-datasheet.pdf SBOS778D 7.5" }
+
+# ADS9224R datasheet device parameters (SBAS876C) backing the sim-validation
+# acceptance gates + the switched-cap settling model. Consumed by the SPICE
+# netlists + the ENOB helper.
+[circuit.ads9224r_adc]
+csh = { value = 16.0e-12, unit = "F", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.5 (Ci sample mode)", note = "sample-mode input cap = the charge-kickback source; hold mode 1 pF" }
+input_bw = { value = 52.0e6, unit = "Hz", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.5 (-3 dB)" }
+snr_db = { value = 94.5, unit = "dB", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.6 (SNR, fIN=2kHz)", note = "datasheet SNR -> ENOB ~15.4 bits; the ENOB acceptance reference" }
+thd_db = { value = -109.0, unit = "dB", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.6 (THD, fIN=2kHz)" }
+transition_noise_lsb = { value = 0.4, unit = "1", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.6 (mid-code)" }
+vcm = { value = 2.048, unit = "V", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C (REFby2; VCM range 1.848-2.248 V)", note = "the THS4551 output common-mode (VOCM) target" }
+
 [circuit.harness]
 r_return = { value = 0.02, unit = "Ohm", status = "assumed", blocked_by = "Q9", note = "inter-board ground-return resistance (jumper wires + connectors)" }
 l_return = { value = 0.5e-6, unit = "H", status = "assumed", blocked_by = "Q9", note = "ground-return loop inductance, ~0.5 m of wire" }
@@ -157,11 +181,11 @@ en_gate_pulldown = { value = 10.0e3, unit = "Ohm", status = "assumed", blocked_b
 shunt = { value = 2.0e-3, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "default low-side current shunt; other scaling options in hw/ads9224r-module/bom.csv" }
 fda_rf = { value = 2.0e3, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "THS4551 feedback R; differential gain = fda_rf/fda_rg" }
 fda_rg = { value = 100.0, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "THS4551 gain-set R" }
+fda_fb_c = { value = 270.0e-12, unit = "F", status = "assumed", blocked_by = "Q23", note = "FDA feedback cap = the antialiasing pole (1/(2*pi*fda_rf*fda_fb_c)); Tier-2 noise sim showed the bucket alone is NOT antialiasing - this bounds the wideband-noise ENOB cost" }
 flt_r = { value = 10.0, unit = "Ohm", status = "assumed", blocked_by = "Q23", note = "ADC charge-bucket series R (FDA<->AINx isolation); TI SAR front-end app-note range 10-22 Ohm" }
-flt_c = { value = 1.5e-9, unit = "F", status = "assumed", blocked_by = "Q23", note = "ADC charge-bucket cap; sources the cap-DAC charge each conversion" }
-cdac = { value = 60.0e-12, unit = "F", status = "assumed", blocked_by = "Q23", note = "ADS9224R sampling cap-DAC (datasheet-typical for the SAR class); SPICE-model only" }
-ref_v = { value = 4.096, unit = "V", status = "assumed", blocked_by = "Q23", note = "ADC reference; the EVM uses an external low-noise ref + buffer - confirm value/IC" }
-ref_reservoir_c = { value = 10.0e-6, unit = "F", status = "assumed", blocked_by = "Q23", note = "reference reservoir cap; the SAR draws charge from REF each conversion; SPICE/board only" }
+flt_c = { value = 1.0e-9, unit = "F", status = "assumed", blocked_by = "Q23", note = "ADC charge-bucket cap; retuned to 1 nF so a worst-case full-scale step settles < 0.5 LSB in the real 140 ns tACQ (Tier-2 validation); TI calc nominal ~1.1 nF" }
+ref_v = { value = 4.096, unit = "V", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C (FSR +/-4.096 V)", note = "differential full-scale = +/-VREF at REFP; internal ref = 2.5 V REFOUT x 1.6388 buffer ~= 4.096 V; REFby2 = 2.048 V sets the FDA common mode" }
+ref_reservoir_c = { value = 10.0e-6, unit = "F", status = "datasheet", source = "ti-ads9224r-datasheet.pdf (CREFP_x typ 10 uF)", note = "reference reservoir cap; the SAR draws charge from REFP each conversion" }
 
 # -----------------------------------------------------------------------------
 # Analog feedback chain - DERIVED from [circuit.*] (verify via
@@ -177,6 +201,7 @@ offset = { value = 1.65, unit = "V", status = "ti-evm-baseline", blocked_by = "Q
 fda_gain = { value = 20.0, unit = "V/V", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "= fda_rf/fda_rg (THS4551 differential gain)" }
 full_scale_a = { value = 102.4, unit = "A", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "differential +/- full-scale = ref_v/(shunt*fda_gain)" }
 codes_per_amp = { value = 320.0, unit = "1/A", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "= 32768/full_scale_a (16-bit signed two's-complement)" }
+signal_bw_hz = { value = 294731.40790303234, unit = "Hz", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "FDA antialiasing pole = 1/(2*pi*fda_rf*fda_fb_c); well below Nyquist (1.5 MHz), above the motor-current band" }
 
 [feedback.emf]
 divider_ratio = { value = 0.0949667616334283, unit = "1", status = "ti-evm-baseline", blocked_by = "Q7", derived_from = "circuit.emf_channel", note = "= r_bottom/(r_top+r_bottom)" }
@@ -195,8 +220,8 @@ vref = { value = 3.3, unit = "V", status = "decided", source = "architecture.md 
 sclk = { value = 1.0e6, unit = "Hz", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "2.7 V spec used conservatively at 3.3 V; bench-validate 1.3-1.5 MHz for margin" }
 conversions_per_pwm_period = { value = 2, unit = "1", status = "decided", source = "architecture.md ADC decision", note = "sector-aware schedule: active current + floating EMF" }
 sample_aperture = { value = 2.0e-6, unit = "s", status = "datasheet", source = "microchip-mcp3208-datasheet.pdf", note = "~1.5 SCLK cycles early in frame; must land in PWM off-window" }
-ads9224r_acq_window_s = { value = 200.0e-9, unit = "s", status = "assumed", blocked_by = "Q23", note = "ADS9224R acquisition window at the module conversion rate (the charge-bucket settling budget)" }
-acq_settle_residual_ads9224r = { value = 1.6195967923126097e-06, unit = "1", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "single-pole bucket-settling estimate exp(-t_acq/(flt_r*flt_c)); target < 0.5 LSB (1.5e-5); SPICE cross-checks the RC, bench validates ENOB (Q23)" }
+ads9224r_acq_window_s = { value = 140.0e-9, unit = "s", status = "datasheet", source = "ti-ads9224r-datasheet.pdf SBAS876C 6.8 (tACQ min)", note = "ADS9224R acquisition window = the charge-bucket settling budget" }
+acq_settle_residual_ads9224r = { value = 8.315287191035679e-07, unit = "1", status = "assumed", blocked_by = "Q23", derived_from = "circuit.ads9224r_module", note = "single-pole bucket-settling estimate exp(-t_acq/(flt_r*flt_c)); target < 0.5 LSB (1.5e-5); the real switched-cap settling is cross-checked in ads9224r_acq.cir (Tier 2)" }
 # Shared-sample-cap residual: fraction of (previous cap voltage - target)
 # left at the hold instant, exp(-t_window/((R_source+R_switch)*C_sample)).
 # Worst case = full-scale channel step: residual * 4096 LSB of crosstalk.

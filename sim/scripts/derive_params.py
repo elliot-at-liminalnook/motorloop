@@ -204,6 +204,12 @@ DERIVATIONS: list[Derivation] = [
                 "circuit.ads9224r_module.fda_rg", "circuit.ads9224r_module.ref_v")),
     Derivation("adc.acq_settle_residual_ads9224r", _ads9224r_acq_residual,
                ("circuit.ads9224r_module.flt_r", "circuit.ads9224r_module.flt_c")),
+    Derivation("feedback.current_ads9224r.signal_bw_hz",
+               lambda p: 1.0 / (2.0 * math.pi
+                                * p.value("circuit.ads9224r_module.fda_rf")
+                                * p.value("circuit.ads9224r_module.fda_fb_c")),
+               ("circuit.ads9224r_module.fda_rf",
+                "circuit.ads9224r_module.fda_fb_c")),
     # Ground-shift disturbance coefficients (realism stage 3) come straight
     # from the codified harness components.
     Derivation("disturbance.gnd_shift_r",
@@ -218,10 +224,16 @@ DERIVATIONS: list[Derivation] = [
 # them and the simulation) - exempt from the orphan check.
 DIRECTLY_CONSUMED = {
     "circuit.gate_pulldowns.en_gate_pulldown",  # bench config-window model
-    # ADS9224R front-end SPICE-model components (consumed by the ngspice
-    # netlist transient, not by a closed-form scalar derivation).
-    "circuit.ads9224r_module.cdac",
+    # ADS9224R front-end SPICE-model + ENOB-helper components: consumed directly
+    # by the ngspice netlists / the noise-ENOB calc (sim-validation Tiers 2-3),
+    # not by a closed-form scalar derivation.
     "circuit.ads9224r_module.ref_reservoir_c",
+    "circuit.ths4551.vnoise_density", "circuit.ths4551.inoise_density",
+    "circuit.ths4551.gbw", "circuit.ths4551.slew", "circuit.ths4551.zout",
+    "circuit.ths4551.vos", "circuit.ths4551.aol_db", "circuit.ths4551.iq",
+    "circuit.ads9224r_adc.csh", "circuit.ads9224r_adc.input_bw",
+    "circuit.ads9224r_adc.snr_db", "circuit.ads9224r_adc.thd_db",
+    "circuit.ads9224r_adc.transition_noise_lsb", "circuit.ads9224r_adc.vcm",
 }
 
 

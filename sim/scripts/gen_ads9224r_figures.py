@@ -169,8 +169,78 @@ def fig_settling(params, out):
     finish(fig, out, "settling")
 
 
+def fig_noise(params, out):
+    import adc_metrics as M
+    ref = params.value("circuit.ads9224r_module.ref_v")
+    adc_snr = params.value("circuit.ads9224r_adc.snr_db")
+    bw = params.value("feedback.current_ads9224r.signal_bw_hz")
+
+    def run(aacap=None):
+        ov = {"aacap": aacap} if aacap is not None else None
+        spec = spice_runner.run_netlist("ads9224r_noise", params,
+                                        overrides=ov)["ads9224r_noise.out"]
+        f = np.array([r[0] for r in spec]); d = np.array([r[1] for r in spec])
+        rms = M.integrate_noise_rms(list(f), list(d))
+        snr = M.snr_db_from_noise(ref, rms)
+        cost = M.enob_from_snr(adc_snr) - M.enob_from_snr(M.combine_snr_db(snr, adc_snr))
+        return f, d, rms, cost
+
+    f, d, rms, cost = run()
+    f0, d0, rms0, cost0 = run(aacap=1e-15)
+    fig, ax = plt.subplots(figsize=(8.6, 5.0))
+    ax.loglog(f0, d0 * 1e9, color="tab:red", lw=1.0,
+              label=f"bucket only: {rms0*1e6:.0f} uV, cost {cost0:.1f} bit")
+    ax.loglog(f, d * 1e9, color="tab:green", lw=1.4,
+              label=f"+ antialiasing cap: {rms*1e6:.0f} uV, cost {cost:.2f} bit")
+    ax.axvline(bw, ls="--", color="0.5", lw=0.9)
+    ax.text(bw * 1.1, d.max() * 1e9 * 0.3, f"AA pole {bw/1e3:.0f} kHz",
+            fontsize=8, color="0.4")
+    ax.axvline(1.5e6, ls=":", color="tab:blue", lw=0.9)
+    ax.text(1.5e6 * 1.1, d.max() * 1e9 * 0.1, "Nyquist 1.5 MHz", fontsize=8,
+            color="tab:blue")
+    ax.set_xlabel("frequency (Hz)")
+    ax.set_ylabel("output noise density (nV/sqrtHz)")
+    ax.set_title("Tier 2: front-end noise -> ENOB (ngspice .noise). Antialiasing "
+                 "cap saves ~%.1f bit" % (cost0 - cost))
+    ax.legend(loc="lower left", fontsize=8)
+    ax.grid(alpha=0.3, which="both")
+    finish(fig, out, "noise")
+
+
+def fig_loop_budget(params, out):
+    import adc_metrics as M
+    spec = spice_runner.run_netlist("ads9224r_noise", params)["ads9224r_noise.out"]
+    v = M.integrate_noise_rms([r[0] for r in spec], [r[1] for r in spec])
+    g = params.value("feedback.current_ads9224r.fda_gain")
+    sh = params.value("circuit.ads9224r_module.shunt")
+    cpa = params.value("feedback.current_ads9224r.codes_per_amp")
+    fs = params.value("feedback.current_ads9224r.full_scale_a")
+    i_fe = M.current_noise_rms_a(v, g, sh) * 1e3
+    i_adc = params.value("circuit.ads9224r_adc.transition_noise_lsb") / cpa * 1e3
+    i_tot = M.rss(i_fe, i_adc)
+    eb = M.enob_from_snr(M.snr_db_from_noise(fs, i_tot / 1e3))
+    fig, ax = plt.subplots(figsize=(8.4, 5.0))
+    bars = ["front-end\n(THS4551+R,\nantialiased)", "ADC\ntransition\nnoise",
+            "combined\nloop noise"]
+    vals = [i_fe, i_adc, i_tot]
+    cols = ["tab:green", "tab:gray", "tab:blue"]
+    ax.bar(bars, vals, color=cols)
+    for i, val in enumerate(vals):
+        ax.text(i, val, f"{val:.2f} mA", ha="center", va="bottom")
+    ax.set_ylabel("phase-current measurement noise (mA RMS)")
+    ax.set_title("Tier 4: validated front-end -> FOC current loop "
+                 "(%.1f effective bits, %.4f%% of +/-%.0f A FS)"
+                 % (eb, i_tot / 1e3 / fs * 100, fs))
+    ax.text(0.5, 0.92, "front-end ~= ADC's own noise (balanced design); skew = 0 "
+            "(simultaneous, Q21 - see part-comparison T3/T4)",
+            transform=ax.transAxes, ha="center", fontsize=8, color="0.35")
+    ax.grid(alpha=0.3, axis="y")
+    finish(fig, out, "loop_budget")
+
+
 FIGURES = {"signal_chain": fig_signal_chain, "simultaneity": fig_simultaneity,
-           "scaling": fig_scaling, "settling": fig_settling}
+           "scaling": fig_scaling, "settling": fig_settling, "noise": fig_noise,
+           "loop_budget": fig_loop_budget}
 
 
 def main():

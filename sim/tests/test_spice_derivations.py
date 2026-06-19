@@ -97,6 +97,48 @@ def test_ads9224r_settle_transient(params):
 
 
 @needs_ngspice
+def test_ads9224r_acq_settling(params):
+    """Tier 2: the real switched-cap acquisition settles to < 0.5 LSB within
+    tACQ. The cap-DAC kickback (Csh/(Csh+Cflt)) recharges through Rflt - a much
+    smaller error than the Tier-1 single-pole full-step estimate."""
+    import adc_metrics  # noqa: F401 (kept parallel to the noise test import)
+    rows = spice_runner.run_netlist("ads9224r_acq", params)["ads9224r_acq.out"]
+    t_acq = params.value("adc.ads9224r_acq_window_s")
+    ref = params.value("circuit.ads9224r_module.ref_v")
+    probe = min(rows, key=lambda r: abs(r[0] - t_acq))
+    residual = abs(ref - probe[1]) / ref
+    assert residual < 1.0 / 65536, f"settling {residual:.2e} exceeds 0.5 LSB"
+
+
+@needs_ngspice
+def test_ads9224r_noise_enob(params):
+    """Tier 2: integrated front-end noise -> ENOB. With the antialiasing
+    feedback cap the front-end costs < 0.5 bit vs the ADC's datasheet SNR;
+    removing the cap (overriding it ~0) costs materially more - proving the
+    bucket alone is not an antialiasing filter (SBAA282)."""
+    import adc_metrics
+
+    def enob_cost(overrides=None):
+        spec = spice_runner.run_netlist("ads9224r_noise", params,
+                                        overrides=overrides)["ads9224r_noise.out"]
+        freqs = [r[0] for r in spec]
+        dens = [r[1] for r in spec]
+        n_rms = adc_metrics.integrate_noise_rms(freqs, dens)
+        ref = params.value("circuit.ads9224r_module.ref_v")
+        snr_fe = adc_metrics.snr_db_from_noise(ref, n_rms)
+        adc_snr = params.value("circuit.ads9224r_adc.snr_db")
+        sys_snr = adc_metrics.combine_snr_db(snr_fe, adc_snr)
+        return (adc_metrics.enob_from_snr(adc_snr)
+                - adc_metrics.enob_from_snr(sys_snr))
+
+    cost = enob_cost()
+    assert cost < 0.5, f"front-end ENOB cost {cost:.2f} bit (with antialiasing)"
+    cost_no_aa = enob_cost(overrides={"aacap": 1e-15})
+    assert cost_no_aa > cost + 0.5, (
+        f"antialiasing cap should matter: with={cost:.2f} without={cost_no_aa:.2f}")
+
+
+@needs_ngspice
 def test_iout_channel_dc(params):
     """DC sweep: slope == gain*shunt, intercept == offset, swing == rails."""
     data = spice_runner.run_netlist("iout_channel", params)["iout_dc.out"]

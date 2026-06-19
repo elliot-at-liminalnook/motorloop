@@ -1,0 +1,32 @@
+* Tier-3 vendor cross-check: TI's THS4551 macromodel in the module's gain
+* configuration. An .ac sweep extracts the closed-loop DC gain and -3 dB
+* bandwidth, cross-checked against the datasheet GBW/gain in circuit.ths4551.
+* The .LIB is provided via aux_files (portal-gated download); the test skips when
+* it is absent.
+*
+* PINOUT: confirm against the downloaded THS4551.LIB `.SUBCKT` line and adjust the
+* X1 instance below. TI FDA models typically expose:
+*   .SUBCKT THS4551 VINP VINM VOCM VS+ VS- VOUTP VOUTM
+.include components.param
+.param temp=27
+.include THS4551.LIB
+
+.param G={ads9224r_module_fda_rf/ads9224r_module_fda_rg}
+Vsp vsp 0 dc 2.5
+Vsn vsn 0 dc -2.5
+Vocm vocm 0 dc 0
+Vin inp 0 dc 0 ac 1
+Vinm inm 0 dc 0
+
+* gain network around the FDA (single-ended drive -> differential out)
+Rg1 inp na {ads9224r_module_fda_rg}
+Rf1 na outp {ads9224r_module_fda_rf}
+Rg2 inm nb {ads9224r_module_fda_rg}
+Rf2 nb outm {ads9224r_module_fda_rf}
+X1 na nb vocm vsp vsn outp outm THS4551
+
+.control
+ac dec 30 1e3 5e8
+wrdata ths4551_vendor_ac.out vdb(outp,outm)
+.endc
+.end

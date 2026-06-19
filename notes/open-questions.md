@@ -22,6 +22,17 @@ question here, also flip the matching statuses there.
   thresholds, PWM sanity checks, and expected no-load speed. Resolve: pick the
   motor, then an identification session (DMM for R, LCR/current-step for L,
   drill-spin + scope for Ke and EMF shape, spin-down for J/friction).
+  **Candidates selected 2026-06-18 (`notes/motor-selection-checklist.md` +
+  `motor-comparison-report.md`, `sim/tests/motors.py`):** three available motors
+  profiled + compared — budget **iPower GM2804** (7 pp, has an AS5048A encoder),
+  mid **Nanotec DB42S03** (4 pp, full datasheet R/L/Kt/J → drops in with
+  `status=datasheet`, and 4 pp = the current `POLE_PAIRS` build, no re-Verilate),
+  premium **maxon EC 45 flat** (8 pp). *Adopting the DB42 promotes the motor
+  params placeholder → datasheet* (the data half). *Still bench-only:* the
+  GM2804's L/J, all align offsets, EMF shape, and rated-power validation — the
+  identification session above. Picking a motor also sets the RTL `POLE_PAIRS`
+  (build-time; `build_motor.sh`) and the angle-sensor requirement (more pole
+  pairs → needs the AS5047P; see the M8 coupling).
 - [x] **Q2 — ADC domain: 3.3 V or 5 V?** Resolved 2026-06-12: 3.3 V, with a
   sector-aware PWM-synchronized sampling schedule; TXB0108 off the critical
   path; future FOC-grade sampling via a parallel second ADC if ever needed.
@@ -177,3 +188,12 @@ question here, also flip the matching statuses there.
   gain + shunt scaling (codes/A), and the acquisition settling / ENOB at the
   conversion rate — then promote the `assumed` `circuit.ads9224r_module.*`
   values to `measured`. Closes the loop on Q21 with a real, citable board.
+  **Sim-validated 2026-06-18 (Tiers 2–4, `notes/ads9224r-sim-validation-report.md`):**
+  the datasheet device params are anchored (Csh 16 pF, tACQ 140 ns, FSR ±4.096 V),
+  the scaling (320 codes/A) + acquisition settling (<0.5 LSB) + front-end ENOB
+  (0.46-bit cost, *with* the added 270 pF antialiasing cap — the bucket alone
+  costs ~1.9 bits) + the loop current-noise budget (~15 effective bits) are
+  ngspice-validated, and the reference is decided (internal default, REF6041
+  optional for drift). *Still bench-only:* absolute ENOB/SNR, real layout
+  coupling, measured inter-channel skew; *still pending the portal-gated .LIB:*
+  the THS4551/REF6041 vendor-macromodel cross-check (skip-if-absent wired).

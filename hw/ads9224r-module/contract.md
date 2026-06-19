@@ -23,8 +23,9 @@ both channels at the same instant (resolves Q21).
 | Full-scale current | ±102.4 A | derived `feedback.current_ads9224r.full_scale_a` |
 | Scale factor | 320 codes/A (16-bit signed) | derived `feedback.current_ads9224r.codes_per_amp` |
 | Reference | 4.096 V | `circuit.ads9224r_module.ref_v` |
-| Charge-bucket | Rflt 10 Ω, Cflt 1.5 nF | `circuit.ads9224r_module.flt_*` |
-| Acq. settling estimate | 1.6e-6 (< 0.5 LSB) | derived `adc.acq_settle_residual_ads9224r` |
+| Charge-bucket | Rflt 10 Ω, Cflt 1 nF | `circuit.ads9224r_module.flt_*` |
+| Antialiasing cap | 270 pF (FDA fb) → 295 kHz pole | `circuit.ads9224r_module.fda_fb_c` |
+| Acq. settling (switched-cap, ngspice) | 1.6e-7 (≪ 0.5 LSB) | `test_ads9224r_acq_settling` |
 
 Scaling is SPICE-cross-checked (`test_ads9224r_frontend_dc`, slope = gain·shunt →
 codes/A); settling is SPICE-cross-checked (`test_ads9224r_settle_transient`).
@@ -41,9 +42,15 @@ MSB-first on the two SDO lanes; zero current = zero code (no offset subtraction)
 
 ## Provenance & validation status
 
-- **Designed + simulated.** Values are `assumed` / datasheet-typical / EVM-topology
-  baseline (blocked_by **Q23**) — the analog front-end is validated against the
-  ngspice models (`sim/circuits/ads9224r_*.cir`), not silicon.
+- **Designed + sim-validated (Tiers 2–4, `notes/ads9224r-sim-validation-report.md`):**
+  device params anchored to the datasheets (Csh 16 pF, tACQ 140 ns, FSR ±4.096 V,
+  status `datasheet`); scaling (320 codes/A), acquisition settling (1.6e-7 <
+  0.5 LSB), front-end ENOB (0.46-bit cost with the antialiasing cap), and the
+  loop current-noise budget (~15 effective bits) are ngspice-validated. Reference:
+  internal default, REF6041 optional (drift). Design choices (shunt, FDA
+  R's, flt R/C, fda_fb_c) remain `assumed` (Q23).
+- **Vendor-macromodel cross-check (Tier 3):** wired skip-if-absent; runs when the
+  portal-gated THS4551/REF6041 `.LIB` is dropped in `docs/ti-simulation-models/`.
 - **Pending (Q23, maintainer/lab — checklist §10):** confirm the reference IC/value,
   the FDA gain + shunt scaling (codes/A), and acquisition settling / ENOB at the
   conversion rate on a fabricated board; then promote the `assumed` values to

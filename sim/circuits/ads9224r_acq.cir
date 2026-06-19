@@ -1,0 +1,29 @@
+* ADS9224R real switched-capacitor acquisition settling (Tier 2). The THS4551
+* output (a stiff full-scale source behind a one-pole at GBW) holds the bucket
+* Cflt; at acquisition the ADC cap-DAC (Csh, holding a stale charge) reconnects
+* via a switch, causing the charge-share kickback, and the amp recharges through
+* Rflt. The held-sample v(cdac) must settle to < 0.5 LSB of the target within
+* tACQ. This supersedes the Tier-1 single-pole full-step estimate: the real
+* kickback is only Csh/(Csh+Cflt), not a full step. (Amp gain-dependent bandwidth
+* and slew are refined in Tier 3 with the vendor macromodel.)
+.include components.param
+.param GBW={ths4551_gbw}
+.param VFS={ads9224r_module_ref_v}
+.param bcap={ads9224r_module_flt_c}
+
+Vamp src 0 dc {VFS}
+Rop src pnode {1k}
+Cop pnode 0 {1/(2*3.141592653589793*1e3*GBW)}
+Eo aout 0 pnode 0 1
+Rflt aout buck {ads9224r_module_flt_r}
+Cflt buck 0 {bcap} ic={VFS}
+Sacq buck cdac swc 0 swmod
+Ccdac cdac 0 {ads9224r_adc_csh} ic=0
+Vswc swc 0 PWL(0 0 1p 1)
+.model swmod sw vt=0.5 ron=20 roff=1e12
+
+.control
+tran 0.02n 300n uic
+wrdata ads9224r_acq.out v(cdac)
+.endc
+.end

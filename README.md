@@ -201,6 +201,84 @@ thermal drift, cogging-detent startup, the sensor-eccentricity signature,
 per-cycle PWM ripple, the stall-detection raster, dead-time microscopy,
 the three-way plant-parity residuals, and the FOC sampling/latency studies.
 
+## Figure Index
+
+This is the complete committed media index under `figures/`.
+
+Gallery pages:
+[core bench](figures/gallery.md),
+[ADS9224R module](figures/ads9224r-module/gallery.md),
+[part comparison](figures/comparison/gallery.md),
+[motor comparison](figures/motors/gallery.md),
+[stress tests](figures/stress/gallery.md).
+
+Core bench:
+[motorloop.gif](figures/motorloop.gif),
+[startup](figures/startup.png),
+[commutation](figures/commutation.png),
+[brownout](figures/brownout.png),
+[regen](figures/regen.png),
+[adc_chain](figures/adc_chain.png),
+[foc_startup](figures/foc_startup.png),
+[thermal](figures/thermal.png),
+[cogging](figures/cogging.png),
+[eccentricity](figures/eccentricity.png),
+[pwm_ripple](figures/pwm_ripple.png),
+[stall_raster](figures/stall_raster.png),
+[deadtime](figures/deadtime.png),
+[parity](figures/parity.png),
+[foc_sampling](figures/foc_sampling.png),
+[foc_latency](figures/foc_latency.png).
+
+ADS9224R module:
+[signal_chain](figures/ads9224r-module/signal_chain.png),
+[simultaneity](figures/ads9224r-module/simultaneity.png),
+[scaling](figures/ads9224r-module/scaling.png),
+[settling](figures/ads9224r-module/settling.png),
+[loop_budget](figures/ads9224r-module/loop_budget.png),
+[noise](figures/ads9224r-module/noise.png).
+
+Part comparison:
+[t1_latency](figures/comparison/t1_latency.png),
+[t2_reversal](figures/comparison/t2_reversal.png),
+[t3_skew](figures/comparison/t3_skew.png),
+[t4_noise_floor](figures/comparison/t4_noise_floor.png),
+[t5_snap](figures/comparison/t5_snap.png),
+[t6_phase_margin](figures/comparison/t6_phase_margin.png),
+[t7_resolution](figures/comparison/t7_resolution.png),
+[t8_penalty](figures/comparison/t8_penalty.png),
+[t9_dirty](figures/comparison/t9_dirty.png),
+[t10_envelope](figures/comparison/t10_envelope.png).
+
+Motor comparison:
+[summary](figures/motors/summary.png),
+[torque_speed](figures/motors/torque_speed.png),
+[dynamics](figures/motors/dynamics.png),
+[efficiency](figures/motors/efficiency.png),
+[latency_coupling](figures/motors/latency_coupling.png).
+
+RL experiments:
+[coupling_returns](figures/rl/coupling_returns.png),
+[motor_envelope](figures/rl/motor_envelope.png),
+[smoke_test](figures/rl/smoke_test.mp4),
+[rand_baseline](figures/rl/rand_baseline.mp4),
+[halfcheetah_db42](figures/rl/halfcheetah_db42.mp4),
+[dodge_before](figures/rl/dodge_before.mp4),
+[dodge_after](figures/rl/dodge_after.mp4).
+
+Stress tests:
+[A1_thermal](figures/stress/A1_thermal.png),
+[A2_brownout](figures/stress/A2_brownout.png),
+[A3_regen](figures/stress/A3_regen.png),
+[A4_overcurrent](figures/stress/A4_overcurrent.png),
+[A5_fault](figures/stress/A5_fault.png),
+[B1_reversal_cliff](figures/stress/B1_reversal_cliff.png),
+[B2_load_step](figures/stress/B2_load_step.png),
+[C1_settle_limit](figures/stress/C1_settle_limit.png),
+[C2_fullscale_clip](figures/stress/C2_fullscale_clip.png),
+[D1_numeric_rails](figures/stress/D1_numeric_rails.png),
+[D2_circle_sat](figures/stress/D2_circle_sat.png).
+
 ## Proven safety properties (formal)
 
 The tests above *observe* safety invariants across simulation; an open-source

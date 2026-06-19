@@ -37,6 +37,7 @@ For the ZONRI power board, prefer the TI reference-board files in `../ti-referen
 | Microchip MCP3208 product page | Not a PDF | https://www.microchip.com/en-us/product/MCP3208 |
 | Microchip MCP3204/3208 datasheet | `microchip-mcp3208-datasheet.pdf` | https://ww1.microchip.com/downloads/aemDocuments/documents/APID/ProductDocuments/DataSheets/21298e.pdf |
 | TI ADS9224R dual simultaneous-sampling SAR ADC datasheet (Rev. C, 66 p) — reference-platform external current ADC: 16-bit, 3 MSPS, simultaneous (retires Q21) | `ti-ads9224r-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/ads9224r.pdf |
+| TI THS4551 low-noise precision 150-MHz fully-differential amplifier datasheet (SBOS778D) — the open ADS9224R module's ADC driver (sim-validation Tiers 2–4) | `ti-ths4551-datasheet.pdf` | https://www.ti.com/lit/ds/symlink/ths4551.pdf |
 
 ## Rotor Angle Sensor
 

@@ -16,3 +16,16 @@ TI publishes several DRV8301 electrical model files. These are not FMUs and will
 Source page:
 
 - DRV8301 product/tools page: https://www.ti.com/product/DRV8301/toolssoftware
+
+## Open ADS9224R module — Tier-3 vendor macromodels (sim-validation §3)
+
+Portal-gated TI downloads (PSpice-for-TI / TINA-TI). Drop the extracted `.LIB`
+at the path below and the Tier-3 tests (`sim/tests/test_ads9224r_vendor.py`)
+cross-check automatically; absent, they skip (CI stays green). Confirm each
+model's `.SUBCKT` pin order against the netlist instantiation when first added.
+
+| File (place here) | Model | Source |
+| --- | --- | --- |
+| `ths4551/THS4551.LIB` | THS4551 fully-differential ADC driver | https://www.ti.com/product/THS4551 → Design & development → simulation models (PSpice-for-TI / TINA-TI) |
+| `ref6041/REF6041.LIB` | REF6041 4.096 V reference + buffer (external-ref option, §3.4) | https://www.ti.com/product/REF6041 → Design & development → simulation models |
+| (optional) `ads9224r/ADS9224R.TSM` | ADS9224R TINA model / input model | https://www.ti.com/product/ADS9224R → Design & development |
