@@ -16,7 +16,7 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
 
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
         contracts version portability formal synth synth-check asic fmax ipxact \
-        bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval
+        bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval rl-combat-train rl-combat-eval
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -76,6 +76,11 @@ rl-dodge-train:  ## train the dodge-balance quadruped (perception + threats + cu
 rl-dodge-eval:  ## eval + render the dodge policy (objects flying at the legs)
 	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_dodge.py --model sim/build/rl/ppo_dodge.zip --difficulty 0.6 --video --tag dodge_after
 	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/dodge_after_traj.npz --tag dodge_after
+rl-combat-train:  ## train the combat-dodge quadruped (evade a weaponized spinner pursuer)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_combat.py --steps 2500000 --n-envs 16 --max-difficulty 0.6 --weapon spinner
+rl-combat-eval:  ## eval + render the combat policy (spinner chasing the legs)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_combat.py --model sim/build/rl/ppo_combat.zip --difficulty 0.6 --weapon spinner --video --tag combat_after
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/combat_after_traj.npz --tag combat_after
 
 ## --- proofs / synthesis / ASIC (need the OSS CAD Suite, sourced in-recipe) ---
 formal:  ## run + check all formal proofs

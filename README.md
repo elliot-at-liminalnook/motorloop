@@ -264,7 +264,9 @@ RL experiments:
 [rand_baseline](figures/rl/rand_baseline.mp4),
 [halfcheetah_db42](figures/rl/halfcheetah_db42.mp4),
 [dodge_before](figures/rl/dodge_before.mp4),
-[dodge_after](figures/rl/dodge_after.mp4).
+[dodge_after](figures/rl/dodge_after.mp4),
+[combat_before](figures/rl/combat_before.mp4),
+[combat_after](figures/rl/combat_after.mp4).
 
 Stress tests:
 [A1_thermal](figures/stress/A1_thermal.png),

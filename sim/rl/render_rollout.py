@@ -36,11 +36,15 @@ def main():
 
     data = np.load(args.traj)
     qpos, qvel = data["qpos"], data["qvel"]
+    mocap = data["mocap"] if "mocap" in data else None
     robot = str(data["robot"]) if "robot" in data else "Ant-v5"
-    if robot == "dodge":
+    if robot in ("dodge", "combat"):
         import sys
         sys.path.insert(0, str(Path(__file__).resolve().parent))
-        from dodge_env import build_scene
+        if robot == "combat":
+            from combat_env import build_scene
+        else:
+            from dodge_env import build_scene
         m = mujoco.MjModel.from_xml_string(build_scene())
         d = mujoco.MjData(m)
     else:
@@ -57,6 +61,8 @@ def main():
     frames = []
     for t in range(len(qpos)):
         d.qpos[:] = qpos[t]; d.qvel[:] = qvel[t]
+        if mocap is not None:
+            d.mocap_pos[:] = mocap[t]
         mujoco.mj_forward(m, d)
         renderer.update_scene(d, camera=cam)
         frames.append(renderer.render())
