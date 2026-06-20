@@ -61,7 +61,30 @@ def step_reward(dealt: float = 0.0, taken: float = 0.0, closing: float = 0.0,
     weapon hits them / theirs hits us); `closing`/`fleeing` are the toward/away
     velocity fractions (aggression credits closing only - fleeing is a penalty, per
     SPARC 1.2.1); `control` is positional dominance. Needs a robot that can deal
-    damage (the weapon-leg body) for the `dealt` term to be real."""
+    damage (the weapon-leg body) for the `dealt` term to be real.
+
+    Backend-agnostic: scalars (numpy source of truth) OR jnp arrays (the MJX twin)
+    flow through identical arithmetic — this IS the single SPARC source the CPU
+    match, the co-evolution, and the MJX self-play all share (no fork)."""
     return (DAMAGE_MAX * (dealt - taken)
             + AGGRESSION_MAX * (closing - fleeing)
             + CONTROL_MAX * control)
+
+
+def step_reward_jax(dealt, taken, closing, fleeing, control, *, xp=None):
+    """JAX/numpy twin of `step_reward` that *clamps each fraction to its SPARC range*
+    before differencing (the per-step combat envs pass already-saturated fractions;
+    this makes the contract explicit and identical across backends). `closing`/
+    `fleeing` are non-negative toward/away fractions; `dealt`/`taken` are in [0,1]
+    severity units (see `reality_gap.damage_from_force`). `xp` defaults to jnp if
+    available else numpy, so the same call works on GPU (traced) and CPU (eager)."""
+    if xp is None:
+        try:
+            import jax.numpy as jnp
+            xp = jnp
+        except Exception:                       # pragma: no cover - CPU fallback
+            import numpy as xp                   # type: ignore
+    clip01 = lambda x: xp.clip(x, 0.0, 1.0)
+    return (DAMAGE_MAX * (clip01(dealt) - clip01(taken))
+            + AGGRESSION_MAX * (clip01(closing) - clip01(fleeing))
+            + CONTROL_MAX * clip01(control))

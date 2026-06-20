@@ -84,23 +84,36 @@ def topology_ga(gens=10, pop=12, seed=0):
 
 
 def sensitivity():
-    """Phase 8c: vary coevolve cost/erosion constants +-50%, check ranking stability."""
+    """Phase 8c: vary the co-evolution engagement constant +-50%, check that the DESIGN
+    RANKING is stable (a real ordering, not an artifact of the hand-tuned constant)."""
     import coevolve as C
+    import design_codec as dc
     rng = np.random.default_rng(0)
-    designs = rng.uniform(0, 1, (12, len(C.ROBOT_PARAMS)))
-    lo = np.array([p[1] for p in C.ROBOT_PARAMS]); hi = np.array([p[2] for p in C.ROBOT_PARAMS])
-    att = [np.array([0.25, 0.4, 2.5])]
+    designs = rng.uniform(0, 1, (12, dc.FULL_DIM))
+    att = [np.full(dc.FULL_DIM, 0.5)]                     # fixed reference attacker
+    base_engage = C.engage
     def rank(scale):
-        # perturb the erosion coefficient in _hit_on_us via a monkeypatch factor
-        base = C._hit_on_us
-        C._hit_on_us = lambda rs, xa, _b=base, _s=scale: 1.0 / (1.0 + np.exp(((rs[0]-xa[0]) - _s*0.015*xa[2]*(rs[1]/6.0) - _s*0.05*xa[1]) / 0.04))
-        f = np.array([C.robot_fitness(lo + d * (hi - lo), att) for d in designs])
-        C._hit_on_us = base
+        # perturb the strike-margin gain in engage() by `scale`, re-rank our designs
+        def patched(our_m, att_m, _s=scale):
+            def deal(att, dfn):
+                margin = (att["reach"] - dfn["clearance"]) * 6.0 * _s
+                hit = 1.0 / (1.0 + np.exp(-margin)) * np.clip(att["impulse"] / 3.0, 0.2, 1.0) * att["stand"]
+                return float(hit)
+            import sparc_score as sp
+            oo, to = deal(our_m, att_m), deal(att_m, our_m)
+            ag = sp._c(0.5 + 0.5 * (att_m["mass"] - our_m["mass"]) / 6.0)
+            return (dict(damage=sp.damage_fraction(oo, to), control=0.5, aggression=ag),
+                    dict(damage=sp.damage_fraction(to, oo), control=0.5, aggression=sp._c(1 - ag)))
+        C.engage = patched
+        f = np.array([C.robot_fitness(d, att) for d in designs])
+        C.engage = base_engage
         return np.argsort(np.argsort(f))
     r0, rlo, rhi = rank(1.0), rank(0.5), rank(1.5)
     corr = lambda a, b: float(np.corrcoef(a, b)[0, 1])
-    print(f"  [sensitivity] design-ranking corr vs -50%: {corr(r0,rlo):+.2f}, vs +50%: {corr(r0,rhi):+.2f} "
+    c_lo, c_hi = corr(r0, rlo), corr(r0, rhi)
+    print(f"  [sensitivity] design-ranking corr vs -50%: {c_lo:+.2f}, vs +50%: {c_hi:+.2f} "
           f"(>0.7 => robust to the hand-tuned constant)")
+    return c_lo > 0.7 and c_hi > 0.7
 
 
 def main():

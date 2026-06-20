@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: MIT
+# Attacker body — same schema as robot.toml (Phase 4: the opponent is a GENERATED BODY,
+# not the old abstract [strike_h, reach, speed] vector). A weapon-leg striker: a 5th
+# forward leg carries the spear (is_weapon), and a higher gear trades top speed for the
+# strike torque an aggressor wants. load_spec(attacker.toml) -> build_match(ours, attacker)
+# puts both bodies in one MJX scene so co-evolution and the match share ONE morphology space.
+
+[meta]
+name = "attacker"
+
+[torso]
+half_extents = [0.18, 0.05, 0.05]   # slightly leaner trunk than ours
+mass = 5.5                          # kg, lighter -> quicker close
+spawn_height = 0.34
+
+[leg_defaults]
+thigh_len = 0.20
+calf_len = 0.20
+link_radius = 0.020
+hip_offset = 0.08
+thigh_mass = 0.55
+calf_mass = 0.38
+foot_radius = 0.025
+abd_range = [-0.80, 0.80]
+flex_range = [-1.50, 1.50]
+knee_range = [-2.60, -0.40]
+joint_damping = 0.5
+joint_stiffness = 0.0
+
+[actuator]
+motor = "db42s03"
+peak_factor = 4.0
+gear = 8.0                          # higher gear -> more strike torque (the aggressor knob)
+
+# 4 stance legs + a forward weapon-leg (the spear). is_weapon adds the spear geom.
+[[leg]]
+name = "FL"
+pos = [0.18, 0.11, 0.0]
+[[leg]]
+name = "FR"
+pos = [0.18, -0.11, 0.0]
+[[leg]]
+name = "RL"
+pos = [-0.18, 0.11, 0.0]
+[[leg]]
+name = "RR"
+pos = [-0.18, -0.11, 0.0]
+[[leg]]
+name = "WP"
+pos = [0.22, 0.0, 0.0]
+is_weapon = true
+
+[domain_randomization]
+torso_mass = [4.0, 7.0]
+thigh_len = [0.17, 0.23]
+calf_len = [0.17, 0.23]
+gear = [6.0, 10.0]
+joint_stiffness = [0.0, 25.0]

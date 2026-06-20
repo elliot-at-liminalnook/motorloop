@@ -115,8 +115,10 @@ def proxy_fitness(x: np.ndarray) -> float:
     return 2.0 * stand + 1.5 * clear - 0.5 * (mass / 6.0)
 
 
-def cem(pop, gens, seed):
-    """Cross-entropy method in normalized [0,1] space; returns best (x, fitness)."""
+def cem(pop, gens, seed, fitness=proxy_fitness):
+    """Cross-entropy method in normalized [0,1] space; returns best (x, fitness).
+    `fitness(x_real)` is the proxy by default; `--fitness policy` swaps in the trained-
+    policy return (codesign_gpu.policy_fitness_direct) — same loop, real objective."""
     rng = np.random.default_rng(seed)
     lo = np.array([p[1] for p in PARAMS]); hi = np.array([p[2] for p in PARAMS])
     denorm = lambda u: lo + np.clip(u, 0, 1) * (hi - lo)
@@ -125,15 +127,28 @@ def cem(pop, gens, seed):
     best_x, best_f = None, -1e9
     for g in range(gens):
         pcent = np.clip(mean + std * rng.standard_normal((pop, len(PARAMS))), 0, 1)
-        fits = np.array([proxy_fitness(denorm(u)) for u in pcent])
+        fits = np.array([fitness(denorm(u)) for u in pcent])
         elite = pcent[np.argsort(fits)[-n_elite:]]
         mean, std = elite.mean(0), elite.std(0) + 1e-3
         gi = int(np.argmax(fits))
         if fits[gi] > best_f:
             best_f, best_x = fits[gi], denorm(pcent[gi])
-        print(f"  gen {g:2d}: best={fits.max():6.3f}  mean={fits.mean():6.3f}  "
+        print(f"  gen {g:2d}: best={fits.max():8.3f}  mean={fits.mean():8.3f}  "
               f"(running best {best_f:.3f})")
     return best_x, best_f
+
+
+def _policy_fitness_factory(budget, restore):
+    """Lazy GPU import: a fitness(x_real) -> trained-policy return for that body."""
+    import time
+    from codesign_gpu import policy_fitness_direct
+    def f(x_real):
+        t = time.time()
+        r = policy_fitness_direct(to_overrides(x_real), K=budget, restore_path=restore)
+        print(f"    [policy-fitness] {np.round(x_real,3)} -> return {r:.2f} "
+              f"({time.time()-t:.0f}s/candidate)")   # the per-candidate wall-clock #2 removes
+        return r
+    return f
 
 
 def main():
@@ -141,16 +156,27 @@ def main():
     ap.add_argument("--pop", type=int, default=16)
     ap.add_argument("--gens", type=int, default=10)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--fitness", choices=["proxy", "policy"], default="proxy",
+                    help="proxy = static stand/clearance/mass (CPU, default); "
+                         "policy = trained-policy return per candidate (GPU, Phase 2 direct)")
+    ap.add_argument("--policy-budget", type=int, default=150_000,
+                    help="fine-tune steps per candidate when --fitness policy")
+    ap.add_argument("--restore", default=str(Path(os.environ.get("CODESIGN_OUT", ".")) / "baseline.pkl"),
+                    help="baseline checkpoint to warm-start each candidate from")
     args = ap.parse_args()
+
+    fitfn = proxy_fitness
+    if args.fitness == "policy":
+        fitfn = _policy_fitness_factory(args.policy_budget, args.restore)
 
     default_x = np.array([SPEC["leg_defaults"]["thigh_len"],
                           SPEC["leg_defaults"]["calf_len"],
                           SPEC["actuator"]["gear"],
                           SPEC["leg_defaults"]["joint_stiffness"],
                           SPEC["torso"]["mass"]])
-    f0 = proxy_fitness(default_x)
-    print(f"default design fitness: {f0:.3f}\nCEM (pop {args.pop}, {args.gens} gens):")
-    best_x, best_f = cem(args.pop, args.gens, args.seed)
+    f0 = fitfn(default_x)
+    print(f"default design fitness ({args.fitness}): {f0:.3f}\nCEM (pop {args.pop}, {args.gens} gens):")
+    best_x, best_f = cem(args.pop, args.gens, args.seed, fitness=fitfn)
     print("\noptimized design vs default:")
     for (name, lo, hi, _), v0, v1 in zip(PARAMS, default_x, best_x):
         print(f"  {name:16s} {v0:7.3f} -> {v1:7.3f}")

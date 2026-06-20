@@ -17,7 +17,9 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
         contracts version portability formal synth synth-check asic fmax ipxact \
         bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval rl-combat-train rl-combat-eval robot \
-        gpu-baseline gpu-adversarial gpu-codesign gpu-selfplay gpu-extra
+        gpu-baseline gpu-mjx-train gpu-adversarial gpu-codesign gpu-coevolve gpu-selfplay \
+        gpu-match gpu-parity gpu-rederive gpu-extra gpu-e2e gpu-validate \
+        gpu-residual gpu-rma gpu-robust-codesign gpu-active-id codesign-rs
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -96,18 +98,54 @@ robot:  ## generate + prove the parametric body + co-design (robot.toml -> MJCF 
 	MUJOCO_GL=osmesa $(RL_PY) sim/robot/coevolve.py --rounds 6
 	MUJOCO_GL=osmesa $(RL_PY) sim/robot/match_env.py --prove
 
-## --- GPU/MJX co-design (run on a CUDA box; pip install -r requirements-gpu.txt) ---
-gpu-baseline:  ## Phase 1: train the MJX baseline locomotion policy (brax PPO)
+## --- GPU/MJX co-design (run on a CUDA box; pip install -r requirements-gpu.txt;
+##     see notes/gpu-runbook.md for provision -> install -> run order -> wall-clock) ---
+gpu-mjx-train: gpu-baseline  ## alias: Phase 1 MJX baseline policy
+gpu-baseline:  ## Phase 0/1: throughput baseline + train the MJX baseline locomotion policy
+	python3 sim/robot/bench_throughput.py
 	python3 sim/robot/train_codesign.py --steps 3000000
-gpu-adversarial:  ## Stage B: warm-start the adversarial design-conditioned policy
-	python3 sim/robot/train_adversarial.py --steps 12000000 --resume /root/proj/out/baseline.pkl
+gpu-parity:  ## Phase 1/9 gate: MJX<->MuJoCo parity (qpos/qvel/reward + SPARC twin)
+	python3 sim/robot/test_parity.py
+gpu-adversarial:  ## Stage B: warm-start the adversarial design-conditioned (SPARC) policy
+	python3 sim/robot/train_adversarial.py --steps 12000000 --resume /root/proj/out/universal_ckpt.pkl
 gpu-codesign:  ## Phases 2/3/5: universal policy + trained-return co-design + Pareto
 	python3 sim/robot/codesign_gpu.py --steps 4000000
-gpu-selfplay:  ## Phase 4: MJX SPARC self-play match (force-weighted damage)
+gpu-rederive:  ## Phase R1/R7: re-derive design rankings under the calibrated sim (robust/CVaR)
+	python3 sim/robot/rederive_r7.py
+gpu-coevolve:  ## Phase 4/8b: co-evolve two generated bodies (real-physics, HoF + abs benchmark)
+	MUJOCO_GL=osmesa python3 sim/robot/coevolve.py --rounds 6
+gpu-selfplay:  ## Phase 4: MJX self-play with a Hall-of-Fame league (two-policy)
+	python3 sim/robot/selfplay_mjx.py --steps 3000000
+gpu-match:  ## Phase 4: single-learner MJX SPARC match (force-weighted damage)
 	python3 sim/robot/match_mjx.py --steps 4000000
 gpu-extra:  ## Phases 6/7: topology GA + differentiable co-design
 	python3 sim/robot/codesign_extra.py
 	python3 sim/robot/codesign_diff.py
+gpu-e2e:  ## lightweight instrumented end-to-end loop check (profiles each stage; appends e2e_history.jsonl)
+	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu} python3 sim/robot/e2e.py
+gpu-validate:  ## tiny sequential leak-test of EVERY GPU stage before any long run (E2E-first)
+	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu} bash sim/robot/validate_gpu.sh
+
+## --- Real2Sim2Real (Phase R/RS): framework-now, sim-to-sim verified (CPU, no hardware) ---
+codesign-rs:  ## run ALL the Phase-R/RS sim-to-sim self-tests (reality-gap calibrated co-design)
+	$(RL_PY) sim/robot/reality_gap.py
+	$(RL_PY) sim/robot/design_codec.py
+	$(RL_PY) sim/robot/domain_model.py
+	$(RL_PY) sim/robot/hardware_id.py
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/test_contact.py
+	$(RL_PY) sim/robot/robust_codesign.py
+	$(RL_PY) sim/robot/reality_gap_eval.py
+	$(RL_PY) sim/robot/multifidelity.py
+	$(RL_PY) sim/robot/nsga2.py
+gpu-residual:  ## RS2/RS3: learned actuator + contact residuals (sim-to-sim; bench fit hardware-gated)
+	$(RL_PY) sim/robot/actuator_residual.py
+	$(RL_PY) sim/robot/contact_residual.py
+gpu-rma:  ## RS4: teacher->student online adaptation (RMA) — adaptation gap (sim-to-sim)
+	$(RL_PY) sim/robot/adaptive_policy.py
+gpu-robust-codesign:  ## R6/RS6: CVaR robust ranking + MAP-Elites QD archive of robust bodies
+	$(RL_PY) sim/robot/robust_codesign.py
+gpu-active-id:  ## RS5/RS8: info-gain test selection + proxy/nominal/robust ranking correlation
+	$(RL_PY) sim/robot/reality_gap_eval.py
 
 ## --- proofs / synthesis / ASIC (need the OSS CAD Suite, sourced in-recipe) ---
 formal:  ## run + check all formal proofs
