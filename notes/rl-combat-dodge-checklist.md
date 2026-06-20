@@ -202,30 +202,38 @@ report states honestly what converged on the CPU budget (and on which body).
 Full results: [`rl-combat-dodge-report.md`](rl-combat-dodge-report.md). Reproduce:
 `make rl-combat-train` → `make rl-combat-eval`.
 
-- **Pipeline:** `MotorloopCombat-v0` (`sim/rl/combat_env.py`), `train_combat.py`,
-  `eval_combat.py`, `render_rollout.py` (combat branch); `make rl-combat-train/-eval`.
-- **Weaponized pursuer (§1):** a kinematic **mocap spinner** (low kill-disk band
-  `[0.02,0.12] m` + chassis) chasing the CoM by pure pursuit at `1+3·difficulty`
-  m/s; strike = blade↔leg contact → terminate + −50 (+ natural knockback). Hammer
-  variant wired.
-- **Perception (§2):** low rangefinder ring + closing rate + privileged pursuer
-  track + per-foot tip-height/in-reach; 71-dim obs, VecNormalized.
-- **Clearance reward (§3):** height-clearance (foot *tip* vs band — calibration
-  fix), standoff + belly (urgency-scaled), leap, settle/jerk, −50 strike.
-- **Training (§4):** PPO + VecNormalize, 2.5 M steps, 16 envs, curriculum 0→0.6.
-- **Result (spinner, diff 0.6, n=10):** survival **~16 → ~758 steps**, **0/10
-  falls** (random 5/10), **5/10 survive the full 1500-step window** (random 0/10),
-  exposure 5 %, standoff 0.92 m (a tight dance just outside the 0.40 m bite — it
-  *can't* outrun a 2.8 m/s spinner). **Honest finding:** the policy is specialized
-  to the curriculum endpoint — at diff 0.3 it does *worse* (over-tuned footwork);
-  training over a difficulty *range* would fix the easy case.
-- **Viz (§5):** `figures/rl/combat_before.mp4` (random, struck fast) vs
-  `combat_after.mp4` (dances at the bite edge, high-steps, survives).
-- **Parity + hardware mapping (§6):** motor-envelope parity holds; pursuer track →
-  ToF-lidar + IMU on the RISC-V SoC, policy on SoC, FOC per joint — no RTL vision.
-- **Integration (§7):** Makefile targets; REUSE/SPDX clean.
+Honest **partial/negative** result — the journey is the value (full write-up in the
+report). Solved via a **skill-ladder** (stand→hop→dodge, each warm-starting the next).
 
-**Honest status:** pipeline + robust balance (0 falls) + **extended evasion of a
-faster-than-you spinner** converged; eliminating the last strikes is **body/budget-
-bound** (Ant's short 2-DOF legs can't truly leap/outrun a 2.8 m/s disk — Go2 is the
-next body) — reported, not hidden.
+- **Pipeline:** `MotorloopCombat-v0` (`sim/rl/combat_env.py`), `train_combat.py`
+  (warm-start `--init-model`, `--hop-reward`, `--no-lethal`), `eval_combat.py`,
+  `render_rollout.py` (combat branch); `make rl-combat-train/-eval`.
+- **Oscillating attacker (§1):** mocap spinner that **attacks→retreats→repositions→
+  re-attacks** (state machine), speed/commit scale with difficulty.
+- **Exploit fix:** it learned to **perch its torso on the chassis** → fixed with
+  **any-robot-geom strike** (body included) + an **anti-mount** penalty.
+- **Perception (§2):** low rangefinder ring + pursuer track + per-foot tip/in-reach
+  (71-dim). **Calibration:** clearance at the capsule *tip* (settled tip = 0.02 m).
+- **Skill-ladder results (the deliverable):**
+  - **A — Stand:** ✅ 10/10 survive 1500 steps, 0 falls.
+  - **B — Hop/high-step:** ✅ 10/10, lifts foot tips 0.12 m+ while balanced
+    (`figures/rl/combat_hop.mp4`).
+  - **H — Dodge (non-lethal + anti-flee, warm-started):** balance kept, but
+    **reactive dodging not acquired** — struck ~12/12 at every difficulty where the
+    spinner can reach a foot; it **flees** (standoff ~1.9 m) and the spinner is
+    faster (`figures/rl/combat_after.mp4` = honest engagement).
+- **Key findings:** joint learning collapses (staging mandatory); the no-truncation
+  `ep_len` metric *hides* success (only failures log — trust evals only);
+  **catastrophic forgetting** under a lethal attacker (lethal-trained policy fell
+  8/10 even parked); **non-lethal stage H** fixed the collapse but not the dodge;
+  the **fleeing trap is partly morphology** (the Ant's splayed load-bearing legs
+  can't retract without losing support).
+- **Parity + hardware mapping (§6):** motor-envelope parity holds; pursuer track →
+  ToF-lidar + IMU on the SoC, FOC per joint — no RTL vision. **Integration (§7):**
+  staged Makefile targets; REUSE/SPDX clean.
+
+**Honest status:** pipeline + **stand + hop converged**; **reactive dodge unsolved
+on the Ant** — the study diagnoses exactly why (fleeing trap, catastrophic
+forgetting, splayed-leg morphology) and points to a **Go2-class body** + longer
+(GPU) budget as the path, not more Ant training. Self-play adversary + hammer
+variant remain wired stretch goals.

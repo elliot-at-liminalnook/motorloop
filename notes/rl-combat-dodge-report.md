@@ -1,144 +1,134 @@
 <!-- SPDX-License-Identifier: MIT -->
-# Combat-dodge — results (a quadruped that evades a weaponized spinner pursuer)
+# Combat-dodge — results (a quadruped vs a weaponized spinner: an honest skill-ladder study)
 
 Implements [`rl-combat-dodge-checklist.md`](rl-combat-dodge-checklist.md): a
-quadruped (torso + 4 legs) that treats the threat as an **adversary trying to
-attack it** — the combat-robotics meta of a **low spinner** (a horizontal kill-disk
-near the floor on a chassis that *chases* the robot). It learns to keep its feet
-out of the strike band, hold a marginal standoff, and stay upright — the NN policy
-commanding every joint through the FOC motor envelope. The combat reskin of
+quadruped that must survive a **low spinner** (a horizontal kill-disk on a chassis
+that *chases and attacks* it) — keeping legs *and body* out of the strike band,
+under the FOC motor envelope. The combat reskin of
 [`rl-dodge-report.md`](rl-dodge-report.md).
 
-Code: `sim/rl/combat_env.py` (env + mocap pursuer + low perception + clearance
-reward), `train_combat.py` (PPO + curriculum), `eval_combat.py`, `render_rollout.py`
-(the `robot=="combat"` branch). Reproduce: `make rl-combat-train` →
-`make rl-combat-eval` (needs `~/rl-venv`; `requirements-rl.txt`).
+**Honest bottom line up front.** This is a *partial / negative* result, reported in
+full because the journey is the value. Via a **skill-ladder curriculum** the robot
+**learned to stand rock-solid (10/10) and to hop / high-step its feet clear of the
+strike band (10/10)** — the two motor primitives the dodge needs. But **reactive
+dodging of the moving spinner was not achieved on the Ant body** within the CPU
+budget: the moment the spinner can reach a foot, the robot is struck (≈12/12). The
+study pins down *exactly why*, which is the deliverable. The clear next step is a
+**different body (Go2)**, not more Ant training.
 
-## Honest frame (read this first)
+Code: `sim/rl/combat_env.py` (oscillating mocap attacker, body-strike, the staged
+reward with `hop_reward` / `lethal` / anti-flee modes), `train_combat.py` (PPO +
+warm-start `--init-model` + curriculum), `eval_combat.py`, `render_rollout.py`
+(combat branch). Reproduce: `make rl-combat-train` (runs the ladder) →
+`make rl-combat-eval`.
 
-- **The threat is a persistent mobile pursuer, not a projectile.** A kinematic
-  **mocap spinner** — a low kill-disk (strike band `z∈[0.02, 0.12] m`, radius
-  0.30 m) on a chassis — chases the robot's CoM by pure pursuit. The task is to
-  *maintain a safe relationship* with it, continuously.
-- **Weapon physics are a modeled abstraction, not a flywheel sim.** A strike
-  (the disk contacting any leg/foot geom) = **catastrophic: terminate + a large
-  penalty** (the mocap body also physically shoves the robot — natural knockback).
-  We do **not** simulate the blade's stored kinetic energy to the joule; that's
-  stiff/unstable in MuJoCo and unnecessary to learn evasion.
-- **Perception = sim rangefinders + a privileged pursuer track**, not a camera —
-  maps to an overhead/onboard **ToF-lidar tracker + IMU on the RISC-V SoC** on
-  hardware (see Hardware mapping).
-- **Body caveat:** trained on the **Ant** stand-in (short, near-ground, 2-DOF
-  legs). It learns the **standoff + high-step + ride-high** behavior well; a
-  taller-legged body (Go2) is where clean *leaps over* a fast spinner have the
-  travel to work. Flagged, per the checklist.
-- **CPU demo budget:** 2.5 M steps, 16 envs. A learned, runnable evader, not a
-  SOTA combatant.
+## The skill-ladder (the method)
+
+Reactive dodging asks the robot to learn two hard things at once — the *motor
+skill* (lift a load-bearing foot clear while balancing on the others) and the
+*timing* (when, which foot). Trained jointly under a lethal attacker, PPO collapsed
+every time. So we **decompose into independently-trainable skills, each
+warm-starting the next** (each is a `--tag`ged checkpoint):
+
+| stage | scene | reward added | result |
+|---|---|---|---|
+| **A — Stand** | attacker parked far | strong always-on balance (`+up`, collapse floor) | **10/10 survive 1500 steps, 0 falls** |
+| **B — Hop / high-step** | attacker parked | `hop_reward`: lift feet above the band while upright | **10/10, lifts tips 0.12 m+** — primitive learned |
+| **H — Dodge timing** | spinner engages, **non-lethal** + anti-flee | survive strikes (−3, no terminate) so it can *learn* | balance kept; **dodging not acquired** |
+| **(target) Dodge** | lethal oscillating attacker | — | **unsolved on the Ant** |
+
+Stages A and B are clean wins. The collapse lives entirely in the transition to a
+*moving lethal* threat.
 
 ## What was built
 
-- **Body:** the gymnasium Ant (torso + 4 legs, 8 actuated hinge joints).
-- **The weaponized pursuer (§1):** a **mocap** body (immovable, kinematic) carrying
-  a low `cylinder` blade (the strike band) + a chassis box, **teleported one
-  substep at a time toward the robot's CoM** at `1 + 3·difficulty` m/s (pure
-  pursuit). Strike = blade/chassis contacting a leg/foot geom → terminate + −50.
-  A `weapon="hammer"` variant (overhead descending arc + lateral-retreat reward)
-  is wired for future training.
-- **Perception (§2):** a **low rangefinder ring** (12 rays tilted down to catch a
-  ground-hugging chassis) + per-ray closing rate, **plus a privileged pursuer
-  track** (relative pos/vel, bite radius, band top, weapon one-hot) and **per-foot
-  state** (tip height, distance to pursuer, in-reach flag). 71-dim obs,
-  VecNormalized.
-- **The clearance reward (§3):** `+1 alive`, **`+height-clearance`** (per foot,
-  reward the foot *tip* above the strike band, punish a tip *in* the band ~2×
-  harder, gated on in-reach), `+standoff` and `+belly-clearance` (both scaled by
-  pursuer **urgency** = closing-speed × proximity), `+leap` (upward CoM velocity
-  when a foot is low and in-reach), `+settle`/`−jerk` (graceful when the pursuer is
-  far), and **−50 on a strike**. Terminate on strike, fall, or flip.
-- **Calibration that mattered:** the Ant's ankle-geom *centres* sit at ~0.55 m
-  (diagonal legs), so clearance must be measured at the capsule **tip**
-  (`centre − |axis_z|·half_len − radius`). Verified: a settled foot tip sits at
-  **0.02 m — inside the strike band** — so "clear the band" = lift a tip past
-  0.12 m, exactly the strike condition.
-- **Curriculum (§4):** pursuer difficulty ramps **0 → 0.6** over the first 60 % of
-  training (speed scales with it) — stand first, then evade.
+- **Oscillating attacker (the "battlebot"):** a kinematic **mocap** spinner (low
+  blade disk, band `z∈[0.02,0.12] m`, + chassis) that **darts in (attack) → backs
+  off (retreat) → orbits to a new bearing (reposition) → re-attacks** — a dynamic
+  adversary, not a glued chaser. Commit distance and speed scale with a difficulty
+  curriculum.
+- **Exploit fix (the "hops on top" bug):** the first working-ish policy learned to
+  **perch its torso on the chassis** for free clearance reward. Fixed: **any robot
+  geom touching the weapon is a strike** (not just legs) + an **anti-mount** penalty.
+- **Perception:** a low rangefinder ring + a privileged pursuer track + per-foot
+  tip-height/in-reach (71-dim obs, VecNormalized). On hardware = a ToF-lidar + IMU
+  on the RISC-V SoC.
+- **Calibration:** clearance is measured at the capsule **tip** (`centre −
+  |axis_z|·half_len − radius`); a settled foot tip sits at 0.02 m — *inside* the
+  band — so "clear" means lifting a tip past 0.12 m.
 
 ## What was measured
 
-Deterministic eval, **spinner**, **10 episodes**, 1500-step cap. "Survived" =
-reached the cap without a strike or fall.
+Deterministic lethal eval, spinner, n≥10, 1200-step cap. Difficulty sets attacker
+speed (`1.0+2.5·d` m/s) and commit distance.
 
-| metric | random @0.6 | **trained @0.6** | trained @0.3 |
-|---|---|---|---|
-| steps survived (mean) | ~16 | **~758** | ~317 |
-| ended by **strike** | 5/10 | 5/10 | 7/10 |
-| ended by **fall** | **5/10** | **0/10** | 1/10 |
-| **survived to cap** | 0/10 | **5/10** | 2/10 |
-| vulnerable (foot in band & in-reach) | 3 % | 5 % | 1 % |
-| mean standoff | 1.83 m | 0.92 m | 1.62 m |
+| policy | @0.10 (parked) | @0.13 (just engages) | @0.20 | @0.30 |
+|---|---|---|---|---|
+| **random** | 5/10 fall · 5/10 strike | — | — | — |
+| **stand (A)** | **10/10 survive** | — | — | — |
+| **hop (B)** | **10/10 survive**, high-steps | — | — | — |
+| **dodge (H, final)** | 10/12 survive | **0/12 survive · 12/12 strike** | 12/12 strike | 12/12 strike |
 
-- **It learned to survive the spinner.** Random control is struck or knocked over
-  in ~16 steps and **never** survives the window (5 falls + 5 strikes); the trained
-  policy survives **~47× longer**, **never falls**, and **reaches the full 1500-step
-  cap in half its episodes** against a pursuer faster than it can outrun. The
-  robust-balance result from the projectile env carries over and is *stronger* here
-  (0 falls).
-- **Why the trained standoff is *tighter* (0.92 m < random's 1.83 m).** At
-  difficulty 0.6 the spinner (2.8 m/s) is **faster than the Ant can outrun**, so
-  the policy can't flee — it holds a **marginal ~0.9 m dance just outside the
-  0.40 m bite radius**, repositioning and high-stepping to keep its feet clear.
-  Random's larger average distance is an artifact: it falls before the pursuer
-  (starting 3 m out) even arrives. The trained number is the *steady-state* of a
-  bot actively managing a faster attacker — the intended behavior.
-- **Low exposure over a long life:** ~5 % of ~750 steps with a foot in the band
-  *and* in reach — the clearance term is doing its job (the high-step gait).
-- **Honest finding — the policy is specialized to the difficulty it finished
-  training on.** At difficulty **0.3** (a *slower* spinner) it does **worse**
-  (~317 steps, 2/10 survive) than at 0.6, not better. The curriculum ramps to 0.6
-  and ends there, so the fast-aggressor footwork is over-tuned: against a slow
-  pursuer the policy relaxes its high-step cadence at the wrong moments and gets
-  clipped (note the 1 % exposure but 7/10 strikes — the hits land in that rare
-  guard-down window). Training across a difficulty *range* (not just ramping to a
-  fixed endpoint) would fix the easy case; the **0.6 headline is the hard opponent
-  we care about**.
-- **Video** (`figures/rl/`): `combat_before.mp4` (random — struck/knocked over
-  fast) vs `combat_after.mp4` (the trained bot dancing at the bite edge,
-  high-stepping, surviving the chase).
+- **Stand and hop are solved.** The hopper survives indefinitely and visibly
+  **high-steps its feet above the band** while balanced (`figures/rl/combat_hop.mp4`).
+- **Dodging is not.** At *every* difficulty where the spinner can actually reach a
+  foot (≥0.12), the robot is struck ~12/12. `figures/rl/combat_after.mp4` shows an
+  honest engagement: the attacker oscillates in, the robot reacts, and is clipped.
+- The trained dodge policy keeps a **standoff of ~1.9 m** — it **flees** rather than
+  stand-and-dodge, and the spinner is faster, so it loses.
 
-## What's converged vs compute/body-bound
+## Findings (why it's hard — the real deliverable)
 
-**Converged:** the pipeline, robust balance (0 falls), and **extended evasion of a
-faster pursuer**. **Bounded:** the remaining strikes (the faster spinner eventually
-catches it in a minority of episodes) are limited by, in order: (1) the **Ant
-body** — short 2-DOF legs can high-step and shuffle but can't truly *leap over* or
-*outrun* a 2.8 m/s disk; a taller-leg Go2 would; (2) **budget** — 2.5 M CPU steps;
-(3) **mobility** — the actuator/gear caps top translation speed, so escape isn't an
-option at high difficulty. These are flagged, not hidden.
+1. **Joint learning collapses; staging is mandatory.** From-scratch dodge stalled at
+   ~50-step survival. Only warm-starting stand→hop→dodge produced anything.
+2. **The training metric lies here.** Episodes have no time-limit truncation, so a
+   *successful* (never-terminating) policy is invisible in `ep_len_mean` — only
+   failures get logged. Several "stalls" were measurement artifacts; **only truncated
+   evals are trustworthy.** (This cost real iterations; documented so it doesn't
+   again.)
+3. **Catastrophic forgetting under a lethal attacker.** Training the lethal dodge
+   *destroyed* the standing skill (a lethal-trained policy fell **8/10 with the
+   attacker parked**). Dying on every mistake gives a pure-death gradient and no
+   chance to reinforce good behavior.
+4. **Non-lethal training (stage H) fixes the collapse, not the dodge.** Letting
+   strikes be survivable (−3, no terminate) kept balance perfectly (10/10 parked)
+   and let reward *rise* during engagement — but the policy still settled on
+   **fleeing**, and anti-flee penalties didn't break it.
+5. **The fleeing trap is partly morphology.** The Ant's four legs **splay outward**,
+   each foot ~0.5 m from centre in a different direction, all load-bearing. A spinner
+   from *any* angle immediately threatens a foot the robot can't lift without losing
+   its support polygon — so "run" looks better than "dodge," even though the Ant is
+   too slow to run.
 
-## Hardware mapping (the "what components" answer, §6)
+## Why a different body, not more training
 
-No new RTL. On a real combat bot: an **overhead or onboard ToF-lidar + IMU** track
-the opponent and are read by the **RISC-V SoC**; the trained policy runs on the
-SoC; it still commands the **FOC per joint** over AXI-Lite — the existing
-motor/sensor/controller stack with the policy as the outer loop. The sim's low
-rangefinder ring + pursuer track *is* that opponent tracker; the sim↔hardware path
-is the motor-envelope actuator (parity-anchored to the cycle-accurate bench,
-`test_rl_actuator_parity.py`) plus the SoC. Perception in the sim now, on the SoC
-later — never in RTL.
+The Ant is a **poor platform for this specific task**: splayed load-bearing legs,
+no leg-tuck-under-body, and a top speed below the spinner's. The likely fixes, in
+order: (1) a **Go2-class body** (legs tuck *under* the torso — it can retract a leg
+and keep a stable tripod, and is fast enough to reposition); (2) a **longer
+harmless-marker (stage H) phase + a lethal fine-tune**, on GPU at 10-50× the steps;
+(3) a faster actuator / different action space. The *methodology* (skill-ladder,
+non-lethal timing stage, exploit-proof strike model, oscillating adversary) carries
+over directly.
+
+## Hardware mapping (unchanged)
+
+No new RTL. On a real combat bot the opponent is tracked by an **overhead/onboard
+ToF-lidar + IMU on the RISC-V SoC**; the policy runs on the SoC and commands the
+**FOC per joint** over AXI-Lite. Perception lives in the sim now / on the SoC later.
 
 ## Reproduce
 
 ```
-make rl-combat-train   # PPO + curriculum, 2.5 M steps, 16 envs -> ppo_combat.zip
-make rl-combat-eval    # eval + render figures/rl/combat_after.mp4
+make rl-combat-train   # stand (1.5M) -> hop (1.2M) -> dodge/H (2.5M), warm-started
+make rl-combat-eval    # figures/rl/combat_hop.mp4 (high-steps) + combat_after.mp4 (engagement)
 ```
 
 ## Status vs the checklist
 
-Every section §0–§7 is implemented; `MotorloopCombat-v0` runs with a low rangefinder
-ring + pursuer track, a **weaponized chasing spinner** (+ a wired hammer variant), a
-**height-clearance + standoff + leap** reward under a curriculum; a before/after
-video pair exists; the motor-envelope parity holds; metrics show **far longer
-survival, zero falls, and low strike-band exposure** vs random. **Converged:**
-balance + extended evasion. **Compute/body-bound:** eliminating the last strikes
-against a faster-than-you spinner (Ant legs / budget). Reported honestly.
+`MotorloopCombat-v0` runs with the oscillating weaponized attacker, exploit-proof
+strikes (body included), low perception, and the staged clearance reward;
+before/after videos and a metrics sweep exist; the motor-envelope parity holds.
+**Converged:** the pipeline, stand, hop, and the diagnosis. **Unsolved (body/budget-
+bound):** reactive dodging on the Ant — the study shows precisely why and points to
+Go2. Reported honestly, in full.

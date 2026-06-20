@@ -16,7 +16,8 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
 
 .PHONY: help all verify deps cores bench test cocotb lint reuse coverage \
         contracts version portability formal synth synth-check asic fmax ipxact \
-        bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval rl-combat-train rl-combat-eval
+        bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval rl-combat-train rl-combat-eval robot \
+        gpu-baseline gpu-adversarial gpu-codesign gpu-selfplay gpu-extra
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -76,11 +77,37 @@ rl-dodge-train:  ## train the dodge-balance quadruped (perception + threats + cu
 rl-dodge-eval:  ## eval + render the dodge policy (objects flying at the legs)
 	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_dodge.py --model sim/build/rl/ppo_dodge.zip --difficulty 0.6 --video --tag dodge_after
 	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/dodge_after_traj.npz --tag dodge_after
-rl-combat-train:  ## train the combat-dodge quadruped (evade a weaponized spinner pursuer)
-	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_combat.py --steps 2500000 --n-envs 16 --max-difficulty 0.6 --weapon spinner
-rl-combat-eval:  ## eval + render the combat policy (spinner chasing the legs)
-	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_combat.py --model sim/build/rl/ppo_combat.zip --difficulty 0.6 --weapon spinner --video --tag combat_after
+rl-combat-train:  ## train the combat skill-ladder: stand -> hop -> dodge (see notes/rl-combat-dodge-report.md)
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_combat.py --steps 1500000 --max-difficulty 0.0 --tag combat_stand
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_combat.py --steps 1200000 --max-difficulty 0.0 --hop-reward \
+	  --init-model sim/build/rl/ppo_combat_stand.zip --tag combat_hop
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/train_combat.py --steps 2500000 --max-difficulty 0.2 --hop-reward --no-lethal \
+	  --init-model sim/build/rl/ppo_combat_hop.zip --tag combat_h2
+rl-combat-eval:  ## eval/render the hopper (high-steps) + an honest dodge engagement
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_combat.py --model sim/build/rl/ppo_combat_hop.zip --difficulty 0.0 --video --tag combat_hop
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/combat_hop_traj.npz --tag combat_hop
+	MUJOCO_GL=osmesa $(RL_PY) sim/rl/eval_combat.py --model sim/build/rl/ppo_combat_h2.zip --difficulty 0.13 --video --tag combat_after
 	MUJOCO_GL=osmesa $(RL_PY) sim/rl/render_rollout.py --traj sim/build/rl/combat_after_traj.npz --tag combat_after
+robot:  ## generate + prove the parametric body + co-design (robot.toml -> MJCF -> optimize)
+	$(RL_PY) sim/robot/gen_robot_mjcf.py
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/prove_robot.py
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/train_mjx.py --smoke
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/optimize_design.py --gens 8
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/coevolve.py --rounds 6
+	MUJOCO_GL=osmesa $(RL_PY) sim/robot/match_env.py --prove
+
+## --- GPU/MJX co-design (run on a CUDA box; pip install -r requirements-gpu.txt) ---
+gpu-baseline:  ## Phase 1: train the MJX baseline locomotion policy (brax PPO)
+	python3 sim/robot/train_codesign.py --steps 3000000
+gpu-adversarial:  ## Stage B: warm-start the adversarial design-conditioned policy
+	python3 sim/robot/train_adversarial.py --steps 12000000 --resume /root/proj/out/baseline.pkl
+gpu-codesign:  ## Phases 2/3/5: universal policy + trained-return co-design + Pareto
+	python3 sim/robot/codesign_gpu.py --steps 4000000
+gpu-selfplay:  ## Phase 4: MJX SPARC self-play match (force-weighted damage)
+	python3 sim/robot/match_mjx.py --steps 4000000
+gpu-extra:  ## Phases 6/7: topology GA + differentiable co-design
+	python3 sim/robot/codesign_extra.py
+	python3 sim/robot/codesign_diff.py
 
 ## --- proofs / synthesis / ASIC (need the OSS CAD Suite, sourced in-recipe) ---
 formal:  ## run + check all formal proofs
@@ -108,4 +135,4 @@ all: verify synth  ## verify + a full place&route Fmax run
 
 clean:  ## remove generated/build artifacts
 	rm -rf build sim/build formal/work synth/work sim/cocotb/build \
-	       sim/cocotb/sim_build site site-src
+	       sim/cocotb/sim_build site site-src sim/robot/model.xml

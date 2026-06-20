@@ -257,6 +257,9 @@ Motor comparison:
 [efficiency](figures/motors/efficiency.png),
 [latency_coupling](figures/motors/latency_coupling.png).
 
+Battlebot studies:
+[retract_power](figures/battlebot/retract_power.png).
+
 RL experiments:
 [coupling_returns](figures/rl/coupling_returns.png),
 [motor_envelope](figures/rl/motor_envelope.png),
@@ -266,7 +269,8 @@ RL experiments:
 [dodge_before](figures/rl/dodge_before.mp4),
 [dodge_after](figures/rl/dodge_after.mp4),
 [combat_before](figures/rl/combat_before.mp4),
-[combat_after](figures/rl/combat_after.mp4).
+[combat_after](figures/rl/combat_after.mp4),
+[combat_hop](figures/rl/combat_hop.mp4).
 
 Stress tests:
 [A1_thermal](figures/stress/A1_thermal.png),

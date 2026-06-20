@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# GPU/MJX co-design stack — install on a CUDA box (RunPod 4090 etc.; see
+# notes/motorloop-runpod-gpu and notes/codesign-realization-checklist.md).
+# Driver >= 550 (CUDA 12). On Python 3.10, tomli backports tomllib.
+jax[cuda12]
+mujoco
+mujoco-mjx
+brax
+tomli ; python_version < "3.11"
