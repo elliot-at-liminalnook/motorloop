@@ -1,9 +1,20 @@
 # SPDX-License-Identifier: MIT
 # GPU/MJX co-design stack — install on a CUDA box (RunPod 4090 etc.; see
-# notes/motorloop-runpod-gpu and notes/codesign-realization-checklist.md).
+# notes/gpu-pod-setup.md + the motorloop-runpod-gpu memory).
 # Driver >= 550 (CUDA 12). On Python 3.10, tomli backports tomllib.
-jax[cuda12]
-mujoco
-mujoco-mjx
-brax
+#
+# PINNED to the exact set verified working this session (RTX 4090, CUDA 12, py3.10).
+# Unpinned `brax`/`jax` pull newer releases that change APIs (brax PPO net signature,
+# jax.lax internals) and break the saved checkpoints/scripts — re-pin only after re-running
+# `make gpu-validate`. flax/optax are brax deps but pinned so warm-started ckpts load cleanly.
+jax[cuda12]==0.6.2
+mujoco==3.9.0
+mujoco-mjx==3.9.0
+brax==0.14.1
+flax==0.10.7
+optax==0.2.8
+numpy==2.2.6
 tomli ; python_version < "3.11"
+# Note: mujoco-mjx 3.9 prints "Failed to import warp: No module named 'warp'" on import.
+# HARMLESS — warp is an optional alternate MJX backend; we use the JAX backend. Don't chase
+# it (installing warp-lang just to silence it pulls a large unused dep).

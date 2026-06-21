@@ -19,7 +19,8 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
         bender docs clean soc-sim soc-build compare ads9224r stress motors rl-figures rl-train rl-eval rl-dodge-train rl-dodge-eval rl-combat-train rl-combat-eval robot \
         gpu-baseline gpu-mjx-train gpu-adversarial gpu-codesign gpu-coevolve gpu-selfplay \
         gpu-match gpu-parity gpu-rederive gpu-extra gpu-e2e gpu-validate \
-        gpu-residual gpu-rma gpu-robust-codesign gpu-active-id codesign-rs
+        gpu-residual gpu-rma gpu-robust-codesign gpu-active-id codesign-rs \
+        gpu-fighter gpu-fighter-rank
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -125,6 +126,52 @@ gpu-e2e:  ## lightweight instrumented end-to-end loop check (profiles each stage
 	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu} python3 sim/robot/e2e.py
 gpu-validate:  ## tiny sequential leak-test of EVERY GPU stage before any long run (E2E-first)
 	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu} bash sim/robot/validate_gpu.sh
+
+## --- fighter milestone (notes/codesign-fighter-milestone-checklist.md): can it FIGHT? ---
+gpu-fighter:  ## F2: real-scale single-fighter training (warm-start, shaping, 6 metrics)
+	python3 sim/robot/train_adversarial.py --steps 12000000 --resume $${CODESIGN_OUT:-/root/proj/out}/universal_ckpt.pkl --tag f2
+gpu-fighter-rank:  ## F4: rank N bodies proxy/nominal/robust vs ground-truth fight performance
+	python3 sim/robot/fighter_rank.py
+gpu-curriculum:  ## contact-forcing curriculum (teaches reliable attacking engagement)
+	bash sim/robot/curriculum_train.sh
+gpu-win-exchanges:  ## STEP 2: win-exchanges curriculum DRIVER (gate+rollback+keep-best, resume-safe)
+	python3 sim/robot/curriculum_drive.py --warm $${CODESIGN_OUT:-/root/proj/out}/universal_ckpt.pkl --steps-per-phase 4000000 --lean-contacts
+gpu-win-exchanges-medium:  ## STEP 2 2·0: medium ~2-4 GPU-hr single-stage learning-curve validation (does the curve RISE?)
+	python3 sim/robot/train_adversarial.py --resume $${CODESIGN_OUT:-/root/proj/out}/cval_ckpt.pkl --tag medium \
+	  --steps 8000000 --lean-contacts --sep-lo 0.4 --sep-hi 1.0 --approach-weight 1.5 --azimuth 2.0 \
+	  --clean-weight 4 --trade-weight 3 --disengage-weight 1 && python3 sim/robot/make_benchmark_figure.py --tags medium
+win-exchanges-prove:  ## CPU: validate the win-exchanges machinery (reward asymmetry + benchmark keep-best + driver), no GPU
+	MJX_PY=$${MJX_PY:-$(HOME)/mjx-venv/bin/python}; \
+	$$MJX_PY sim/robot/curriculum_drive.py --tiny --lean-contacts && \
+	$$MJX_PY sim/robot/make_benchmark_figure.py --tags cval c1
+
+## --- arena framework build (notes/framework-build-checklist.md; resume-safe via BUILD_STATE.json) ---
+FW_MJX_PY ?= $(HOME)/mjx-venv/bin/python
+fw-status:  ## arena: show build-progress ledger + the next unverified phase
+	cd sim/robot && MJX_PY=$(FW_MJX_PY) $(FW_MJX_PY) -m arena._ledger status
+fw-snapshot:  ## arena: verify-gated tar snapshot of a phase (PHASE=N), flips it to `verified`
+	PHASE=$(PHASE) MJX_PY=$(FW_MJX_PY) bash scripts/fw_snapshot.sh
+fw-restore:  ## arena: restore arena/ from a snapshot (SNAP=sim/build/fw-snapshots/...tgz)
+	tar xzf $(SNAP) -C sim/robot && echo "restored arena from $(SNAP)"
+arena-prove:  ## arena: CPU end-to-end self-test of the whole framework (every layer)
+	cd sim/robot && for m in trace kernel_emit stage engine runner run cli pod_smoke coach; do $(FW_MJX_PY) -m arena.$$m --selftest || exit 1; done
+gpu-arena:  ## arena: the unified run — skill curriculum THEN self-play, seeded from the skill fighter
+	cd sim/robot && python3 -m arena.cli pipeline --seed $${CODESIGN_OUT:-/root/proj/out}/curriculum_best.pkl \
+	  --runner local --lean --envs 8192 --steps-per-phase 10000000 --round-steps 10000000 --name striker-arena
+
+## --- monitoring (signals to look at) ---
+dashboard:  ## render the multi-panel held-out-signal dashboard PNG (SPARC/ratio/clean-trade/fire/range/engagement)
+	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu/out} $(FW_MJX_PY) sim/robot/make_dashboard.py
+status:  ## print the per-phase signal table (best/ratio + decomposition) from pulled data
+	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu/out} $(FW_MJX_PY) sim/robot/make_dashboard.py --table
+status-live:  ## rich live-pod snapshot — combat decomposition + GPU + economics (needs an active pod)
+	bash scripts/rp_status.sh
+gpu-commanded:  ## train the command-conditioned (remote-steerable) locomotor
+	python3 sim/robot/train_commanded.py --steps 8000000
+gpu-commanded-eval:  ## deploy: drive a command square + figures (commanded vs achieved)
+	python3 sim/robot/eval_commanded.py && python3 sim/robot/make_command_figure.py
+commanded-prove:  ## CPU: validate the command-conditioning mechanism (no GPU)
+	python3 sim/robot/commanded_env.py --prove
 
 ## --- Real2Sim2Real (Phase R/RS): framework-now, sim-to-sim verified (CPU, no hardware) ---
 codesign-rs:  ## run ALL the Phase-R/RS sim-to-sim self-tests (reality-gap calibrated co-design)

@@ -34,6 +34,20 @@ motor = "db42s03"                   # ref into sim/tests/motors.py (the torque e
 peak_factor = 4.0                   # burst current multiple, decided
 gear = 6.0                          # transmission ratio, decided
 
+[striker]                           # pneumatic fast-extend STEEL ROD weapon (off by default → body
+                                    # byte-identical). Enabled per-build (AdversarialEnv striker=True);
+                                    # added to FRONT legs (pos.x>0) as a powered slide DOF + rod.
+enabled    = true                   # decided (striker ON by default — core to the fighter body)
+stroke     = 0.10                   # m, rod travel, decided
+rod_len    = 0.10                   # m, rod length, decided
+rod_radius = 0.008                  # m, decided
+rod_density= 7850                   # kg/m³, STEEL (datasheet) -> ~0.16 kg rod
+bore       = 0.016                  # m, pneumatic piston bore, decided
+pressure   = 800000.0               # Pa (8 bar shop-air/CO2), decided -> F = P·π(bore/2)² ≈ 161 N
+valve_tau  = 0.005                  # s, solenoid/fill first-order lag (the real speed bottleneck)
+return_stiffness = 40.0             # N/m, weak return spring (retract when not fired), decided
+fire_cost  = 0.05                   # reward penalty per unit fire ctrl (air/energy) — fire to connect
+
 # Legs: any number, any attachment. Default = 4 corners (a Go2-style quad). Add a
 # 5th entry with is_weapon=true to get the leg-weapon body (see the 5leg variant).
 [[leg]]

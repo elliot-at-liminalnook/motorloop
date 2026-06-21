@@ -1,0 +1,95 @@
+{
+  "created": "2026-06-21T10:48:19",
+  "phases": [
+    {
+      "phase": 0,
+      "title": "Scaffold + build-resumability tooling",
+      "verify_cmd": "$MJX_PY -c \"import json; json.load(open('sim/robot/arena/BUILD_STATE.json')); print('ledger ok')\"",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase0-20260621-104827.tgz",
+      "ts": "2026-06-21T10:48:27",
+      "notes": null
+    },
+    {
+      "phase": 1,
+      "title": "Layer 0: trace spine (arena/trace.py)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.trace --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase1-20260621-105034.tgz",
+      "ts": "2026-06-21T10:50:34",
+      "notes": null
+    },
+    {
+      "phase": 2,
+      "title": "Kernel + watcher emit into the universal stream",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.kernel_emit --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase2-20260621-105256.tgz",
+      "ts": "2026-06-21T10:52:56",
+      "notes": null
+    },
+    {
+      "phase": 3,
+      "title": "Layer 1: Stage (arena/stage.py) round-trips kernel CLIs",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.stage --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase3-20260621-105450.tgz",
+      "ts": "2026-06-21T10:54:50",
+      "notes": null
+    },
+    {
+      "phase": 4,
+      "title": "Layer 2: unified engine + schedules (collapse the two drivers)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.engine --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase4-20260621-105652.tgz",
+      "ts": "2026-06-21T10:56:52",
+      "notes": null
+    },
+    {
+      "phase": 5,
+      "title": "Layer 3: Runner (Local + Pod lifecycle unified)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.runner --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase5-20260621-105829.tgz",
+      "ts": "2026-06-21T10:58:29",
+      "notes": null
+    },
+    {
+      "phase": 6,
+      "title": "Layer 4: Run/Pipeline sugar + observability",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.run --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase6-20260621-110103.tgz",
+      "ts": "2026-06-21T11:01:03",
+      "notes": null
+    },
+    {
+      "phase": 7,
+      "title": "Migrate: arena.cli unified entrypoint + drivers point at arena",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m py_compile curriculum_drive.py selfplay_drive.py && $MJX_PY -m arena.cli --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase7-20260621-110328.tgz",
+      "ts": "2026-06-21T11:03:28",
+      "notes": null
+    },
+    {
+      "phase": 8,
+      "title": "PodRunner integration (offline) + real-GPU exercise = self-play transition",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.pod_smoke --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase8-20260621-110719.tgz",
+      "ts": "2026-06-21T11:07:19",
+      "notes": null
+    },
+    {
+      "phase": 9,
+      "title": "Coach \u2014 automatic competency controller (adaptive reward, replaces brittle weights)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.coach --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase9-20260621-120608.tgz",
+      "ts": "2026-06-21T12:06:08",
+      "notes": null
+    }
+  ]
+}

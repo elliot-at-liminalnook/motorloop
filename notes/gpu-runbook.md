@@ -6,7 +6,12 @@ the local box has none. This is the end-to-end recipe to reproduce every GPU res
 rented box (RunPod 4090 used here). The CPU-only Phase-R/RS sim-to-sim verifications run
 locally with no GPU — see `make codesign-rs`.
 
-## 0. Provision (RunPod 4090; see notes/motorloop-runpod-gpu memory)
+> **Exact from-scratch pod recipe (provision → ssh → ship → install → env → terminate) +
+> the hard-won gotchas is in `notes/gpu-pod-setup.md`.** The pod disk is ephemeral; the
+> trained checkpoints/metrics this session produced are saved locally in `sim/build/gpu/out/`
+> (re-ship them to a fresh pod to resume warm-starts). The section below is the summary.
+
+## 0. Provision (RunPod 4090; see notes/gpu-pod-setup.md + the motorloop-runpod-gpu memory)
 - Deploy on-demand via the GraphQL API (curl, not urllib — Cloudflare blocks urllib's UA);
   image `runpod/pytorch:2.x-py3.10-cuda12-*`, port 22, `PUBLIC_KEY` env = your SSH pubkey.
 - SSH in with the dedicated key (`~/.ssh/runpod_ed25519`). Cost discipline: spin up for a
@@ -14,11 +19,14 @@ locally with no GPU — see `make codesign-rs`.
 
 ## 1. Install
 ```
-pip install -r requirements-gpu.txt          # jax[cuda12], mujoco, mujoco-mjx, brax, ...
-tar czf - sim/robot sim/tests/motors.py | ssh POD "tar xzf - -C /root/proj"   # ship code
-python3 -c "import jax; print(jax.devices())" # -> [CudaDevice(id=0)]
+tar czf - sim/robot sim/tests/motors.py requirements-gpu.txt | ssh POD "tar xzf - -C /root/proj"  # ship code+reqs
+ssh POD 'bash /root/proj/sim/robot/setup_pod.sh'   # ONE command: pinned install + out/env.sh + smoke test
 ```
-Gotcha: pod is Python 3.10 → `tomllib` is 3.11+; `gen_robot_mjcf` falls back to `tomli`.
+`setup_pod.sh` installs the **pinned** `requirements-gpu.txt` and writes `out/env.sh` (the
+mandatory `MUJOCO_GL=""`, `XLA_PYTHON_CLIENT_PREALLOCATE=false`, `CODESIGN_OUT`,
+`JAX_COMPILATION_CACHE_DIR` exports — `source` it before every run). Full gotchas:
+`notes/gpu-pod-setup.md`. Gotcha: pod is Python 3.10 → `tomllib` is 3.11+; `gen_robot_mjcf`
+falls back to `tomli`.
 
 ## 2. Run order (each `make` target = one script; `CODESIGN_OUT` = where checkpoints land)
 **Always leak-test tiny first** (the E2E-first rule — one GPU ⇒ stages are sequential):
