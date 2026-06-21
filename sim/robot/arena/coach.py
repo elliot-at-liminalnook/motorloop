@@ -34,7 +34,9 @@ class Lever:
     lo: float = 0.0
     hi: float = 6.0
     lr: float = 0.4            # unitless gain (deficit normalized by gauge scale)
-    w: float | None = None     # current weight (init = midpoint)
+    invert: bool = False       # if True the field moves DOWN when lagging (a DIFFICULTY lever, e.g. sep_hi:
+                               #   melee lagging -> narrow the spawn -> "PRACTICE what's lagging", not just reward it)
+    w: float | None = None     # current value (init = midpoint)
     _prev: float | None = None
     _tract: float = 0.5        # tractability — EMA of |progress|, starts OPTIMISTIC (give laggards a try)
 
@@ -51,6 +53,8 @@ class Coach(Schedule):
         self.base = base
         self.levers = [l.init() for l in levers]
         self.gate_eps = gate_eps
+        self.opp_difficulty = 0.25            # EXTENSION 1: adaptive OPPONENT selection (0=easiest/oldest HoF,
+                                              #   1=toughest/newest). Tracks win-rate: dominate -> tougher foes.
         self.last_weights = {l.field: l.w for l in self.levers}
 
     # --- the controller (pure; directly unit-testable) ---------------------------------------
@@ -72,9 +76,15 @@ class Coach(Schedule):
                 delta = l.lr * deficit * span * l._tract
                 if l.w > 0.6 * l.hi and l._tract < 0.1:                         # heavy + stuck -> release
                     delta = -0.05 * span
+            if l.invert:                                                       # difficulty lever: lagging -> DECREASE
+                delta = -delta
             l.w = min(l.hi, max(l.lo, l.w + delta))
             l._prev = g
+        # EXTENSION 1 — opponent difficulty tracks win-rate (dominate -> face tougher HoF snapshots)
+        win = max(0.0, min(1.0, signals.get("win_rate", 0.5)))
+        self.opp_difficulty = round(0.6 * self.opp_difficulty + 0.4 * win, 3)
         self.last_weights = {l.field: round(l.w, 3) for l in self.levers}
+        self.last_weights["opp_difficulty"] = self.opp_difficulty
         return self.last_weights
 
     # --- Schedule wrapper --------------------------------------------------------------------
@@ -90,6 +100,7 @@ class Coach(Schedule):
         sig = (res or {}).get("signals") or {}
         if sig:
             state.extra["coach_weights"] = self.update(sig)    # engine emits this as a 'coach' metric
+            state.extra["opp_difficulty"] = self.opp_difficulty  # League.next() reads this (Extension 1)
         self.base.on_done(state, stage, res, best_before)
 
     def seed_ckpt(self, state):
@@ -99,11 +110,18 @@ class Coach(Schedule):
     @classmethod
     def default(cls, base):
         levers = [
+            # REWARD levers (reward what's lagging):
             Lever("clean", lambda s: s.get("clean", 0.0), target=0.12, lo=2, hi=8, lr=0.4),       # land un-traded hits
             Lever("trade", lambda s: -s.get("trade", 0.0), target=-0.03, lo=1, hi=8, lr=0.4),     # punish trading when high
             Lever("approach", lambda s: s.get("closing", 0.0) - s.get("fleeing", 0.0),
                   target=0.0, lo=0, hi=3, lr=0.35),                                                # the anti-retreat lever
             Lever("fire", lambda s: s.get("fire", 0.0), target=1.5, lo=0, hi=3, lr=0.35),         # use the rod
+            # REAL-ROBOT competency levers (EXTENSION 2): defend balance + energy/actuator-safety:
+            Lever("upright", lambda s: s.get("survival_rate", 0.0), target=0.7, lo=0.3, hi=4, lr=0.5),   # don't FALL
+            Lever("energy_penalty", lambda s: s.get("safe_rate", 1.0), target=0.9, lo=0, hi=1.5, lr=0.4),  # don't SLAM actuators
+            # CURRICULUM lever (PRACTICE what's lagging): melee gap -> narrow the spawn -> force close combat
+            Lever("sep_hi", lambda s: s.get("sparc_close", 0.0) - s.get("sparc_med", 0.0),
+                  target=0.0, lo=0.4, hi=1.4, lr=0.3, invert=True),
         ]
         return cls(base, levers)
 

@@ -146,6 +146,32 @@ control + **action filter** `u_t=0.8 u_{t-1}+0.2 a_t` + safety shaping (**uprigh
 peak-torque penalty** — ties to `joint_torque_limit`). `reality_gap`/`domain_model` cover the DR
 half; add the filter + torque penalty + perturbations.
 
+**2·C. The adaptive COACH (`arena/coach.py`) — replace brittle hand-tuned reward weights.**
+Instead of fixing `clean_weight`/`fire_shaping`/... by hand, a closed-loop controller measures each
+competency from the held-out decomposition and moves its reward weight (and DIFFICULTY) toward a
+target: laggard ↑, satisfied ↓ (can't over-optimize into a degenerate optimum), stuck → back off
+(don't pour reward into an unlearnable hole). This is the continuous-weight form of Isaac Lab's
+RewardManager+CurriculumManager — but with the CLOSED LOOP they leave to you. Architecture: **shaped
+coaching reward for LEARNING, sparse unshaped verdict for JUDGMENT** (so the policy can't just learn
+the coach's hints).
+- [x] **Sparse verdict** (the honest judgment): per-bout **win-rate** (`Σdealt−Σtaken>0`), **survival**
+      (didn't fall), **actuator-safety** (didn't slam actuators). **keep-best flips onto win-rate**, not
+      the dense SPARC. (Immediately exposed a hidden weakness: `survival=0` — it falls every bout.)
+- [x] **Reward levers** (reward what's lagging): clean / trade / fire / approach, progress-gated.
+- [x] **One CURRICULUM lever** (practice what's lagging): melee gap (`sparc_close−sparc_med`) → narrow
+      the spawn (`sep_hi`, inverted) → force close combat. The first "difficulty" lever.
+- [ ] **EXTENSION 1 — broaden the LEVERS** (asap): the Coach should also drive **scenario/opponent
+      selection** (melee lagging → pick a *rushing* HoF snapshot) and **reset conditions**, not just
+      reward + spawn-range. The `League`/`Curriculum` schedules already expose these; wire the Coach to them.
+- [ ] **EXTENSION 2 — broaden the COMPETENCIES toward the REAL robot** (asap): add reward terms +
+      gauges + verdicts for the real-battlebot competency set — **balance, tracking, recovery, contact
+      discipline, energy use, actuator safety, sensor robustness**. (`safe_rate` + an `--energy-penalty`
+      term are the first two; the rest need reward terms in the env.) This is the actual prize: the same
+      coach that defends "use the rod" today defends "stay within the actuator/energy envelope" on the
+      physical robot — ties to `joint_torque_limit` + the `reality_gap` sensor model (2e).
+- **Verify:** each lever raises the laggard then decays it (CPU selftest ✓); the win-rate curve (not
+      SPARC) is what keep-best + figures track; every coach intervention is a `coach` event in the trace.
+
 ### STEP 3 — re-run the decisive experiment on the STRONGER fighter (the definitive version)
 - [ ] Repeat Step 1 with the win-exchanges fighter; this is the publishable co-design result
       (does calibrated robustness pick better fighters when contact dynamics genuinely matter).

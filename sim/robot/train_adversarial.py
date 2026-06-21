@@ -49,7 +49,14 @@ class AdversarialEnv(Env):
                  sep_lo=None, sep_hi=None, approach_weight=0.0, azimuth=0.0,
                  reality_gap=False, n_worlds=64,
                  clean_weight=0.0, trade_weight=0.0, disengage_weight=0.0, striker=None,
-                 fire_shaping=0.0, rod_reach=0.30, opponent="passive", opp_infer=None, opp_params=None):
+                 fire_shaping=0.0, rod_reach=0.30, opponent="passive", opp_infer=None, opp_params=None,
+                 upright_weight=0.3, energy_penalty=0.0):
+        # REAL-ROBOT competency knobs (the Coach drives these, like it drives clean/fire):
+        #   upright_weight — BALANCE/survival anchor (was a fixed 0.3); raise it when the fighter
+        #     FALLS (survival verdict lagging) — a battlebot that lands a hit but topples loses.
+        #   energy_penalty — ENERGY/actuator-safety: penalize hinge effort; raise it when the policy
+        #     SLAMS the actuators (safe verdict lagging) — ties to the real motor/torque envelope.
+        self._upright_w = float(upright_weight); self._energy_w = float(energy_penalty)
         # OPPONENT (B): "passive" (skill curriculum — B limp, default, byte-identical) | "frozen"
         # (B driven by a FROZEN policy snapshot of OUR fighter — self-play, makes `taken` truly
         # adversarial). A frozen opponent is armed too (striker_b) so it can strike back. The
@@ -305,9 +312,10 @@ class AdversarialEnv(Env):
         trade = jnp.minimum(dealt_f, taken_f)           # mutual contact (drive DOWN)
         outward = jnp.clip(-toward / 2, 0, 1)           # moving AWAY from the opponent
         disengage = state.info["prev_dealt"] * outward  # retreat right after landing a hit
-        reward = (sparc + shaped + self._approach_w * approach + 0.3 * up + 0.1
+        energy = jnp.mean(jnp.abs(clip_a[:self._n_hinge]))      # hinge actuator effort (energy/safety)
+        reward = (sparc + shaped + self._approach_w * approach + self._upright_w * up + 0.1
                   + self._clean_w * clean - self._trade_w * trade + self._dis_w * disengage
-                  + self._fire_shaping * fire_aim - fire_cost)
+                  + self._fire_shaping * fire_aim - fire_cost - self._energy_w * energy)
         done = jnp.where(dx.xpos[self._At][2] < 0.18, 1.0, 0.0)
         # MERGE into the existing metrics dict (brax's Evaluator injects a 'reward' key —
         # replacing the dict drops it and breaks the scan-carry pytree).
@@ -416,23 +424,35 @@ def build_benchmark(bench_env, n_epis, steps, seed=20240601):
                 s, key = carry; key, sk = jax.random.split(key)
                 a, _ = inf(s.obs, sk); s = bench_env.step(s, a); alive = 1.0 - s.done
                 m = s.metrics
+                sat = jnp.mean(jnp.abs(a[:bench_env._n_hinge]) > 0.95)   # actuator saturation (slamming)
                 return (s, key), jnp.array([m["sparc"] * alive, m["dealt"] * alive, m["taken"] * alive,
                                             m["clean_hit"] * alive, m["trade"] * alive, m["fire"] * alive,
-                                            m["closing"] * alive, m["fleeing"] * alive, m["dist"] * alive, alive])
+                                            m["closing"] * alive, m["fleeing"] * alive, m["dist"] * alive,
+                                            alive, sat])
             (_, _), outs = jax.lax.scan(stp, (st, k), None, length=steps)
             return outs.sum(0), d0
-        per_ep, d0 = jax.vmap(ep)(keys)                       # per_ep:(n,10) ep-totals; d0:(n,) initial sep
-        agg = per_ep.mean(0)                                  # the 10 decomposition signals
+        per_ep, d0 = jax.vmap(ep)(keys)                       # per_ep:(n,11) ep-totals; d0:(n,) initial sep
+        agg = per_ep[:, :10].mean(0)                          # the 10 dense decomposition signals
         spe = per_ep[:, 0]                                    # per-episode SPARC sum, for range bins
         bm = lambda mask: jnp.sum(spe * mask) / jnp.maximum(jnp.sum(mask), 1.0)
         bins = jnp.array([bm(d0 < 0.6), bm((d0 >= 0.6) & (d0 < 0.9)), bm(d0 >= 0.9)])  # close/med/far SPARC
-        return jnp.concatenate([agg, bins])                  # 13 values (see BENCH_KEYS)
+        # SPARSE VERDICT — unshaped per-bout pass/fail (the honest judgment the coach CAN'T reach):
+        dealt_s, taken_s, alive_s, sat_s = per_ep[:, 1], per_ep[:, 2], per_ep[:, 9], per_ep[:, 10]
+        survived_bout = alive_s >= steps - 0.5                            # didn't fall the whole bout
+        # CLEAN WIN = out-damaged the opponent AND stayed upright. keep-best selects on THIS, so a
+        # topple-after-a-hit no longer counts as a win — the judgment now matches the goal, and the
+        # Coach's `upright` lever has the selection pressure AGREEING with it (not fighting it).
+        win = jnp.mean(((dealt_s - taken_s > 0.0) & survived_bout).astype(jnp.float32))
+        surv = jnp.mean(survived_bout.astype(jnp.float32))
+        safe = jnp.mean(((sat_s / steps) < 0.5).astype(jnp.float32))      # didn't slam actuators most of the bout
+        return jnp.concatenate([agg, bins, jnp.array([win, surv, safe])])  # 16 values (see BENCH_KEYS)
     return bench
 
 
-# names for build_benchmark()'s 13-value vector (the held-out combat decomposition + range profile)
+# build_benchmark()'s 16-value vector: dense decomposition (for the Coach) + range profile + the
+# SPARSE VERDICT (win_rate/survival_rate/safe_rate — the unshaped judgment; keep-best selects on win_rate).
 BENCH_KEYS = ["sparc", "dealt", "taken", "clean", "trade", "fire", "closing", "fleeing", "dist",
-              "alive", "sparc_close", "sparc_med", "sparc_far"]
+              "alive", "sparc_close", "sparc_med", "sparc_far", "win_rate", "survival_rate", "safe_rate"]
 
 
 def main():
@@ -459,6 +479,8 @@ def main():
                     help="+w·prev_dealt·outward_vel: reward retreat right AFTER a hit (anneal — don't make it flee)")
     ap.add_argument("--fire-shaping", type=float, default=0.0,
                     help="dense reward for firing a rod when its tip is aimed/in-range at B (anneal as hits take over)")
+    ap.add_argument("--upright-weight", type=float, default=0.3, help="BALANCE anchor weight (Coach raises it when survival lags)")
+    ap.add_argument("--energy-penalty", type=float, default=0.0, help="ENERGY/actuator-safety: penalize hinge effort (Coach raises it when slamming)")
     # Held-out BENCHMARK eval (the honest monotone-improvement curve + keep-best selection). Run
     # at every eval on a FIXED config (comparable across curriculum phases), independent of the
     # shaped training reward — reads the SPARC/dealt/taken metrics, not `reward`.
@@ -499,7 +521,8 @@ def main():
                                               approach_weight=args.approach_weight, azimuth=args.azimuth,
                                               clean_weight=args.clean_weight, trade_weight=args.trade_weight,
                                               disengage_weight=args.disengage_weight, striker=striker,
-                                              fire_shaping=args.fire_shaping,
+                                              fire_shaping=args.fire_shaping, upright_weight=args.upright_weight,
+                                              energy_penalty=args.energy_penalty,
                                               opponent=args.opponent, opp_infer=opp_infer)
     METRIC(stage="adv_env_build", t_s=f"{time.time()-t_env:.1f}",
            obs=env.observation_size, act=env.action_size, striker=int(env._has_striker),
@@ -523,7 +546,7 @@ def main():
     fjson = OUT / "fight_metrics.jsonl"; fjson.write_text("")          # F0: the six trackers
     bjson = OUT / f"{args.tag}_benchmark.jsonl"; bjson.write_text("")  # the honest monotone curve
     tm = {"first_eval": None}; last = {"r": float("nan"), "step": 0, "dealt": 0.0, "taken": 0.0}
-    best = {"bench": -1e30, "step": -1}                                # keep-best (monotone by construction)
+    best = {"win": -1.0, "sparc": -1e30, "step": -1}                   # keep-best on the SPARSE VERDICT (win-rate)
     def g(m, k): return float(m.get(f"eval/episode_{k}", 0.0))
     def save(obj, name):
         try: pickle.dump(obj, open(OUT / name, "wb"))
@@ -558,12 +581,16 @@ def main():
             bsparc, bdealt, btaken = v["sparc"], v["dealt"], v["taken"]
         except Exception as e:
             print(f"  [bench] failed: {type(e).__name__}: {e}", flush=True); return
-        bratio = bdealt / max(btaken, 1e-6); improved = bsparc > best["bench"]
+        bratio = bdealt / max(btaken, 1e-6)
+        bwin = v["win_rate"]                                  # the SPARSE VERDICT (unshaped) — keep-best on THIS
+        improved = bwin > best["win"]
         if improved:
-            best.update(bench=bsparc, step=step); save(params, f"{args.tag}_best.pkl")
-        rec = dict(step=step, cum_step=args.cum_base + step, bench_sparc=round(bsparc, 3),
-                   bench_dealt=round(bdealt, 4), bench_taken=round(btaken, 4), bench_ratio=round(bratio, 3),
-                   best=round(best["bench"], 3), improved=int(improved),
+            best.update(win=bwin, sparc=bsparc, step=step); save(params, f"{args.tag}_best.pkl")
+        rec = dict(step=step, cum_step=args.cum_base + step,
+                   win_rate=round(bwin, 4), survival_rate=round(v["survival_rate"], 4),
+                   safe_rate=round(v["safe_rate"], 4), best=round(best["win"], 4), improved=int(improved),
+                   bench_sparc=round(bsparc, 3), bench_dealt=round(bdealt, 4), bench_taken=round(btaken, 4),
+                   bench_ratio=round(bratio, 3),
                    clean=round(v["clean"], 4), trade=round(v["trade"], 4), fire=round(v["fire"], 3),
                    closing=round(v["closing"], 3), fleeing=round(v["fleeing"], 3),
                    dist=round(v["dist"], 2), alive=round(v["alive"], 1),
@@ -572,13 +599,14 @@ def main():
         open(bjson, "a").write(json.dumps(rec) + "\n")
         _ke.emit_metric("benchmark", **rec)
         json.dump(dict(tag=args.tag, cum_step=args.cum_base + step, wall_s=round(time.time()-t0, 0),
-                       best_bench=round(best["bench"], 3), best_step=best["step"],
-                       last_bench=round(bsparc, 3), last_ratio=round(bratio, 3)),
+                       best_bench=round(best["win"], 4), best_win=round(best["win"], 4),
+                       best_sparc=round(best["sparc"], 3), best_step=best["step"],
+                       last_win=round(bwin, 4), last_bench=round(bsparc, 3), last_ratio=round(bratio, 3)),
                   open(OUT / f"{args.tag}_state.json", "w"))
-        print(f"  [bench] step {step:>9,} sparc {bsparc:7.2f} ratio {bratio:.2f} "
-              f"clean {v['clean']:.3f} trade {v['trade']:.3f} fire {v['fire']:.2f} "
-              f"sparc[c/m/f] {v['sparc_close']:.1f}/{v['sparc_med']:.1f}/{v['sparc_far']:.1f} | "
-              f"best {best['bench']:7.2f}{'  *NEW-BEST*' if improved else ''}", flush=True)
+        print(f"  [bench] step {step:>9,} WIN {bwin:.2f} surv {v['survival_rate']:.2f} safe {v['safe_rate']:.2f} | "
+              f"sparc {bsparc:6.2f} ratio {bratio:.2f} fire {v['fire']:.2f} "
+              f"sparc[c/m/f] {v['sparc_close']:.0f}/{v['sparc_med']:.0f}/{v['sparc_far']:.0f} | "
+              f"best-WIN {best['win']:.2f}{'  *NEW-BEST*' if improved else ''}", flush=True)
     ppo.train(environment=env, num_timesteps=args.steps, num_evals=n_eval,
               episode_length=300, num_envs=args.envs, batch_size=args.batch,
               num_minibatches=args.minibatches, unroll_length=args.unroll, num_updates_per_batch=args.updates,
@@ -593,11 +621,11 @@ def main():
            throughput=f"{last['step']/max(train_s,1e-6):.0f}",
            final_sparc=f"{last['r']:.2f}", dealt=f"{last['dealt']:.4f}", taken=f"{last['taken']:.4f}",
            dealt_taken_ratio=f"{ratio:.2f}", competent=int(competent), warm=int(restore is not None),
-           best_bench=f"{best['bench']:.2f}" if bench is not None else "off", best_step=best["step"])
+           best_win=f"{best['win']:.3f}" if bench is not None else "off", best_step=best["step"])
     print(f"FIGHTER: final dealt {last['dealt']:.4f} vs taken {last['taken']:.4f} (ratio {ratio:.2f}); "
-          f"best benchmark SPARC {best['bench']:.2f} @ step {best['step']:,} "
-          f"(-> {args.tag}_best.pkl). competent = {competent}. Decomposition, not the scalar, "
-          f"is the verdict (a survivor has dealt≈0).", flush=True)
+          f"best held-out WIN-RATE {best['win']:.3f} (sparc {best['sparc']:.2f}) @ step {best['step']:,} "
+          f"(-> {args.tag}_best.pkl). The sparse verdict (win-rate) is the judgment; the dense "
+          f"decomposition is the coach's signal.", flush=True)
 
 
 if __name__ == "__main__":

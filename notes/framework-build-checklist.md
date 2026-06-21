@@ -163,6 +163,51 @@ The implementation is itself a multi-stage run, so it gets the same resume/backu
       resumable, across machines`.
 - [ ] **Checkpoint:** `make fw-snapshot PHASE=8`; record results in `notes/codesign-fighter-report.md`.
 
+## Phase 9 — the adaptive Coach (DONE; `arena/coach.py`)
+Verified competency controller: sparse-verdict judgment (win/survival/safe) + keep-best-on-win; reward
+levers (clean/trade/fire/approach) + balance/energy competency levers + a curriculum lever (sep_hi) +
+adaptive opponent difficulty. `make fw-snapshot PHASE=9` taken. (Roadmap for it: win-exchanges §2·C.)
+
+---
+
+## ROADMAP — the motorloop-specific spine (DONE 2026-06-21; Phases 10–12 verified + snapshotted)
+The generic top-of-list items (metrics/batch/DR/coaching) were already built. The highest *new* lift
+was the unique motorloop move: **connect the robot policy down to the verified component IP** (FOC/ADC/
+encoder RTL), which had floated free of the robot sim. All three carried out (`make arena-prove`):
+`arena/backend.py` (Actuator contract), `arena/rtl_gate.py` (FOC-envelope gate + RTL cosim hook),
+`arena/manifest.py` (reproducibility + episode recorder + regression). Sequence (all `[x]`):
+
+### Phase 10 — Backend/actuator CONTRACT (the architectural enabler, #2)
+- [ ] Define a small `Backend` protocol — `reset / step / observe / act / metrics` (+ `render`) — so
+      the actuator/physics layer is SWAPPABLE behind the kernel. Refactor `AdversarialEnv`'s MJX core
+      behind it (small, ~no behavior change; the RL inner loop keeps the fast MJX-ideal actuator at
+      8192 envs).
+- **Verify:** the MJX backend passes byte-identical parity (`test_parity`) behind the contract; a toy
+      stub backend plugs into the same `train_adversarial`/`arena` harness. `PROVEN: backend contract —
+      MJX behind it unchanged; a second backend plugs in`.
+
+### Phase 11 — RTL-cosim VALIDATION backend (THE differentiator, #6)
+- [ ] A **multi-fidelity** backend: train on MJX-ideal (fast), then run a trained policy's actuator-
+      command trajectory through the real **FOC/ADC RTL cosim** (cocotb/Verilator) as a GATE — does the
+      controller actually deliver the demanded torque under current-limit + back-EMF + ADC latency +
+      encoder quantization + PWM saturation? Reuse `multifidelity.py` + `reality_gap` + `motors.py` +
+      `joint_torque_limit`; this grounds the Coach's `actuator-safety`/`energy` competency and the
+      verdict's `safe_rate` in VERIFIED SILICON, not a toy clamp. (Same "fast for learning, real for
+      judgment" split we used for rewards — now for the actuator.)
+- **Verify:** a policy that respects the idealized limit but VIOLATES the real controller's envelope is
+      caught by the RTL gate (fails `safe`); one that respects both passes. `PROVEN: co-design realized —
+      robot behavior traced to the verified FOC/ADC IP`.
+
+### Phase 12 — Episode/manifest CONTRACT (cheap + foundational, #1; do alongside 10–11)
+- [ ] Extend the trace spine: optionally record full **per-step obs/action/reward/safety-events** for a
+      run (replayable episodes), and write a **reproducibility manifest** per run — git commit, seed,
+      config (Stage), robot model (`robot.toml` hash), policy checkpoint, backend, machine profile.
+- **Verify:** a recorded run REPLAYS bit-identically from its manifest; `run.regression(other)` diffs two
+      runs' metrics. `PROVEN: runs are regression evidence, not demos`.
+
+> Explicitly DEFERRED (agree with the generic ranking's tail): high-fidelity rendering, URDF import
+> adapters, Drake-style optimization/co-design — later, once the actuator-to-component spine is real.
+
 ---
 
 ## Done-when

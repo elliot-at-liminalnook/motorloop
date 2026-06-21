@@ -46,7 +46,7 @@ class Schedule:
 class Curriculum(Schedule):
     name = "curriculum"
 
-    def __init__(self, steps_per_phase=4_000_000, tol=2.0, retries=1, phases=None):
+    def __init__(self, steps_per_phase=4_000_000, tol=0.05, retries=1, phases=None):  # tol = win-rate scale
         ph, _ = _curriculum_phases() if phases is None else (phases, None)
         self.phases = ph
         self.steps = steps_per_phase
@@ -80,7 +80,7 @@ class Curriculum(Schedule):
 class League(Schedule):
     name = "league"
 
-    def __init__(self, seed, rounds=12, round_steps=10_000_000, tol=3.0, rw=None):
+    def __init__(self, seed, rounds=12, round_steps=10_000_000, tol=0.05, rw=None):  # tol = win-rate scale
         self.seed = str(seed)
         self.rounds = rounds
         self.steps = round_steps
@@ -95,7 +95,11 @@ class League(Schedule):
             return None
         if not state.hof:
             state.hof = [self.seed]                             # seed the Hall of Fame
-        pool = first_quarter(state.hof)
+        # EXTENSION 1: the Coach's opp_difficulty grows the sampling window from the first quarter
+        # (oldest/easiest — the anti-cycling floor) toward the whole HoF (recent/toughest snapshots).
+        d = float(state.extra.get("opp_difficulty", 0.25))
+        window = max(1, int((0.25 + 0.75 * d) * len(state.hof)))
+        pool = state.hof[:window]
         opp = pool[state.round % len(pool)]                     # deterministic (resume-safe) pick
         return Stage.from_league(state.round, opp, self.seed, self.steps, self.rw)
 

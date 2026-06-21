@@ -154,7 +154,7 @@ fw-snapshot:  ## arena: verify-gated tar snapshot of a phase (PHASE=N), flips it
 fw-restore:  ## arena: restore arena/ from a snapshot (SNAP=sim/build/fw-snapshots/...tgz)
 	tar xzf $(SNAP) -C sim/robot && echo "restored arena from $(SNAP)"
 arena-prove:  ## arena: CPU end-to-end self-test of the whole framework (every layer)
-	cd sim/robot && for m in trace kernel_emit stage engine runner run cli pod_smoke coach; do $(FW_MJX_PY) -m arena.$$m --selftest || exit 1; done
+	cd sim/robot && for m in trace kernel_emit stage engine runner run cli pod_smoke coach backend rtl_gate manifest; do $(FW_MJX_PY) -m arena.$$m --selftest || exit 1; done
 gpu-arena:  ## arena: the unified run — skill curriculum THEN self-play, seeded from the skill fighter
 	cd sim/robot && python3 -m arena.cli pipeline --seed $${CODESIGN_OUT:-/root/proj/out}/curriculum_best.pkl \
 	  --runner local --lean --envs 8192 --steps-per-phase 10000000 --round-steps 10000000 --name striker-arena

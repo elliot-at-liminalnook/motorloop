@@ -40,6 +40,12 @@ PHASES = [
      "cd sim/robot && $MJX_PY -m arena.pod_smoke --selftest"),
     (9, "Coach — automatic competency controller (adaptive reward, replaces brittle weights)",
      "cd sim/robot && $MJX_PY -m arena.coach --selftest"),
+    (10, "Backend/actuator CONTRACT (Ideal + FOC envelope; the swappable-actuator enabler)",
+     "cd sim/robot && $MJX_PY -m arena.backend --selftest"),
+    (11, "RTL/component-envelope VALIDATION gate (the differentiator: behavior -> verified IP)",
+     "cd sim/robot && $MJX_PY -m arena.rtl_gate --selftest"),
+    (12, "Episode/MANIFEST contract (reproducibility + regression evidence)",
+     "cd sim/robot && $MJX_PY -m arena.manifest --selftest"),
 ]
 
 

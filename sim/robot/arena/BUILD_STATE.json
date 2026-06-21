@@ -87,8 +87,35 @@
       "title": "Coach \u2014 automatic competency controller (adaptive reward, replaces brittle weights)",
       "verify_cmd": "cd sim/robot && $MJX_PY -m arena.coach --selftest",
       "status": "verified",
-      "snapshot": "sim/build/fw-snapshots/phase9-20260621-120608.tgz",
-      "ts": "2026-06-21T12:06:08",
+      "snapshot": "sim/build/fw-snapshots/phase9-20260621-134741.tgz",
+      "ts": "2026-06-21T13:47:41",
+      "notes": null
+    },
+    {
+      "phase": 10,
+      "title": "Backend/actuator CONTRACT (Ideal + FOC envelope; the swappable-actuator enabler)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.backend --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase10-20260621-142903.tgz",
+      "ts": "2026-06-21T14:29:03",
+      "notes": null
+    },
+    {
+      "phase": 11,
+      "title": "RTL/component-envelope VALIDATION gate (the differentiator: behavior -> verified IP)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.rtl_gate --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase11-20260621-142904.tgz",
+      "ts": "2026-06-21T14:29:04",
+      "notes": null
+    },
+    {
+      "phase": 12,
+      "title": "Episode/MANIFEST contract (reproducibility + regression evidence)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.manifest --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase12-20260621-142904.tgz",
+      "ts": "2026-06-21T14:29:04",
       "notes": null
     }
   ]

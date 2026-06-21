@@ -28,6 +28,8 @@ class Stage:
     trade: float = 0.0
     disengage: float = 0.0
     fire: float = 0.0
+    upright: float = 0.3       # BALANCE anchor (Coach competency lever — raise when survival lags)
+    energy_penalty: float = 0.0  # ENERGY/actuator-safety (Coach competency lever — raise when slamming)
     steps: int = 4_000_000
     opponent: str = "passive"          # passive | frozen
     opp_ckpt: str | None = None
@@ -46,7 +48,8 @@ class Stage:
               "--approach-weight", str(self.approach), "--azimuth", str(self.azimuth),
               "--shaping", str(self.shaping), "--clean-weight", str(self.clean),
               "--trade-weight", str(self.trade), "--disengage-weight", str(self.disengage),
-              "--fire-shaping", str(self.fire),
+              "--fire-shaping", str(self.fire), "--upright-weight", str(self.upright),
+              "--energy-penalty", str(self.energy_penalty),
               "--bench-sep-lo", str(self.bench["sep_lo"]), "--bench-sep-hi", str(self.bench["sep_hi"]),
               "--bench-az", str(self.bench["az"]), "--bench-epis", str(self.bench["epis"]),
               "--bench-steps", str(self.bench["steps"])]
