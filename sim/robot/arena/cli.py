@@ -23,10 +23,19 @@ from arena.coach import Coach                              # noqa: E402
 
 
 def build_schedule(args):
-    cur = Curriculum(steps_per_phase=args.steps_per_phase)
+    phases = None
+    if args.curriculum_phases > 0:                          # truncate the curriculum to the first N phases
+        from arena.schedule import _curriculum_phases
+        phases = _curriculum_phases()[0][:args.curriculum_phases]   # e.g. =1 -> just strk0, a fast strike primer
+    cur = Curriculum(steps_per_phase=args.steps_per_phase, phases=phases)
     lg = League(seed=args.seed, rounds=args.rounds, round_steps=args.round_steps)
-    base = cur if args.cmd == "curriculum" else lg if args.cmd == "league" else Pipeline([cur, lg])
-    return Coach.default(base) if args.coach else base     # --coach: auto-adapt reward weights to laggards
+    if args.cmd == "curriculum":
+        return Coach.default(cur) if args.coach else cur
+    if args.cmd == "league":
+        return Coach.default(lg) if args.coach else lg
+    # pipeline: with --coach, coach the LEAGUE ONLY (self-play has an EVOLVING opponent → the lagging
+    # competency shifts, so adaptation pays off). The fixed-difficulty primer stays static (uncoached).
+    return Pipeline([cur, Coach.default(lg) if args.coach else lg])
 
 
 def build_runner(args):
@@ -51,15 +60,41 @@ def make_parser():
     ap.add_argument("--batch", type=int, default=0)
     ap.add_argument("--lean", action="store_true")
     ap.add_argument("--tiny", action="store_true")
-    ap.add_argument("--coach", action="store_true", help="auto-adapt reward weights to lagging competencies")
+    ap.add_argument("--coach", action="store_true",
+                    help="auto-adapt reward weights to lagging competencies (in a pipeline: LEAGUE only — the primer stays static)")
     ap.add_argument("--name", default="arena-run")
     ap.add_argument("--rundir", default=None)
     ap.add_argument("--kernel", default=None)
+    ap.add_argument("--curriculum-phases", type=int, default=0,
+                    help="truncate the curriculum to the first N phases (0=all; 1=just the strk0 strike primer → fast to self-play)")
+    ap.add_argument("--no-preflight", action="store_true",
+                    help="skip the physical-feasibility pre-flight gate (not recommended)")
+    ap.add_argument("--fall-threshold", type=float, default=0.09,
+                    help="torso-z fall threshold the kernel uses — the pre-flight checks the body can stand above it")
     return ap
+
+
+def preflight(args):
+    """Physical-feasibility gate: refuse to spend GPU on a design the reward demands but physics forbids.
+    Skipped for the stub kernel (selftest) and on --no-preflight; a tooling hiccup degrades to a WARNING."""
+    if args.no_preflight or args.kernel:        # --kernel set == stub/offline test, no real robot model
+        return
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from gen_robot_mjcf import load_spec
+        from arena.feasibility import preflight_gate
+        spec = load_spec(Path(__file__).resolve().parents[1] / "robot.toml")
+        preflight_gate(spec, fall_threshold=args.fall_threshold)
+    except RuntimeError as e:                    # INFEASIBLE — do not waste the GPU
+        print(f"\narena: ABORTING before launch — {e}", flush=True)
+        sys.exit(2)
+    except Exception as e:                       # mujoco/tooling glitch: warn, don't block a real run
+        print(f"arena: pre-flight skipped (probe error: {e})", flush=True)
 
 
 def main(argv=None):
     args = make_parser().parse_args(argv)
+    preflight(args)                              # physics gate BEFORE any (paid) training
     run = Run(args.name, build_schedule(args), build_runner(args), rundir=args.rundir)
     run.go()
     png = run.figure()

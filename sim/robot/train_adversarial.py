@@ -316,7 +316,11 @@ class AdversarialEnv(Env):
         reward = (sparc + shaped + self._approach_w * approach + self._upright_w * up + 0.1
                   + self._clean_w * clean - self._trade_w * trade + self._dis_w * disengage
                   + self._fire_shaping * fire_aim - fire_cost - self._energy_w * energy)
-        done = jnp.where(dx.xpos[self._At][2] < 0.18, 1.0, 0.0)
+        # FALL = torso below 0.09 m. The 3.5 kg / gear-12 body holds a stable controllable stance at
+        # torso-z ~0.15 (crouch ~0.11), measured; 0.09 sits below the crouch so dodging/crouching
+        # survives but a real topple (torso ~0.05-0.07) is caught. The old 0.18 sat ABOVE this body's
+        # max standing height (0.185, singular straight-leg) → survival was geometrically impossible.
+        done = jnp.where(dx.xpos[self._At][2] < 0.09, 1.0, 0.0)
         # MERGE into the existing metrics dict (brax's Evaluator injects a 'reward' key —
         # replacing the dict drops it and breaks the scan-carry pytree).
         metrics = {**state.metrics, "dealt": dealt_f, "taken": taken_f, "closing": clos,

@@ -117,6 +117,15 @@
       "snapshot": "sim/build/fw-snapshots/phase12-20260621-142904.tgz",
       "ts": "2026-06-21T14:29:04",
       "notes": null
+    },
+    {
+      "phase": 13,
+      "title": "Physical-feasibility PRE-FLIGHT gate (catch infeasible designs in seconds, pre-GPU)",
+      "verify_cmd": "cd sim/robot && $MJX_PY -m arena.feasibility --selftest",
+      "status": "verified",
+      "snapshot": "sim/build/fw-snapshots/phase13-20260621-160311.tgz",
+      "ts": "2026-06-21T16:03:11",
+      "notes": null
     }
   ]
 }

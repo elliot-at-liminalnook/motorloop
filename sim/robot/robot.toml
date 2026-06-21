@@ -11,8 +11,11 @@ name = "paramquad"
 
 [torso]
 half_extents = [0.19, 0.05, 0.05]   # m, decided (~Go2 trunk)
-mass = 6.0                          # kg, assumed (~Go2-class trunk)
-spawn_height = 0.34                 # m, decided (legs-under-body stance)
+mass = 3.5                          # kg, decided (lightened 6.0→3.5 for torque-to-weight: the
+                                    # ±1.49 N·m db42s03 could not hold 11.75 kg in a controllable
+                                    # bent-knee stance — needed ~3× more τ/weight. See gear=12 below.
+spawn_height = 0.22                 # m, decided (gentle drop onto the ~0.15 m stable stand of the
+                                    # 3.5 kg/gear-12 body; was 0.34 for the taller-spawning 6 kg build)
 
 [leg_defaults]                      # mammalian 3-DOF leg (abduction, hip-flex, knee)
 thigh_len = 0.21                    # m, datasheet-ish (Go2 thigh)
@@ -32,7 +35,10 @@ joint_stiffness = 0.0               # N·m/rad parallel-elastic spring (0 = none
 [actuator]
 motor = "db42s03"                   # ref into sim/tests/motors.py (the torque envelope)
 peak_factor = 4.0                   # burst current multiple, decided
-gear = 6.0                          # transmission ratio, decided
+gear = 12.0                         # transmission ratio, decided (6→12: 2× joint torque, ½ leg
+                                    # speed). With torso 3.5 kg → ~3.4× τ/weight vs the old build,
+                                    # clearing the measured ~3× needed to stand controllably.
+                                    # Striker speed unaffected (pneumatic, not geared).
 
 [striker]                           # pneumatic fast-extend STEEL ROD weapon (off by default → body
                                     # byte-identical). Enabled per-build (AdversarialEnv striker=True);
@@ -64,8 +70,9 @@ name = "RR"
 pos = [-0.19, -0.11, 0.0]
 
 [domain_randomization]              # ranges trained over so part-swaps need no retrain
-torso_mass = [4.0, 8.0]
+torso_mass = [2.5, 4.5]             # brackets the new 3.5 kg center (was [4,8] for the 6 kg build)
 thigh_len = [0.18, 0.24]
 calf_len = [0.18, 0.24]
-gear = [4.0, 9.0]
+gear = [10.0, 15.0]                 # brackets the new gear=12 center (was [4,9]); keeps DR off the
+                                    # under-torqued regime that made the old body unable to stand
 joint_stiffness = [0.0, 25.0]

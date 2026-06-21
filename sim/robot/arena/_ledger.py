@@ -46,6 +46,8 @@ PHASES = [
      "cd sim/robot && $MJX_PY -m arena.rtl_gate --selftest"),
     (12, "Episode/MANIFEST contract (reproducibility + regression evidence)",
      "cd sim/robot && $MJX_PY -m arena.manifest --selftest"),
+    (13, "Physical-feasibility PRE-FLIGHT gate (catch infeasible designs in seconds, pre-GPU)",
+     "cd sim/robot && $MJX_PY -m arena.feasibility --selftest"),
 ]
 
 
