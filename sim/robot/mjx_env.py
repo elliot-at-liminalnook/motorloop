@@ -9,6 +9,8 @@ the design vector (Phase 2 universal policy) when `design` is passed.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
 import mujoco
@@ -16,12 +18,35 @@ from mujoco import mjx
 from brax.envs.base import Env, State
 
 
+def _stance_values():
+    try:
+        from gen_robot_mjcf import load_spec
+        ld = load_spec(Path(__file__).resolve().parent / "robot.toml").get("leg_defaults", {})
+        return float(ld.get("stand_abd", 0.0)), float(ld.get("stand_flex", -0.4)), float(ld.get("stand_knee", -1.1))
+    except Exception:
+        return 0.0, -0.4, -1.1
+
+
+def _apply_stance(m: mujoco.MjModel, q0):
+    stand_abd, stand_flex, stand_knee = _stance_values()
+    for j in range(m.njnt):
+        name = mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_JOINT, j) or ""
+        adr = int(m.jnt_qposadr[j])
+        if name.endswith("_abd"):
+            q0 = q0.at[adr].set(stand_abd)
+        elif name.endswith("_flex"):
+            q0 = q0.at[adr].set(stand_flex)
+        elif name.endswith("_knee"):
+            q0 = q0.at[adr].set(stand_knee)
+    return q0
+
+
 class CodesignEnv(Env):
     def __init__(self, xml: str, frame_skip: int = 5, design: jnp.ndarray | None = None):
         m = mujoco.MjModel.from_xml_string(xml)
         self._mx = mjx.put_model(m)
         self._nu = int(m.nu)
-        self._q0 = jnp.array(m.qpos0)
+        self._q0 = _apply_stance(m, jnp.array(m.qpos0))
         self._fs = frame_skip
         self._design = None if design is None else jnp.asarray(design)
         d = 0 if self._design is None else int(self._design.shape[0])
@@ -60,7 +85,7 @@ class CodesignEnv(Env):
         up = 1.0 - 2.0 * (dx.qpos[4] ** 2 + dx.qpos[5] ** 2)     # torso upright
         fwd = dx.qvel[0]                                          # forward progress
         reward = 1.0 + up + fwd - 0.001 * jnp.sum(action ** 2)
-        done = jnp.where(dx.qpos[2] < 0.18, 1.0, 0.0)            # fell
+        done = jnp.where(dx.qpos[2] < 0.10, 1.0, 0.0)            # fell
         return state.replace(pipeline_state=dx, obs=self._obs(dx),
                              reward=reward, done=done)
 
@@ -91,7 +116,7 @@ class UniversalEnv(Env):
         m = mujoco.MjModel.from_xml_string(xml)
         self._mx = mjx.put_model(m)
         self._nu = int(m.nu)
-        self._q0 = jnp.array(m.qpos0)
+        self._q0 = _apply_stance(m, jnp.array(m.qpos0))
         self._fs = frame_skip
         self._fixed = None if fixed_design is None else jnp.asarray(fixed_design)
         self._obs_size = 2 * self._nu + 11 + DESIGN_DIM
@@ -164,6 +189,6 @@ class UniversalEnv(Env):
         dx = jax.lax.fori_loop(0, self._fs, lambda i, d: mjx.step(mxd, d), dx)
         up = 1.0 - 2.0 * (dx.qpos[4] ** 2 + dx.qpos[5] ** 2)
         reward = 1.0 + up + dx.qvel[0] - 0.001 * jnp.sum(action ** 2)
-        done = jnp.where(dx.qpos[2] < 0.18, 1.0, 0.0)
+        done = jnp.where(dx.qpos[2] < 0.10, 1.0, 0.0)
         return state.replace(pipeline_state=dx, obs=self._obs(dx, design),
                              reward=reward, done=done)

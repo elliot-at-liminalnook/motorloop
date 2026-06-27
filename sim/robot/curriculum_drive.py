@@ -44,19 +44,22 @@ STATE = OUT / "curriculum_state.json"
 # passive here; moving/attacking (D/E) + self-play (F) extend this once the scripted opponent/HoF
 # are wired.
 PHASES = [
-    dict(name="strk0", sep_lo=0.20, sep_hi=0.35, approach=1.0, azimuth=0.4, shaping=1.0,
-         clean=2.0, trade=0.5, disengage=0.0, fire=1.0),    # teach FIRING in range + re-balance
-    dict(name="cval", sep_lo=0.30, sep_hi=0.45, approach=2.0, azimuth=0.6, shaping=1.0,
+    dict(name="strk0", sep_lo=0.20, sep_hi=0.35, approach=4.0, azimuth=0.3, shaping=1.2,
+         clean=2.0, trade=0.5, disengage=0.0, fire=1.0),    # FORCE engagement: high approach (anti-flee),
+                                                            # near-facing spawn, strong close→strike shaping
+    dict(name="cval", sep_lo=0.30, sep_hi=0.45, approach=4.0, azimuth=0.6, shaping=1.0,
          clean=2.0, trade=1.0, disengage=0.0, fire=0.8),
-    dict(name="c1", sep_lo=0.40, sep_hi=0.70, approach=2.0, azimuth=1.2, shaping=0.8,
+    dict(name="c1", sep_lo=0.40, sep_hi=0.70, approach=3.5, azimuth=1.2, shaping=0.8,
          clean=3.0, trade=2.0, disengage=0.5, fire=0.6),
     dict(name="c2", sep_lo=0.40, sep_hi=1.00, approach=1.5, azimuth=2.0, shaping=0.6,
          clean=4.0, trade=3.0, disengage=1.0, fire=0.4),
     dict(name="c3", sep_lo=0.40, sep_hi=1.40, approach=1.0, azimuth=3.14159, shaping=0.4,
          clean=5.0, trade=3.0, disengage=1.0, fire=0.2),
 ]
-# FIXED benchmark config (comparable across ALL phases — never changes).
-BENCH = dict(sep_lo=0.4, sep_hi=1.2, az=3.14159, epis=16, steps=200)
+# FIXED benchmark config (comparable across ALL phases — never changes). Range matched to the body's
+# engagement envelope (max reach 0.62 m, gear-12 half-speed legs): the old 0.4-1.2 m measured a range
+# this body can't close in 200 steps, so dealt read 0 even when it could strike up close. 0.25-0.7.
+BENCH = dict(sep_lo=0.25, sep_hi=0.7, az=3.14159, epis=16, steps=200)
 
 
 def load_state():
@@ -69,7 +72,9 @@ def save_state(st):
     STATE.write_text(json.dumps(st, indent=2))
 
 
-def run_phase(py, ph, warm, steps, cum_base, lean, tiny, tag_suffix="", envs=0, batch=0):
+def run_phase(py, ph, warm, steps, cum_base, lean, tiny, tag_suffix="", envs=0, batch=0,
+              keep_metric="win", min_keep_dealt=0.0, max_keep_early_dmg=1.0,
+              flee_penalty=0.0, close_bonus=0.0, close_radius=0.45, damage_bonus=0.0):
     """Run one training phase as a subprocess; return its {tag}_state.json dict (or None on failure)."""
     tag = ph["name"] + tag_suffix
     log = OUT / f"curr_{tag}.log"
@@ -85,7 +90,14 @@ def run_phase(py, ph, warm, steps, cum_base, lean, tiny, tag_suffix="", envs=0, 
            "--fire-shaping", str(ph.get("fire", 0.0)),
            "--bench-sep-lo", str(BENCH["sep_lo"]), "--bench-sep-hi", str(BENCH["sep_hi"]),
            "--bench-az", str(BENCH["az"]), "--bench-epis", str(BENCH["epis"]),
-           "--bench-steps", str(BENCH["steps"])]
+           "--bench-steps", str(BENCH["steps"]),
+           "--keep-metric", str(keep_metric),
+           "--min-keep-dealt", str(min_keep_dealt),
+           "--max-keep-early-dmg", str(max_keep_early_dmg),
+           "--flee-penalty", str(ph.get("flee_penalty", flee_penalty)),
+           "--close-bonus", str(ph.get("close_bonus", close_bonus)),
+           "--close-radius", str(ph.get("close_radius", close_radius)),
+           "--damage-bonus", str(ph.get("damage_bonus", damage_bonus))]
     if warm: cmd += ["--resume", str(warm)]
     if lean: cmd += ["--lean-contacts"]
     if tiny: cmd += ["--tiny"]
@@ -105,9 +117,25 @@ def run_phase(py, ph, warm, steps, cum_base, lean, tiny, tag_suffix="", envs=0, 
 
 
 def main():
+    global PHASES
     ap = argparse.ArgumentParser()
     ap.add_argument("--warm", default=str(OUT / "universal_ckpt.pkl"), help="phase-0 warm-start (locomotor or fighter)")
     ap.add_argument("--steps-per-phase", type=int, default=4_000_000)
+    ap.add_argument("--phases", type=int, default=0,
+                    help="run only the first N curriculum phases (0=all phases)")
+    ap.add_argument("--bench-sep-lo", type=float, default=BENCH["sep_lo"])
+    ap.add_argument("--bench-sep-hi", type=float, default=BENCH["sep_hi"])
+    ap.add_argument("--bench-az", type=float, default=BENCH["az"])
+    ap.add_argument("--bench-epis", type=int, default=BENCH["epis"])
+    ap.add_argument("--bench-steps", type=int, default=BENCH["steps"])
+    ap.add_argument("--keep-metric", choices=["win", "sparc", "ratio", "margin", "judge",
+                                              "min_margin", "min_judge"], default="win")
+    ap.add_argument("--min-keep-dealt", type=float, default=0.0)
+    ap.add_argument("--max-keep-early-dmg", type=float, default=1.0)
+    ap.add_argument("--flee-penalty", type=float, default=float(os.environ.get("FLEE_PENALTY", "0")))
+    ap.add_argument("--close-bonus", type=float, default=float(os.environ.get("CLOSE_BONUS", "0")))
+    ap.add_argument("--close-radius", type=float, default=float(os.environ.get("CLOSE_RADIUS", "0.45")))
+    ap.add_argument("--damage-bonus", type=float, default=float(os.environ.get("DAMAGE_BONUS", "0")))
     ap.add_argument("--envs", type=int, default=0, help="num_envs per phase (0=train_adversarial default; 8192 saturates an A100)")
     ap.add_argument("--batch", type=int, default=0, help="PPO batch_size per phase (0=default)")
     ap.add_argument("--tol", type=float, default=2.0, help="benchmark regression tolerance before rollback")
@@ -117,10 +145,15 @@ def main():
     ap.add_argument("--extend", type=int, default=0, help="train the FINAL phase this many more steps, from global best")
     ap.add_argument("--tiny", action="store_true")
     args = ap.parse_args()
+    if args.phases > 0:
+        PHASES = PHASES[:args.phases]
+    BENCH.update(sep_lo=args.bench_sep_lo, sep_hi=args.bench_sep_hi, az=args.bench_az,
+                 epis=args.bench_epis, steps=args.bench_steps)
     py = sys.executable
     if args.tiny:
         args.steps_per_phase = 8_000
-        global PHASES; PHASES = PHASES[:2]
+        PHASES = PHASES[:2]
+        BENCH.update(epis=min(BENCH["epis"], 4), steps=min(BENCH["steps"], 40))
 
     st = load_state() if (args.resume or args.extend) else dict(
         completed=[], global_best_ckpt=None, global_best_bench=-1e30, cum_step=0)
@@ -140,7 +173,14 @@ def main():
                 res = run_phase(py, ph_try, st["global_best_ckpt"], args.steps_per_phase,
                                 st["cum_step"], args.lean_contacts, args.tiny,
                                 tag_suffix="" if attempt == 0 else f"_r{attempt}",
-                                envs=args.envs, batch=args.batch)
+                                envs=args.envs, batch=args.batch,
+                                keep_metric=args.keep_metric,
+                                min_keep_dealt=args.min_keep_dealt,
+                                max_keep_early_dmg=args.max_keep_early_dmg,
+                                flee_penalty=args.flee_penalty,
+                                close_bonus=args.close_bonus,
+                                close_radius=args.close_radius,
+                                damage_bonus=args.damage_bonus)
                 if res is None:
                     save_state(st); print("DRIVER STOP: phase subprocess failed.", flush=True); return
                 st["cum_step"] = res["cum_step"]
@@ -170,7 +210,14 @@ def main():
         ph = {**PHASES[-1]}
         res = run_phase(py, ph, st["global_best_ckpt"], args.extend, st["cum_step"],
                         args.lean_contacts, args.tiny, tag_suffix="_ext",
-                        envs=args.envs, batch=args.batch)
+                        envs=args.envs, batch=args.batch,
+                        keep_metric=args.keep_metric,
+                        min_keep_dealt=args.min_keep_dealt,
+                        max_keep_early_dmg=args.max_keep_early_dmg,
+                        flee_penalty=args.flee_penalty,
+                        close_bonus=args.close_bonus,
+                        close_radius=args.close_radius,
+                        damage_bonus=args.damage_bonus)
         if res is not None:
             st["cum_step"] = res["cum_step"]
             if res["best_bench"] > st["global_best_bench"]:

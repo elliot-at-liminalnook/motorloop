@@ -1,0 +1,270 @@
+{
+  "units": "meters_assumed",
+  "source": "Test_Mesh_Leg_6-23-2026.gltf",
+  "status": "first_pass_inferred_from_geometry_and_render",
+  "bodies": {
+    "red_worm_shaft": {
+      "mass_kg": 0.05,
+      "friction": 0.45,
+      "mesh_names": [
+        "Mesh_9"
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ]
+    },
+    "red_worm_wheel": {
+      "mass_kg": 0.08,
+      "friction": 0.5,
+      "mesh_names": [
+        "Mesh_10"
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ]
+    },
+    "drive_base_linkage": {
+      "mass_kg": 0.35,
+      "friction": 0.65,
+      "proxy": "rigid_proxy_drive_base_linkage",
+      "mesh_names": [
+        "Mesh_11",
+        "Mesh_12",
+        "Mesh_13"
+      ]
+    },
+    "held_upper_carrier_black_rod": {
+      "mass_kg": 0.2,
+      "friction": 0.68,
+      "proxy": "rigid_proxy_held_upper_carrier_black_rod",
+      "mesh_names": [
+        "Cong_3[1]",
+        "Cong_3[1].001",
+        "Mesh_0",
+        "Mesh_1",
+        "Mesh_14",
+        "Mesh_15",
+        "Mesh_16",
+        "Mesh_17",
+        "Mesh_18",
+        "Mesh_19",
+        "Mesh_2",
+        "Mesh_27",
+        "Mesh_28",
+        "Mesh_29",
+        "Mesh_3",
+        "NONE",
+        "NONE.001"
+      ],
+      "status": "held_fixed_by_black_stabilizer_rod"
+    },
+    "purple_hinge_link": {
+      "mass_kg": 0.08,
+      "friction": 0.7,
+      "proxy": "rigid_proxy_purple_hinge_link",
+      "mesh_names": [
+        "Mesh_20",
+        "Mesh_21",
+        "Mesh_26",
+        "Mesh_4",
+        "Mesh_5",
+        "Mesh_6",
+        "Mesh_7"
+      ]
+    },
+    "yellow_piston_rod": {
+      "mass_kg": 0.1,
+      "friction": 0.74,
+      "proxy": "rigid_proxy_yellow_piston_rod",
+      "mesh_names": [
+        "Mesh_8"
+      ],
+      "status": "moves_straight_up_and_down_in_line_inside_fixed_carrier"
+    }
+  },
+  "joints": {
+    "red_worm_shaft_spin": {
+      "type": "revolute_visual",
+      "parent": "drive_base_linkage",
+      "child": "red_worm_shaft",
+      "origin_xyz": [
+        -0.21850000321865082,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "note": "fast worm shaft spin"
+    },
+    "red_worm_wheel_axis": {
+      "type": "revolute_visual",
+      "parent": "drive_base_linkage",
+      "child": "red_worm_wheel",
+      "origin_xyz": [
+        -0.17880000174045563,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "slow worm-wheel rotation driven visually by red_worm_shaft_spin"
+    },
+    "black_rod_hold": {
+      "type": "fixed_visual",
+      "parent": "drive_base_linkage",
+      "child": "held_upper_carrier_black_rod",
+      "origin_xyz": [
+        -0.02500000037252903,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "limit_deg": [
+        0,
+        0
+      ],
+      "note": "black rod holds the distal purple carrier fixed in this approximation"
+    },
+    "purple_leg_slide": {
+      "type": "prismatic",
+      "parent": "held_upper_carrier_black_rod",
+      "child": "purple_hinge_link",
+      "origin_xyz": [
+        0.0,
+        -0.07500000298023224,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "travel_m": [
+        -0.04,
+        0.04
+      ],
+      "note": "hip motor drives the purple perforated leg straight up/down along the stabilizer rod; the knee is a rigid bend, not a joint"
+    },
+    "yellow_rod_slide": {
+      "type": "prismatic",
+      "parent": "held_upper_carrier_black_rod",
+      "child": "yellow_piston_rod",
+      "origin_xyz": [
+        0.0,
+        -0.2280000001192093,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "travel_m": [
+        -0.04,
+        0.04
+      ],
+      "status": "piston moves straight up/down in-line inside the fixed distal carrier, together with the purple leg"
+    },
+    "drive_gear_axis": {
+      "type": "pin_visual",
+      "origin_xyz": [
+        -0.17880000174045563,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ]
+    },
+    "fixed_distal_carrier_pin": {
+      "type": "pin_visual",
+      "origin_xyz": [
+        -0.016699999570846558,
+        -0.2409999966621399,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "status": "held by black stabilizer rod"
+    },
+    "yellow_rod_tip_reference": {
+      "type": "pin_visual",
+      "origin_xyz": [
+        0.0,
+        -0.43299999833106995,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "actuators": {
+    "red_worm_drive_motor": {
+      "type": "torque_motor",
+      "drives_joint": "red_worm_shaft_spin",
+      "command_interface": "commanded_torque_nm",
+      "max_torque_nm": 1.2,
+      "gear_ratio": 20.0,
+      "status": "placeholder_send_torque_only_worm_wheel_keyframed"
+    },
+    "hip_drive_motor": {
+      "type": "linear_actuator",
+      "drives_joint": "purple_leg_slide",
+      "command_interface": "commanded_torque_nm",
+      "max_torque_nm": 3.0,
+      "gear_ratio": 8.0,
+      "status": "the DRIVER: turns the purple leg + piston straight up/down (worm-fed); knee has no motor"
+    }
+  },
+  "animation": {
+    "name": "full_range_of_motion",
+    "fps": 12,
+    "frames": 72,
+    "hip_deg": [
+      0,
+      0
+    ],
+    "red_worm_shaft_deg": "16x inverse worm wheel angle",
+    "red_worm_wheel_deg": [
+      -30,
+      30
+    ],
+    "leg_piston_travel_mm": [
+      -40.0,
+      40.0
+    ],
+    "yellow_rod_motion": "straight up and down, in-line inside the fixed distal carrier (linear, no hinge / no swing)"
+  },
+  "notes": [
+    "The source glTF has mostly unnamed nodes and no separated rigid-body hierarchy.",
+    "LINEAR mechanism: the hip motor (worm-fed) drives the purple perforated leg AND the yellow piston straight UP and DOWN together, along -Y / the vertical black stabilizer rod.",
+    "The red worm shaft spins fast (around Y); the worm wheel turns slowly (around Z) as the slow input.",
+    "The black stabilizer rod and distal purple carrier are held fixed; the rod is the up/down rail/guide.",
+    "The knee is a RIGID bend, not a powered joint, and there is NO motor at the knee.",
+    "The yellow piston slides straight up/down IN-LINE inside the fixed distal carrier (it never swings or pivots).",
+    "Mass/friction/damping values are placeholders for visualization and downstream schema testing.",
+    "The GIF is keyframed kinematics, not a Bullet rigid-body simulation."
+  ]
+}

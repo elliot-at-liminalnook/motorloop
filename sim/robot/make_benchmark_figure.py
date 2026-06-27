@@ -57,18 +57,37 @@ def main():
     Path(a.out).mkdir(parents=True, exist_ok=True)
     step = np.array([r.get("cum_step", r.get("step", 0)) for r in rows], float)
     sparc = np.array([r["bench_sparc"] for r in rows], float)
-    best = np.array([r["best"] for r in rows], float)
+    keep_metric = next((str(r.get("keep_metric")) for r in rows if r.get("keep_metric")), "sparc")
+    # `best` in each jsonl is local to that training invocation. When concatenating
+    # self-play rounds, compute the true global envelope from the selected score.
+    selected = np.array([r.get("selected_score", r.get("best", r["bench_sparc"])) for r in rows], float)
+    best = np.maximum.accumulate(selected)
     ratio = np.array([r.get("bench_ratio", 0.0) for r in rows], float)
+    has_margin = any("bench_margin" in r for r in rows)
+    margin = np.array([r.get("bench_margin", r.get("bench_dealt", 0.0) - r.get("bench_taken", 0.0))
+                       for r in rows], float)
 
     fig, ax = plt.subplots(1, 2, figsize=(13, 4.6))
-    ax[0].plot(step, sparc, ".-", color="tab:blue", alpha=0.6, label="benchmark SPARC (per eval)")
+    if keep_metric == "sparc":
+        ax[0].plot(step, sparc, ".-", color="tab:blue", alpha=0.6, label="benchmark SPARC (per eval)")
+    else:
+        ax[0].plot(step, selected, ".-", color="tab:blue", alpha=0.7,
+                   label=f"benchmark {keep_metric} (per eval)")
+        ax[0].plot(step, sparc, ".-", color="tab:gray", alpha=0.35, label="SPARC reference")
     ax[0].plot(step, best, "-", color="tab:red", lw=2, label="best-so-far (monotone)")
-    ax[0].set_xlabel("cumulative env-steps"); ax[0].set_ylabel("held-out benchmark SPARC")
+    ax[0].set_xlabel("cumulative env-steps"); ax[0].set_ylabel(f"held-out benchmark {keep_metric}")
     ax[0].set_title("Performance keeps rising with training time"); ax[0].legend(); ax[0].grid(alpha=0.3)
-    ax[1].axhline(1.0, color="k", lw=0.8, ls="--", label="dealt=taken")
-    ax[1].plot(step, ratio, ".-", color="tab:green")
-    ax[1].set_xlabel("cumulative env-steps"); ax[1].set_ylabel("benchmark dealt/taken ratio")
-    ax[1].set_title("Wins exchanges when ratio > 1"); ax[1].legend(); ax[1].grid(alpha=0.3)
+    if has_margin:
+        ax[1].axhline(0.0, color="k", lw=0.8, ls="--", label="dealt=taken")
+        ax[1].plot(step, margin, ".-", color="tab:green")
+        ax[1].set_ylabel("benchmark damage margin")
+        ax[1].set_title("Wins exchanges when margin > 0")
+    else:
+        ax[1].axhline(1.0, color="k", lw=0.8, ls="--", label="dealt=taken")
+        ax[1].plot(step, ratio, ".-", color="tab:green")
+        ax[1].set_ylabel("benchmark dealt/taken ratio")
+        ax[1].set_title("Wins exchanges when ratio > 1")
+    ax[1].set_xlabel("cumulative env-steps"); ax[1].legend(); ax[1].grid(alpha=0.3)
     fig.tight_layout(); p = Path(a.out) / "benchmark_curve.png"; fig.savefig(p, dpi=120); plt.close(fig)
     mono = bool(np.all(np.diff(best) >= -1e-9))
     print(f"rows={len(rows)} final_best={best[-1]:.2f} final_ratio={ratio[-1]:.2f} "

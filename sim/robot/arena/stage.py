@@ -28,7 +28,9 @@ class Stage:
     trade: float = 0.0
     disengage: float = 0.0
     fire: float = 0.0
-    upright: float = 0.3       # BALANCE anchor (Coach competency lever — raise when survival lags)
+    upright: float = 2.0       # BALANCE anchor (rich xmat uprightness; raised 0.6->2.0 so it isn't overwhelmed
+                               # by approach=4 and lunge-sprawls; the QDD body has the torque to honor it.
+                               # Coach raises further when survival lags.
     energy_penalty: float = 0.0  # ENERGY/actuator-safety (Coach competency lever — raise when slamming)
     steps: int = 4_000_000
     opponent: str = "passive"          # passive | frozen

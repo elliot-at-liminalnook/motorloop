@@ -132,6 +132,19 @@ MOTORS: dict[str, Motor] = {
         rated_current_a=1.79, rated_voltage_v=24.0, price_usd=90.0,
         provenance="R,L,pole_count datasheet; Ke from rated torque/current; J "
                    "datasheet; 4 pp matches the current POLE_PAIRS=4 build"),
+    # QDD actuator (MIT Mini-Cheetah / T-Motor AK80-class): high torque-density motor for a LOW gear
+    # ratio (~6:1) -> high torque AND high speed AND backdrivable. The training-ease upgrade: ~3x the
+    # db42s03 joint torque at a lower gear, so the body stands with headroom and recovers from impacts.
+    "qdd_mc": Motor(
+        name="qdd_mc", label="QDD actuator (Mini-Cheetah / AK80 class)",
+        r_line_line=0.13,                 # big low-R stator
+        l_line_line=0.05e-3,
+        ke_line_line_peak=0.13,           # high Kt (torque-dense) -> ~6.7 N·m joint at gear 6, peak_factor 4
+        pole_count=21, inertia_kg_m2=6.0e-5,   # larger rotor (heavier but proximal-mounted)
+        damping=2.0e-5, trapezoid_blend=0.0,
+        rated_current_a=3.6, rated_voltage_v=24.0, price_usd=150.0,
+        provenance="QDD robot actuator class (MIT Mini-Cheetah / T-Motor AK80-9): high Kt + low gear "
+                   "for torque+speed+backdrivability; values representative, confirm vs the chosen unit"),
     # Premium: maxon EC 45 flat 50 W 12 V (p/n 251601). Datasheet-typical -
     # confirm exact values against the maxon 251601 datasheet.
     "maxon_ec45": Motor(

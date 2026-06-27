@@ -57,7 +57,8 @@ def striker_force(s: dict) -> float:
 
 
 def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
-             cc_upper: str | None = None, striker: dict | None = None) -> tuple[str, list[str], list[str]]:
+             cc_upper: str | None = None, cc_calf: str | None = None,
+             striker: dict | None = None) -> tuple[str, list[str], list[str]]:
     """One 3-DOF mammalian leg chain; returns (body_xml, [hinge_joint_names], [strike_joint_names]).
     `cc` = ` contype/conaffinity` string for the STRIKING geoms (calf/foot/spear/rod); `cc_upper`
     overrides it for the upper geoms (hip/thigh) — pass ` contype="0" conaffinity="0"` to make
@@ -68,35 +69,47 @@ def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
     actuator. The slide joint is EXCLUDED from the locomotion obs by the env (hinge-only)."""
     if cc_upper is None:
         cc_upper = cc
+    if cc_calf is None:
+        cc_calf = cc
     n = prefix + leg["name"]
     px, py, pz = leg["pos"]
     sy = 1.0 if py >= 0 else -1.0                  # abduction stand-off direction
     r, tl, cl = d["link_radius"], d["thigh_len"], d["calf_len"]
     ho, fr = d["hip_offset"], d["foot_radius"]
     stiff = d["joint_stiffness"]
-    spring = f' stiffness="{stiff}" springref="0"' if stiff > 0 else ""
+    stand_abd = float(d.get("stand_abd", 0.0))
+    stand_flex = float(d.get("stand_flex", -0.4))
+    stand_knee = float(d.get("stand_knee", -1.1))
+    # PARALLEL-ELASTIC springs centered on the STANDING stance (springref = the env _q0 default angles),
+    # so they passively HOLD the stand (zero spring torque at the stance, restoring force if it buckles)
+    # rather than straightening the legs and fighting the actuator.
+    def _sp(ref):
+        return f' stiffness="{stiff}" springref="{ref}"' if stiff > 0 else ""
+    sp_abd, sp_flex, sp_knee = _sp(stand_abd), _sp(stand_flex), _sp(stand_knee)
     jn = [f"{n}_abd", f"{n}_flex", f"{n}_knee"]
     strike_jn: list[str] = []
     xml = f'''
       <body name="{n}_hip" pos="{px} {py} {pz}">
-        <joint name="{jn[0]}" axis="1 0 0" range="{d['abd_range'][0]} {d['abd_range'][1]}"{spring}/>
+        <joint name="{jn[0]}" axis="1 0 0" range="{d['abd_range'][0]} {d['abd_range'][1]}"{sp_abd}/>
         <geom name="{n}_hipg" type="capsule" fromto="0 0 0 0 {sy*ho:.3f} 0" size="{r}" mass="0.3"{cc_upper}/>
         <body name="{n}_thigh" pos="0 {sy*ho:.3f} 0">
-          <joint name="{jn[1]}" axis="0 1 0" range="{d['flex_range'][0]} {d['flex_range'][1]}"{spring}/>
+          <joint name="{jn[1]}" axis="0 1 0" range="{d['flex_range'][0]} {d['flex_range'][1]}"{sp_flex}/>
           <geom name="{n}_thighg" type="capsule" fromto="0 0 0 0 0 {-tl}" size="{r}" mass="{d['thigh_mass']}"{cc_upper}/>
           <body name="{n}_calf" pos="0 0 {-tl}">
-            <joint name="{jn[2]}" axis="0 1 0" range="{d['knee_range'][0]} {d['knee_range'][1]}"{spring}/>
-            <geom name="{n}_calfg" type="capsule" fromto="0 0 0 0 0 {-cl}" size="{r}" mass="{d['calf_mass']}"{cc}/>
+            <joint name="{jn[2]}" axis="0 1 0" range="{d['knee_range'][0]} {d['knee_range'][1]}"{sp_knee}/>
+            <geom name="{n}_calfg" type="capsule" fromto="0 0 0 0 0 {-cl}" size="{r}" mass="{d['calf_mass']}"{cc_calf}/>
             <geom name="{n}_foot" type="sphere" pos="0 0 {-cl}" size="{fr}" mass="0.05"{cc}/>'''
     if striker:
         # PNEUMATIC striker: a carriage on a slide DOF carrying a steel rod, shot out fast by a
         # constant-force cylinder. `_rod` is a striking geom (legs-as-weapons damage credits it).
         s = striker; sj = f"{n}_strike"; strike_jn = [sj]
         st, rl, rr = s["stroke"], s["rod_len"], s["rod_radius"]
+        # FORWARD striker: carriage at the knee, rod fires FORWARD (+x, toward the opponent) instead of
+        # down into the floor (the old -z mount spawned underground -> launch bug, and could only stomp).
         xml += f'''
-            <body name="{n}_carriage" pos="0 0 {-cl}">
-              <joint name="{sj}" type="slide" axis="0 0 -1" range="0 {st}" damping="2" armature="0.005" stiffness="{s['return_stiffness']}" springref="0" solreflimit="0.002 1"/>
-              <geom name="{n}_rod" type="capsule" fromto="0 0 0 0 0 {-rl}" size="{rr}" density="{s['rod_density']}" rgba="0.85 0.85 0.9 1"{cc}/>
+            <body name="{n}_carriage" pos="0 0 0">
+              <joint name="{sj}" type="slide" axis="1 0 0" range="0 {st}" damping="2" armature="0.005" stiffness="{s['return_stiffness']}" springref="0" solreflimit="0.002 1"/>
+              <geom name="{n}_rod" type="capsule" fromto="0 0 0 {rl} 0 0" size="{rr}" density="{s['rod_density']}" rgba="0.85 0.85 0.9 1"{cc}/>
             </body>'''
     elif leg.get("is_weapon"):
         # a rigid leg-weapon: a slim spear geom past the foot (kinetic; heater pending EO)
@@ -117,7 +130,7 @@ def _striker_enabled(spec, striker):
 
 
 def _robot_xml(spec, prefix="", pos=(0.0, 0.0, None), quat=(1, 0, 0, 0), rgba=None, cc="",
-               cc_upper=None, striker=None):
+               cc_upper=None, cc_calf=None, striker=None):
     """One robot's <body> block + its actuator lines (names prefixed for matches).
     `cc` = contype/conaffinity for torso + striking geoms; `cc_upper` for hip/thigh (pass
     "0 0" to drop them from collision — reduced-collision lean mode). `striker` (True/False/None,
@@ -134,7 +147,7 @@ def _robot_xml(spec, prefix="", pos=(0.0, 0.0, None), quat=(1, 0, 0, 0), rgba=No
     legs_xml, joints, strike_joints = [], [], []
     for leg in spec["leg"]:
         on = sspec if (use_striker and leg["pos"][0] > 0) else None      # front legs get the rod
-        lx, jn, sj = _leg_xml(leg, d, tau, prefix, cc, cc_upper, striker=on)
+        lx, jn, sj = _leg_xml(leg, d, tau, prefix, cc, cc_upper, cc_calf, striker=on)
         legs_xml.append(lx); joints += jn; strike_joints += sj
     body = (f'<body name="{prefix}torso" pos="{pos[0]} {pos[1]} {z}" '
             f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}">'
@@ -155,19 +168,59 @@ def _cc(ct, ca):
     return f' contype="{ct}" conaffinity="{ca}"'
 
 
-def _wrap(spec, bodies, acts, floor_cc=""):
+def _calf_floor_enabled(spec: dict) -> bool:
+    c = spec.get("contact", {})
+    return bool(c.get("calf_floor", not c.get("disable_calf_floor", False)))
+
+
+def _contact_pair_xml(pairs: list[str]) -> str:
+    if not pairs:
+        return ""
+    return "  <contact>\n" + "\n".join(pairs) + "\n  </contact>\n"
+
+
+def _floor_calf_pairs(*prefixed_specs: tuple[str, dict]) -> list[str]:
+    pairs: list[str] = []
+    for prefix, spec in prefixed_specs:
+        contact = spec.get("contact", {})
+        solref = contact.get("floor_calf_solref")
+        if solref is None:
+            continue
+        solref_s = " ".join(str(float(x)) for x in solref)
+        solimp = contact.get("floor_calf_solimp")
+        solimp_s = ""
+        if solimp is not None:
+            solimp_s = ' solimp="' + " ".join(str(float(x)) for x in solimp) + '"'
+        for leg in spec["leg"]:
+            pairs.append(
+                f'    <pair geom1="floor" geom2="{prefix}{leg["name"]}_calfg" '
+                f'solref="{solref_s}"{solimp_s}/>'
+            )
+    return pairs
+
+
+def _wrap(spec, bodies, acts, floor_cc="", contact_pairs: list[str] | None = None):
     d = spec["leg_defaults"]
+    contact = spec.get("contact", {})
+    fr = contact.get("friction", [1, 0.1, 0.1])
+    friction = " ".join(str(float(x)) for x in fr)
+    contact_attrs = ""
+    if contact.get("solref") is not None:
+        contact_attrs += ' solref="' + " ".join(str(float(x)) for x in contact["solref"]) + '"'
+    if contact.get("solimp") is not None:
+        contact_attrs += ' solimp="' + " ".join(str(float(x)) for x in contact["solimp"]) + '"'
     return f'''<mujoco model="{spec['meta']['name']}">
   <compiler angle="radian" autolimits="true"/>
   <option timestep="0.004" integrator="implicitfast"/>
   <default>
     <joint damping="{d['joint_damping']}" armature="0.01"/>
-    <geom friction="1 0.1 0.1" contype="1" conaffinity="1"/>
+    <geom friction="{friction}" contype="1" conaffinity="1"{contact_attrs}/>
   </default>
   <worldbody>
     <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"{floor_cc}/>
     {"".join(bodies)}
   </worldbody>
+{_contact_pair_xml(contact_pairs or [])}\
   <actuator>
 {chr(10).join(acts)}
   </actuator>
@@ -185,10 +238,11 @@ def build_mjcf(spec: dict, overrides: dict | None = None, self_collision: bool =
         spec = _deep_merge(spec, overrides)
     if self_collision:                       # default: every geom collides (the validated model)
         body, acts, _ = _robot_xml(spec, striker=striker)
-        return _wrap(spec, [body], acts)
+        return _wrap(spec, [body], acts, contact_pairs=_floor_calf_pairs(("", spec)))
     # F-SPEED lean scheme: robot collides with the floor only, not with itself
     body, acts, _ = _robot_xml(spec, cc=_cc(2, 1), striker=striker)
-    return _wrap(spec, [body], acts, floor_cc=_cc(1, 2))
+    return _wrap(spec, [body], acts, floor_cc=_cc(1, 2),
+                 contact_pairs=_floor_calf_pairs(("", spec)))
 
 
 def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bool = True,
@@ -203,14 +257,23 @@ def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bo
     if self_collision:                       # default: the validated model (all pairs collide)
         ba, aa, _ = _robot_xml(spec_a, "A_", pos=(-sep / 2, 0.0, None), quat=(1, 0, 0, 0), rgba="0.3 0.4 0.7 1", striker=striker)
         bb, ab, _ = _robot_xml(spec_b, "B_", pos=(sep / 2, 0.0, None), quat=(0, 0, 0, 1), rgba="0.7 0.3 0.3 1", striker=striker_b)
-        return _wrap(spec_a, [ba, bb], aa + ab)
+        return _wrap(spec_a, [ba, bb], aa + ab,
+                     contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)))
     # lean: floor(1,6) ↔ A(2,5) ↔ B(4,3) — A-floor, B-floor, A-B collide; A-A, B-B do not.
     # AND drop hip/thigh from collision (cc_upper "0 0") so only torso/calf/foot/spear/rod collide
     # — shrinks the dominant A-B pair count (legs-as-weapons damage still works via calf/foot/spear/rod).
     off = _cc(0, 0)
-    ba, aa, _ = _robot_xml(spec_a, "A_", pos=(-sep / 2, 0.0, None), quat=(1, 0, 0, 0), rgba="0.3 0.4 0.7 1", cc=_cc(2, 5), cc_upper=off, striker=striker)
-    bb, ab, _ = _robot_xml(spec_b, "B_", pos=(sep / 2, 0.0, None), quat=(0, 0, 0, 1), rgba="0.7 0.3 0.3 1", cc=_cc(4, 3), cc_upper=off, striker=striker_b)
-    return _wrap(spec_a, [ba, bb], aa + ab, floor_cc=_cc(1, 6))
+    calf_a = calf_b = None
+    if not (_calf_floor_enabled(spec_a) and _calf_floor_enabled(spec_b)):
+        # Keep calf capsules available for A<->B contacts, but remove their floor contact bit.
+        # Feet remain the floor support geometry. Extra high bits preserve calf-calf collisions
+        # without re-enabling same-robot or floor pairs under the lean contact mask.
+        calf_a = _cc(8, 20)   # collides with B default (4) and B no-floor calf (16), not floor (1/6)
+        calf_b = _cc(16, 10)  # collides with A default (2) and A no-floor calf (8), not floor (1/6)
+    ba, aa, _ = _robot_xml(spec_a, "A_", pos=(-sep / 2, 0.0, None), quat=(1, 0, 0, 0), rgba="0.3 0.4 0.7 1", cc=_cc(2, 5), cc_upper=off, cc_calf=calf_a, striker=striker)
+    bb, ab, _ = _robot_xml(spec_b, "B_", pos=(sep / 2, 0.0, None), quat=(0, 0, 0, 1), rgba="0.7 0.3 0.3 1", cc=_cc(4, 3), cc_upper=off, cc_calf=calf_b, striker=striker_b)
+    return _wrap(spec_a, [ba, bb], aa + ab, floor_cc=_cc(1, 6),
+                 contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)))
 
 
 def main():

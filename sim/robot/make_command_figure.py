@@ -8,7 +8,7 @@ xy path (does it walk the commanded square?), + a training tracking curve from c
 
 from __future__ import annotations
 
-import argparse, json
+import argparse, json, os
 from pathlib import Path
 import numpy as np
 import matplotlib
@@ -20,21 +20,25 @@ HERE = Path(__file__).resolve().parent
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--npz", default=str(HERE.parents[1] / "sim/build/gpu/out/cmd_eval.npz"))
-    ap.add_argument("--train", default=str(HERE.parents[1] / "sim/build/gpu/out/cmd_train.jsonl"))
+    root = Path(os.environ.get("CODESIGN_OUT", HERE.parents[1] / "sim/build/gpu/out"))
+    ap.add_argument("--tag", default="cmd")
+    ap.add_argument("--npz", default=None)
+    ap.add_argument("--train", default=None)
     ap.add_argument("--out", default=str(HERE.parents[1] / "sim/build/gpu/figures"))
     a = ap.parse_args()
     Path(a.out).mkdir(parents=True, exist_ok=True)
-    d = np.load(a.npz); t = d["t"]
+    npz = Path(a.npz) if a.npz else root / f"{a.tag}_eval.npz"
+    train = Path(a.train) if a.train else root / f"{a.tag}_train.jsonl"
+    d = np.load(npz); t = d["t"]
 
     # 1. commanded vs achieved velocity
     fig, ax = plt.subplots(2, 1, figsize=(11, 7), sharex=True)
     ax[0].plot(t, d["cmd_vx"], "k--", label="commanded vx"); ax[0].plot(t, d["vx"], label="achieved vx")
     ax[1].plot(t, d["cmd_vy"], "k--", label="commanded vy"); ax[1].plot(t, d["vy"], label="achieved vy")
     ax[0].set_ylabel("vx (m/s)"); ax[1].set_ylabel("vy (m/s)"); ax[1].set_xlabel("control step")
-    ax[0].set_title("Remote command vs achieved velocity (steerable locomotor)")
+    ax[0].set_title(f"{a.tag}: remote command vs achieved velocity")
     for x in ax: x.legend(); x.grid(alpha=0.3)
-    fig.tight_layout(); fig.savefig(Path(a.out) / "command_tracking.png", dpi=110); plt.close(fig)
+    fig.tight_layout(); fig.savefig(Path(a.out) / f"{a.tag}_command_tracking.png", dpi=110); plt.close(fig)
 
     # 2. top-down trajectory (the commanded square)
     fig, axi = plt.subplots(figsize=(7, 7))
@@ -42,25 +46,26 @@ def main():
     axi.plot(d["x"], d["y"], lw=0.6, alpha=0.5)
     axi.scatter([d["x"][0]], [d["y"][0]], c="green", s=80, label="start", zorder=5)
     axi.set_aspect("equal"); axi.set_xlabel("x (m)"); axi.set_ylabel("y (m)")
-    axi.set_title("Walked path under the remote command square"); axi.legend(); axi.grid(alpha=0.3)
+    axi.set_title(f"{a.tag}: walked path under remote commands"); axi.legend(); axi.grid(alpha=0.3)
     fig.colorbar(sc, label="control step"); fig.tight_layout()
-    fig.savefig(Path(a.out) / "command_trajectory.png", dpi=110); plt.close(fig)
+    fig.savefig(Path(a.out) / f"{a.tag}_command_trajectory.png", dpi=110); plt.close(fig)
 
     # 3. training tracking curve (optional)
-    tj = Path(a.train)
+    tj = train
     if tj.exists():
         rs = [json.loads(l) for l in tj.read_text().splitlines() if l.strip()]
         if rs:
             fig, axi = plt.subplots(figsize=(9, 4))
-            axi.plot([r["step"] / 1e6 for r in rs], [r["track"] for r in rs])
-            axi.set_xlabel("env-steps (M)"); axi.set_ylabel("velocity-tracking (1=perfect)")
-            axi.set_title("Command-following learned over training"); axi.grid(alpha=0.3)
-            fig.tight_layout(); fig.savefig(Path(a.out) / "command_training.png", dpi=110); plt.close(fig)
+            y = [r.get("track_mean", r.get("track", 0.0)) for r in rs]
+            axi.plot([r["step"] / 1e6 for r in rs], y)
+            axi.set_xlabel("env-steps (M)"); axi.set_ylabel("per-step velocity tracking (1=perfect)")
+            axi.set_title(f"{a.tag}: command-following learned over training"); axi.grid(alpha=0.3)
+            fig.tight_layout(); fig.savefig(Path(a.out) / f"{a.tag}_command_training.png", dpi=110); plt.close(fig)
 
     mv = (np.abs(d["cmd_vx"]) + np.abs(d["cmd_vy"])) > 1e-6
     if mv.sum():
         cmd = np.stack([d["cmd_vx"][mv], d["cmd_vy"][mv]], 1); ach = np.stack([d["vx"][mv], d["vy"][mv]], 1)
-        cos = np.sum(cmd * ach, 1) / (np.linalg.norm(cmd, 1) * np.linalg.norm(ach, axis=1) + 1e-6)
+        cos = np.sum(cmd * ach, 1) / (np.linalg.norm(cmd, axis=1) * np.linalg.norm(ach, axis=1) + 1e-6)
         print(f"direction alignment cos = {np.nanmean(cos):+.2f}; figures -> {a.out}/")
     else:
         print(f"figures -> {a.out}/")

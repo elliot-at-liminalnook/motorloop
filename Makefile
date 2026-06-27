@@ -20,7 +20,7 @@ LITEX_PY  ?= $(HOME)/litex-venv/bin/python             # the LiteX install (soc/
         gpu-baseline gpu-mjx-train gpu-adversarial gpu-codesign gpu-coevolve gpu-selfplay \
         gpu-match gpu-parity gpu-rederive gpu-extra gpu-e2e gpu-validate \
         gpu-residual gpu-rma gpu-robust-codesign gpu-active-id codesign-rs \
-        gpu-fighter gpu-fighter-rank
+        gpu-fighter gpu-fighter-rank gpu-combat-scaffold
 
 help:  ## list targets
 	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
@@ -136,6 +136,8 @@ gpu-curriculum:  ## contact-forcing curriculum (teaches reliable attacking engag
 	bash sim/robot/curriculum_train.sh
 gpu-win-exchanges:  ## STEP 2: win-exchanges curriculum DRIVER (gate+rollback+keep-best, resume-safe)
 	python3 sim/robot/curriculum_drive.py --warm $${CODESIGN_OUT:-/root/proj/out}/universal_ckpt.pkl --steps-per-phase 4000000 --lean-contacts
+gpu-combat-scaffold:  ## scaffold-prior combat curriculum with baseline/trained eval and renders
+	bash scripts/run_scaffold_combat_curriculum.sh
 gpu-win-exchanges-medium:  ## STEP 2 2·0: medium ~2-4 GPU-hr single-stage learning-curve validation (does the curve RISE?)
 	python3 sim/robot/train_adversarial.py --resume $${CODESIGN_OUT:-/root/proj/out}/cval_ckpt.pkl --tag medium \
 	  --steps 8000000 --lean-contacts --sep-lo 0.4 --sep-hi 1.0 --approach-weight 1.5 --azimuth 2.0 \
@@ -166,10 +168,16 @@ status:  ## print the per-phase signal table (best/ratio + decomposition) from p
 	CODESIGN_OUT=$${CODESIGN_OUT:-sim/build/gpu/out} $(FW_MJX_PY) sim/robot/make_dashboard.py --table
 status-live:  ## rich live-pod snapshot — combat decomposition + GPU + economics (needs an active pod)
 	bash scripts/rp_status.sh
+CMD_TAG ?= cmd
 gpu-commanded:  ## train the command-conditioned (remote-steerable) locomotor
-	python3 sim/robot/train_commanded.py --steps 8000000
+	python3 sim/robot/train_commanded.py --tag $(CMD_TAG) --steps 8000000
 gpu-commanded-eval:  ## deploy: drive a command square + figures (commanded vs achieved)
-	python3 sim/robot/eval_commanded.py && python3 sim/robot/make_command_figure.py
+	python3 sim/robot/eval_commanded.py --tag $(CMD_TAG) && \
+	python3 sim/robot/eval_checkpoint_navigation.py --tag $(CMD_TAG) && \
+	python3 sim/robot/make_command_figure.py --tag $(CMD_TAG) && \
+	python3 sim/robot/validate_commanded.py --tag $(CMD_TAG)
+gpu-commanded-render:  ## render a visible walking rollout for the tagged command policy
+	python3 sim/robot/render_commanded_video.py --tag $(CMD_TAG)
 commanded-prove:  ## CPU: validate the command-conditioning mechanism (no GPU)
 	python3 sim/robot/commanded_env.py --prove
 

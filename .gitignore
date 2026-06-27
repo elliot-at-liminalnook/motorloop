@@ -4,6 +4,7 @@ sim/build/
 rtl/gen/
 synth/work/
 fusesoc.conf
+out/
 
 # Generated docs site (robotics-ip stage 7): site-src/ is assembled by
 # scripts/gen_docs.py from notes/ + rtl/contracts/; site/ is the mkdocs render.
@@ -32,6 +33,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 MUJOCO_LOG.TXT
+*.blend1
 *.vcd
 *.fst
 

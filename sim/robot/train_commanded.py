@@ -9,19 +9,87 @@ Streams `METRIC`/CSV with the velocity-tracking score; checkpoints every eval (r
 
 from __future__ import annotations
 
-import argparse, os, pickle, sys, time
+import argparse, json, os, pickle, sys, time
 from pathlib import Path
-import jax
+import jax, jax.numpy as jnp
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from commanded_env import _build  # noqa: E402
+from commanded_env import (  # noqa: E402
+    CMD_CONTROL_MODE,
+    CMD_REWARD_MODE,
+    CMD_TRAIN_MODE,
+    FALL_Z,
+    MIN_UP_Z,
+    OBS_PRIOR_STRENGTH,
+    OBS_ROUTE_CONTEXT,
+    TRACK_SIGMA,
+    VMAX,
+    _build,
+)
 from brax.training.agents.ppo import train as ppo  # noqa: E402
 
 OUT = Path(os.environ.get("CODESIGN_OUT", "/root/proj/out")); OUT.mkdir(parents=True, exist_ok=True)
 
 
 def METRIC(**kw): print("METRIC " + " ".join(f"{k}={v}" for k, v in kw.items()), flush=True)
+
+
+def _infer_policy_obs(policy) -> int | None:
+    pp = policy.get("params", policy) if isinstance(policy, dict) else {}
+    try:
+        return int(pp["hidden_0"]["kernel"].shape[0])
+    except Exception:
+        return None
+
+
+def warm_start(path, obs_dim):
+    """Load a PPO params tuple and pad observation-facing leaves to this env's obs size.
+
+    The original universal locomotor is 38-D. Commanded locomotion is the same 38-D
+    block plus 2 command inputs. Padding the normalizer and first policy/value kernels
+    preserves the existing gait while initializing command sensitivity to zero.
+    """
+    try:
+        parts = list(pickle.load(open(path, "rb")))
+        if len(parts) < 2:
+            return tuple(parts)
+        norm, nets = parts[0], parts[1:]
+        old_obs = _infer_policy_obs(nets[0])
+        if old_obs is None:
+            print(f"WARM-START: could not infer obs size from {path}; using checkpoint unchanged", flush=True)
+            return tuple(parts)
+        pad = obs_dim - old_obs
+        if pad < 0:
+            raise ValueError(f"checkpoint obs {old_obs} is wider than env obs {obs_dim}")
+        if pad == 0:
+            print(f"WARM-START ok: obs {old_obs}->{obs_dim} unchanged", flush=True)
+            return tuple(parts)
+        c = getattr(norm, "count", None)
+        cval = 1.0
+        if c is not None and hasattr(c, "hi") and hasattr(c, "lo"):
+            cval = float(jnp.asarray(c.hi)) * (2.0 ** 32) + float(jnp.asarray(c.lo))
+        nkw = {}
+        for fn in ("mean", "std", "summed_variance"):
+            v = getattr(norm, fn, None)
+            if hasattr(v, "ndim") and v.ndim >= 1 and v.shape[0] == old_obs:
+                fill = (jnp.zeros(pad, dtype=v.dtype) if fn == "mean" else
+                        jnp.ones(pad, dtype=v.dtype) if fn == "std" else
+                        jnp.full((pad,), max(cval, 1.0), dtype=v.dtype))
+                nkw[fn] = jnp.concatenate([v, fill])
+        if nkw:
+            norm = norm.replace(**nkw)
+
+        def pad_leaf(x):
+            if hasattr(x, "ndim") and x.ndim >= 1 and x.shape[0] == old_obs:
+                return jnp.concatenate([x, jnp.zeros((pad,) + x.shape[1:], dtype=x.dtype)], axis=0)
+            return x
+        nets = [jax.tree_util.tree_map(pad_leaf, n) for n in nets]
+        print(f"WARM-START ok: obs {old_obs}->{obs_dim} (+{pad} command dims)", flush=True)
+        return tuple([norm] + nets)
+    except Exception as e:
+        print(f"WARM-START failed ({type(e).__name__}: {e}) -> training from scratch", flush=True)
+        return None
 
 
 def main():
@@ -33,6 +101,10 @@ def main():
     ap.add_argument("--unroll", type=int, default=10)
     ap.add_argument("--updates", type=int, default=4)
     ap.add_argument("--evals", type=int, default=0)
+    ap.add_argument("--episode-length", type=int, default=400)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--entropy", type=float, default=1e-2)
     ap.add_argument("--tag", default="cmd")
     ap.add_argument("--resume", default=None)
     ap.add_argument("--tiny", action="store_true")
@@ -43,38 +115,72 @@ def main():
 
     Env = _build(); env = Env()
     print(f"commanded env: obs={env.observation_size} (incl. 2-D command) act={env.action_size}", flush=True)
-    restore = pickle.load(open(args.resume, "rb")) if (args.resume and os.path.exists(args.resume)) else None
+    restore = warm_start(args.resume, env.observation_size) if (args.resume and os.path.exists(args.resume)) else None
 
-    import json
-    t0 = time.time(); csv = OUT / f"{args.tag}_metrics.csv"; csv.write_text("step,reward,track,verr,sec\n")
+    meta = dict(tag=args.tag, steps=args.steps, envs=args.envs, batch=args.batch,
+                minibatches=args.minibatches, unroll=args.unroll, updates=args.updates,
+                evals=n_eval, episode_length=args.episode_length, seed=args.seed,
+                v_max=VMAX, track_sigma=TRACK_SIGMA, fall_z=FALL_Z, min_up_z=MIN_UP_Z,
+                cmd_train_mode=CMD_TRAIN_MODE, cmd_reward_mode=CMD_REWARD_MODE,
+                cmd_control_mode=CMD_CONTROL_MODE,
+                obs_prior_strength=OBS_PRIOR_STRENGTH,
+                obs_route_context=OBS_ROUTE_CONTEXT,
+                resume=os.path.basename(args.resume) if args.resume else None)
+    (OUT / f"{args.tag}_train_meta.json").write_text(json.dumps(meta, indent=2))
+    t0 = time.time(); csv = OUT / f"{args.tag}_metrics.csv"
+    csv.write_text("step,reward,reward_mean,track,track_mean,verr,verr_mean,align,align_mean,"
+                   "speed,speed_mean,progress,progress_mean,up,up_mean,height,height_mean,sec\n")
     fj = OUT / f"{args.tag}_train.jsonl"; fj.write_text("")
-    tm = {"c": None}; last = {"r": float("nan"), "track": 0.0, "verr": 0.0, "step": 0}
+    tm = {"c": None}
+    last = {"r": float("nan"), "reward_mean": float("nan"), "track": 0.0, "track_mean": 0.0,
+            "verr": 0.0, "verr_mean": 0.0, "align": 0.0, "align_mean": 0.0, "step": 0}
     g = lambda m, k: float(m.get(f"eval/episode_{k}", 0.0))
     def prog(s, m):
         if tm["c"] is None: tm["c"] = time.time() - t0
         r = g(m, "reward"); tr = g(m, "track"); ve = g(m, "verr")
-        open(csv, "a").write(f"{int(s)},{r:.3f},{tr:.4f},{ve:.4f},{time.time()-t0:.0f}\n")
-        open(fj, "a").write(json.dumps(dict(step=int(s), reward=round(r,3), track=round(tr,4),
-                            verr=round(ve,4), tag=args.tag)) + "\n")
-        last.update(r=r, track=tr, verr=ve, step=int(s))
-        print(f"  [{args.tag}] step {int(s):>9,} reward {r:7.2f} track {tr:.3f} verr {ve:.3f} "
+        al = g(m, "align"); sp = g(m, "speed"); pr = g(m, "progress"); up = g(m, "up"); ht = g(m, "height")
+        ep = float(args.episode_length)
+        rec = dict(step=int(s), sec=round(time.time() - t0, 0), reward=round(r, 3),
+                   reward_mean=round(r / ep, 5), track=round(tr, 4), track_mean=round(tr / ep, 5),
+                   verr=round(ve, 4), verr_mean=round(ve / ep, 5),
+                   align=round(al, 4), align_mean=round(al / ep, 5),
+                   speed=round(sp, 4), speed_mean=round(sp / ep, 5),
+                   progress=round(pr, 4), progress_mean=round(pr / ep, 5),
+                   up=round(up, 4), up_mean=round(up / ep, 5),
+                   height=round(ht, 4), height_mean=round(ht / ep, 5), tag=args.tag)
+        with open(csv, "a") as f:
+            f.write(f"{rec['step']},{r:.3f},{r/ep:.6f},{tr:.4f},{tr/ep:.6f},"
+                    f"{ve:.4f},{ve/ep:.6f},{al:.4f},{al/ep:.6f},{sp:.4f},{sp/ep:.6f},"
+                    f"{pr:.4f},{pr/ep:.6f},{up:.4f},{up/ep:.6f},{ht:.4f},{ht/ep:.6f},{rec['sec']:.0f}\n")
+        with open(fj, "a") as f:
+            f.write(json.dumps(rec) + "\n")
+        last.update(r=r, reward_mean=r / ep, track=tr, track_mean=tr / ep,
+                    verr=ve, verr_mean=ve / ep, align=al, align_mean=al / ep, step=int(s))
+        print(f"  [{args.tag}] step {int(s):>9,} reward/step {r/ep:6.3f} "
+              f"track/step {tr/ep:.3f} verr/step {ve/ep:.3f} "
+              f"progress/step {pr/ep:+.3f} align/step {al/ep:+.3f} "
               f"({time.time()-t0:.0f}s)", flush=True)
     def ck(*a):
-        try: pickle.dump(a[-1], open(OUT / f"{args.tag}_ckpt.pkl", "wb"))
-        except Exception: pass
+        try:
+            with open(OUT / f"{args.tag}_ckpt.pkl", "wb") as f:
+                pickle.dump(a[-1], f)
+        except Exception as e:
+            print(f"  [ck] save {args.tag}_ckpt.pkl failed: {e}", flush=True)
 
     make_inf, params, _ = ppo.train(
-        environment=env, num_timesteps=args.steps, num_evals=n_eval, episode_length=400,
+        environment=env, num_timesteps=args.steps, num_evals=n_eval, episode_length=args.episode_length,
         num_envs=args.envs, batch_size=args.batch, num_minibatches=args.minibatches,
-        unroll_length=args.unroll, num_updates_per_batch=args.updates, learning_rate=3e-4,
-        entropy_cost=1e-2, discounting=0.97, reward_scaling=0.1, normalize_observations=True,
-        seed=0, progress_fn=prog, policy_params_fn=ck, restore_params=restore)
+        unroll_length=args.unroll, num_updates_per_batch=args.updates, learning_rate=args.lr,
+        entropy_cost=args.entropy, discounting=0.97, reward_scaling=0.1, normalize_observations=True,
+        seed=args.seed, progress_fn=prog, policy_params_fn=ck, restore_params=restore)
     pickle.dump(params, open(OUT / f"{args.tag}.pkl", "wb"))
     METRIC(stage="cmd_train", train_s=f"{time.time()-t0:.1f}", env_steps=last["step"],
-           final_track=f"{last['track']:.3f}", final_verr=f"{last['verr']:.3f}")
-    print(f"PROVEN: command-conditioned locomotor trained — velocity-tracking {last['track']:.3f} "
-          f"(1.0 = perfect command following), velocity error {last['verr']:.3f} m/s. "
-          f"A remote controller now steers it (eval_commanded.py).", flush=True)
+           final_track_mean=f"{last['track_mean']:.3f}", final_verr_mean=f"{last['verr_mean']:.3f}",
+           final_align_mean=f"{last['align_mean']:.3f}")
+    print(f"TRAINED: command-conditioned locomotor artifact {args.tag}.pkl. "
+          f"Final eval per-step track={last['track_mean']:.3f} (1.0 is perfect), "
+          f"velocity error={last['verr_mean']:.3f}, alignment={last['align_mean']:+.3f}. "
+          f"Run eval_commanded.py --tag {args.tag} to validate deployment.", flush=True)
 
 
 if __name__ == "__main__":
