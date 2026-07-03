@@ -18,9 +18,15 @@ multiple scales:
 
 That now includes component-level co-simulation, formal RTL safety proofs,
 open synthesis, sensor/module studies, robot-body generation, MJX/GPU policy
-training, combat-style contact tasks, calibrated robustness checks, adaptive
-coaching, and an `arena` runner that connects curriculum training to eventual
-self-play.
+training, combat-style contact tasks, and a verification stack that treats the
+simulator itself as something to be audited — contract tests on compiled
+physics, cross-engine checks against Drake, and red-team fixtures for every
+reward. As of July 2026, the simulated quadruped **walks on command, on video**
+(0.83 m/s), after an audit traced every historical training failure to a single
+missing MJCF attribute that had silently capped the robot at 8% of its design
+torque. The next fronts: adversarial self-play combat, and a real leg design
+(worm-drive hip, series-elastic yaw, toggle-press blade foot) working its way
+from CAD into the same pipeline.
 
 ![animated rotor and phase currents](figures/motorloop.gif)
 
@@ -61,11 +67,10 @@ across scenarios; the formal tier proves plant-independent RTL properties such
 as shoot-through freedom, dead-time minimum, legal bus wrappers, reset safety,
 and bounds on control datapaths. See [formal/proof_report.md](formal/proof_report.md).
 
-**Platform and component studies.** The repo includes platform abstractions for
-different gate-driver, current-ADC, and angle-sensor choices; ADS9224R module
-work; motor comparison; part comparison; and stress studies. The point is not a
-pretty plot. The point is recording which part of a system claim came from a
-datasheet, a measured trace, a decision, or a placeholder.
+**Platform and component studies.** Gate-driver, current-ADC, and angle-sensor
+alternatives; motor and part comparisons; stress studies. The point is not a
+pretty plot — it's recording whether each claim came from a datasheet, a
+measured trace, a decision, or a placeholder.
 
 **Full robot simulation.** `sim/robot/robot.toml` is a provenance-tracked body
 source that generates MJCF/MJX models. The robot stack covers morphology
@@ -80,6 +85,17 @@ surface, local and pod runners, build ledger, snapshots, and an adaptive coach
 that moves reward weights based on held-out benchmark signals. See
 [notes/framework-build-checklist.md](notes/framework-build-checklist.md).
 
+**A verification stack the RL layer earned the hard way.** After metrics
+claimed "walking" twice and a video falsified it both times, the robot side
+adopted the RTL side's discipline: outcome-based contract tests on every
+compiled model (`test_model_contract.py`), a preflight that refuses runs whose
+configs cannot work, scripted exploit fixtures that must earn less than an
+honest attempt before any reward change merges, pinned golden trajectories,
+typed spec validation, and an independently-built Drake model that must agree
+with MuJoCo on torque, mass, and statics before anything trains. The story and
+the checks: [notes/training-uplift-audit.md](notes/training-uplift-audit.md),
+[notes/rl-verification-playbook.md](notes/rl-verification-playbook.md).
+
 ## Status, Honestly
 
 This is **verification and simulation**, not hardware validation.
@@ -87,9 +103,17 @@ This is **verification and simulation**, not hardware validation.
 - The RTL/component side is heavily tested, formally checked where appropriate,
   and synthesized through open flows, but it has not yet been correlated against
   a physical motor bench.
-- The robot side has end-to-end local and GPU plumbing, robust ranking results,
-  commanded-control scaffolding, and an adaptive arena pipeline, but full
-  open-ended self-play is still the next frontier rather than a solved result.
+- The robot side crossed its first behavioral milestone in July 2026: a
+  from-scratch policy that walks on command at 0.83 m/s, verified by rendered
+  video (the project's hard rule: metrics select, videos confirm). Walk-then-
+  fight curricula, a moving pursuer opponent, and PFSP league machinery are
+  built and tested; open-ended self-play combat is the current frontier, not
+  yet a result.
+- A real leg mechanism is in CAD (`Test_Mesh_Leg_*`, `Robot_Assembly_*`): three
+  motors per leg — series-elastic belt yaw, self-locking 20:1 worm pitch, and a
+  powered toggle-press blade foot — with rigged kinematics, Drake statics, and
+  MJCF-conversion metadata, pending bench measurements (pulley stiffness, yaw
+  ROM) before it replaces the parametric capsule body.
 - Real2Sim2Real hooks exist for actuator residuals, contact residuals,
   posterior world models, active identification, and robust scoring; the real
   hardware fit is intentionally gated on real measurements.
@@ -144,6 +168,11 @@ expected costs, and gotchas.
 - [notes/codesign-realization-report.md](notes/codesign-realization-report.md) - co-design realization results
 - [notes/codesign-fighter-report.md](notes/codesign-fighter-report.md) - fighter curriculum and combat ranking results
 - [notes/framework-build-checklist.md](notes/framework-build-checklist.md) - arena framework build record
+- [notes/training-uplift-audit.md](notes/training-uplift-audit.md) - the audit that found the 8%-torque bug + top-10 training fixes
+- [notes/rl-verification-playbook.md](notes/rl-verification-playbook.md) - why the old checks missed it; the layered check stack
+- [notes/uplift-execution-plan.md](notes/uplift-execution-plan.md) - the executed plan, with status logs and gate verdicts
+- [notes/system-tour.md](notes/system-tour.md) - the friendly walkthrough of the whole system
+- [notes/sota-training-issues.md](notes/sota-training-issues.md) - cited survey of field-wide training issues, mapped to this stack
 - [notes/gpu-runbook.md](notes/gpu-runbook.md) - remote GPU runbook
 
 ## Layout

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse, json, math, os, shutil, subprocess, sys, time
 from pathlib import Path
+import numpy as np
 
 HERE = Path(__file__).resolve().parent
 OUT = Path(os.environ.get("CODESIGN_OUT", "/root/proj/out")); OUT.mkdir(parents=True, exist_ok=True)
@@ -38,7 +39,7 @@ STATE = OUT / "selfplay_state.json"
 # 0.25-0.7 spans in-reach (0.25, guaranteed contact) to a short close (0.7); approach/shaping up to drive it.
 RW = dict(sep_lo=0.25, sep_hi=0.7, approach=3.0, azimuth=3.14159, shaping=0.8,
           clean=10.0, trade=8.0, taken=0.0, disengage=1.5, fire=1.0, early=0.0, min_hit=0)
-BENCH = dict(sep_lo=0.25, sep_hi=0.7, az=3.14159, epis=16, steps=200)
+BENCH = dict(sep_lo=0.25, sep_hi=0.7, az=3.14159, epis=16, steps=600)  # steps match --episode-length
 
 
 def load_state():
@@ -52,9 +53,22 @@ def save_state(st):
 
 
 def first_quarter(hof):
-    """The oldest 25% of snapshots (the stable pool the paper samples opponents from)."""
+    """DEPRECATED (audit item 10 / C.3): best-responding to ONE deterministic opponent
+    drawn from the oldest quarter is a textbook self-play cycling setup — the likely
+    cause of the cpglong peak-then-collapse. Kept only for archaeology."""
     k = max(1, (len(hof) + 3) // 4)
     return hof[:k]
+
+
+def pfsp_pick(hof, win_rates, rng):
+    """PFSP over the FULL hall of fame: weight w ∝ (1−p)²+ε where p is our win rate
+    vs that snapshot (unknown → p=0.5). Hard opponents get sampled most; nothing
+    leaves the support, so old exploits can't silently come back."""
+    if not hof:
+        raise ValueError("empty HoF")
+    p = np.array([float(win_rates.get(h, 0.5)) for h in hof])
+    w = (1.0 - p) ** 2 + 0.05
+    return hof[int(rng.choice(len(hof), p=w / w.sum()))]
 
 
 def run_round(py, rd, train_opp, bench_opp, warm, steps, cum_base, lean, tiny, envs, batch,
@@ -350,9 +364,9 @@ def main():
           f"cum_step={st['cum_step']:,}", flush=True)
 
     for rd in range(st["round"], args.rounds):
-        # training opponent: sampled from the FIRST QUARTER of the HoF (stable); benchmark: the SEED
-        pool = first_quarter(st["hof"])
-        train_opp = pool[int(rng.integers(len(pool)))]
+        # training opponent: PFSP over the FULL HoF (C.3) — win-rate-prioritized, full
+        # support. st["hof_win"] maps ckpt->our last win rate vs it (filled per round).
+        train_opp = pfsp_pick(st["hof"], st.get("hof_win", {}), rng)
         warm = st["global_best_ckpt"]
         out = run_round(py, rd, train_opp, st["seed"], warm, args.round_steps,
                         st["cum_step"], args.lean_contacts, args.tiny, args.envs, args.batch,
@@ -363,6 +377,9 @@ def main():
         if out is None:
             save_state(st); print("LEAGUE STOP: round failed.", flush=True); return
         res, round_best = out
+        # PFSP bookkeeping: our win rate vs this round's training opponent
+        if isinstance(res, dict) and "win_rate" in res:
+            st.setdefault("hof_win", {})[train_opp] = float(res["win_rate"])
         st["cum_step"] = res["cum_step"]
         delta = delta_diagnostic(py, f"spr{rd}", warm, round_best, st.get("delta_refs", []))
         st.setdefault("skill_deltas", []).append(dict(round=rd, warm=warm, ckpt=round_best, **delta))

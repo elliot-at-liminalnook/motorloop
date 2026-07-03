@@ -25,7 +25,7 @@ sys.path.insert(0, str(HERE))
 from gen_robot_mjcf import build_mjcf, load_spec       # noqa: E402
 from mjx_env import UniversalEnv, DESIGN_DIM           # noqa: E402
 from train_adversarial import AdversarialEnv           # noqa: E402
-from brax.training.agents.ppo import networks as ppo_networks   # noqa: E402
+import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)   # noqa: E402
 from brax.training.acme import running_statistics      # noqa: E402
 
 OUT = Path(os.environ.get("CODESIGN_OUT", "/root/proj/out")); SPEC = load_spec(HERE / "robot.toml")

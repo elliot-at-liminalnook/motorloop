@@ -28,7 +28,10 @@ HERE = Path(__file__).resolve().parent
 #   op '>' => flag if value > thr (too high);  '<' => flag if value < thr (too low)
 SPEC = [
     # --- physics plausibility (launches, blowups, interpenetration) ---
-    ("peak_torso_z",      "physics", ">", 0.45),   # max torso height; stance ~0.2 -> >0.45 = launch
+    ("peak_torso_z",      "physics", ">", 0.60),   # max torso height -> launch. Geometry-derived for the
+                                                   # full-torque body (2026-07 gear fix): settled stance
+                                                   # 0.286, spawn 0.38, max kinematic extension ~0.49
+                                                   # (knee limit -0.4); catapults rose >1.0. 0.60 separates.
     ("airborne_frac",     "physics", ">", 0.05),   # frac of steps torso above any standing pose
     ("peak_lin_speed",    "physics", ">", 4.0),    # max torso linear speed (m/s) -> catapult
     ("peak_joint_speed",  "physics", ">", 60.0),   # max hinge joint speed (rad/s) -> blowup

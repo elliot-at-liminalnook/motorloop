@@ -1,0 +1,386 @@
+{
+  "units": "meters_assumed",
+  "source": "Test_Mesh_Leg_7-1-2026.gltf",
+  "status": "fourth_pass_hip_yaw_CONFIRMED_at_body_mount",
+  "bodies": {
+    "base_housing_and_axle": {
+      "mass_kg": 0.5,
+      "friction": 0.65,
+      "status": "hip_yaw_rotor (was fixed_base in third pass)",
+      "mesh_names": [
+        "Mesh_12",
+        "Mesh_13",
+        "Mesh_14",
+        "Mesh_15",
+        "Mesh_16",
+        "Mesh_2",
+        "Mesh_4",
+        "Mesh_5",
+        "Mesh_6",
+        "Mesh_7",
+        "Mesh_8"
+      ],
+      "parts": {
+        "drive_housing": [
+          "Mesh_5"
+        ],
+        "motor_mount_shaft": [
+          "Mesh_2",
+          "Mesh_6",
+          "Mesh_7",
+          "Mesh_8"
+        ],
+        "gear_axle_pin": [
+          "Mesh_4",
+          "Mesh_12",
+          "Mesh_13",
+          "Mesh_15",
+          "Mesh_14",
+          "Mesh_16"
+        ]
+      },
+      "note": "housing + motor mount shaft + gear axle pin; mounts to the robot body; FOURTH PASS: per user 2026-07-03, a second motor beside the worm input YAWS this whole assembly left-right on the body mount \u2014 small pitch angles are compensated by steering the swing plane"
+    },
+    "worm_input": {
+      "mass_kg": 0.06,
+      "friction": 0.45,
+      "mesh_names": [
+        "Mesh_18",
+        "Mesh_3"
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "note": "hip motor input shaft"
+    },
+    "leg_swing_link": {
+      "mass_kg": 0.55,
+      "friction": 0.6,
+      "mesh_names": [
+        "Mesh_19",
+        "Mesh_17",
+        "Mesh_39",
+        "Mesh_40",
+        "Mesh_41",
+        "Mesh_42",
+        "Mesh_43",
+        "Mesh_44",
+        "Mesh_36",
+        "Mesh_20",
+        "Mesh_21",
+        "Mesh_37",
+        "Mesh_9",
+        "Mesh_10",
+        "Mesh_11",
+        "Mesh_46",
+        "Mesh_47",
+        "Mesh_45",
+        "Mesh_38",
+        "Mesh_24",
+        "Mesh_25"
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "parts": {
+        "sector_gear": [
+          "Mesh_19"
+        ],
+        "drive_frame": [
+          "Mesh_17"
+        ],
+        "guide_rails": [
+          "Mesh_39",
+          "Mesh_40"
+        ],
+        "rail_screws": [
+          "Mesh_41",
+          "Mesh_42",
+          "Mesh_43",
+          "Mesh_44"
+        ],
+        "knee_carrier": [
+          "Mesh_36",
+          "Mesh_20",
+          "Mesh_21"
+        ],
+        "shin_rail": [
+          "Mesh_37",
+          "Mesh_9",
+          "Mesh_10",
+          "Mesh_11"
+        ],
+        "knee_pin": [
+          "Mesh_38",
+          "Mesh_24",
+          "Mesh_25"
+        ],
+        "distal_carrier": [
+          "Mesh_46",
+          "Mesh_47",
+          "Mesh_45"
+        ]
+      },
+      "note": "sector gear + drive frame + guide rails + knee carrier + shin rail + distal carrier: ONE rigid link swinging on the gear axle pin, worm-driven"
+    },
+    "blade_upper": {
+      "mass_kg": 0.05,
+      "friction": 0.7,
+      "mesh_names": [
+        "Mesh_35",
+        "Mesh_1",
+        "Mesh_34"
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "straight center strip, knee pin -> toe hinge; the knee-motor crank (r = 75 mm)"
+    },
+    "blade_lower": {
+      "mass_kg": 0.07,
+      "friction": 0.7,
+      "mesh_names": [
+        "Mesh_22",
+        "Mesh_23",
+        "Mesh_32",
+        "Mesh_33"
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "curved perforated plates, toe hinge -> heel pin; the conrod (L = 100 mm)"
+    },
+    "pushrod": {
+      "mass_kg": 0.08,
+      "friction": 0.6,
+      "mesh_names": [
+        "Mesh_29",
+        "Mesh_30",
+        "Mesh_31",
+        "Mesh_26",
+        "Mesh_0",
+        "Mesh_27",
+        "Mesh_28"
+      ],
+      "note": "pure piston (incl. heel pin): the distal-carrier bushing restricts it to up/down motion colinear with the shin rail (no tilt)"
+    },
+    "yaw_mount_plate": {
+      "mass_kg": 0.15,
+      "friction": 0.65,
+      "status": "fixed_base",
+      "mesh_names": [],
+      "note": "CONFIRMED (user 2026-07-03): the yaw pivot is AT the leg-to-body attachment \u2014 the entire leg assembly (housing, worm motor, sector gear, everything distal) yaws as one piece on this interface. This 'plate' is the body-side frame; it may own zero meshes in this leg-only export (pure attachment frame). Remaining TODO: yaw ROM + gearing."
+    }
+  },
+  "joints": {
+    "worm_spin": {
+      "type": "revolute",
+      "parent": "base_housing_and_axle",
+      "child": "worm_input",
+      "origin_xyz": [
+        -0.21850000321865082,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "note": "hip motor input, fast"
+    },
+    "leg_swing": {
+      "type": "revolute",
+      "parent": "base_housing_and_axle",
+      "child": "leg_swing_link",
+      "origin_xyz": [
+        -0.16268999874591827,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "limit_deg": [
+        -25.0,
+        25.0
+      ],
+      "note": "worm drives the sector gear 20:1; gear grips the drive frame through its C-opening, so frame+rails+leg swing together"
+    },
+    "knee_blade_flexion": {
+      "type": "revolute",
+      "parent": "leg_swing_link",
+      "child": "blade_upper",
+      "origin_xyz": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "limit_deg": [
+        -90.0,
+        10.0
+      ],
+      "note": "KNEE-motor-driven crank; origin in leg-link coords"
+    },
+    "toe_hinge": {
+      "type": "revolute_passive",
+      "parent": "blade_upper",
+      "child": "blade_lower",
+      "origin_xyz": [
+        0.0,
+        0.07500000298023224,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "yellow hinge at the top of the blade joining the two lengths"
+    },
+    "heel_pin_joint": {
+      "type": "revolute_passive",
+      "parent": "blade_lower",
+      "child": "pushrod",
+      "origin_xyz": [
+        0.0,
+        -0.02500000037252903,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "the lower length's ear wraps the heel pin on top of the piston; slider-crank closure - as the blade sweeps out the heel pin lowers toward the ground (weight keeps the joints seated)"
+    },
+    "pushrod_bushing_slide": {
+      "type": "prismatic",
+      "parent": "leg_swing_link",
+      "child": "pushrod",
+      "origin_xyz": [
+        0.0,
+        -0.24050000309944153,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "travel_mm_at_limits": [
+        -41.14,
+        -0.29
+      ],
+      "note": "bushing restricts the rod to piston motion only, colinear with the shin rail and distal carrier"
+    },
+    "toe_pin_reference": {
+      "type": "pin_visual",
+      "origin_xyz": [
+        0.0,
+        0.07500000298023224,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        0,
+        1
+      ],
+      "note": "blade tip spacer pin, radius 75 mm"
+    },
+    "hip_yaw": {
+      "type": "revolute",
+      "parent": "yaw_mount_plate",
+      "child": "base_housing_and_axle",
+      "origin_xyz": [
+        -0.219,
+        0.0,
+        0.0
+      ],
+      "axis_xyz": [
+        0,
+        1,
+        0
+      ],
+      "limit_deg": [
+        -45.0,
+        45.0
+      ],
+      "note": "CONFIRMED first joint in the chain, pivoting at the body attachment: yaw -> leg_swing (worm 20:1 pitch) -> knee_blade -> passive foot loop. ROM still placeholder \u00b145\u00b0; origin approximated at the attachment/motor-pair location."
+    }
+  },
+  "actuators": {
+    "hip_worm_drive_motor": {
+      "type": "torque_motor",
+      "drives_joint": "leg_swing",
+      "command_interface": "commanded_torque_nm",
+      "max_torque_nm": 1.2,
+      "gear_ratio": 20.0,
+      "status": "worm on motor mount shaft; 20:1 from ~20T sector gear"
+    },
+    "knee_motor": {
+      "type": "torque_motor",
+      "drives_joint": "knee_blade_flexion",
+      "command_interface": "commanded_torque_nm",
+      "max_torque_nm": 3.0,
+      "status": "CORRECTED (user 2026-07-03): the knee motor ACTIVELY drives the blade down as well as retracting it \u2014 deployment is gravity-ASSISTED, not gravity-only (third-pass Drake finding 'restraint and retraction only' understated it). The blade is a POWERED downward strike: slider-crank is a toggle press \u2014 near the stowed pose dh/dphi -> 0 so piston force per motor torque -> very large (clamping/pinning); at full extension dh/dphi = 74.6 mm/rad so 3 N.m -> ~40 N at the tip plus the mechanism's weight. Peak strike force arrives at the START of the stomp, easing as it extends."
+    },
+    "hip_yaw_motor": {
+      "type": "series_elastic_belt_drive",
+      "drives_joint": "hip_yaw",
+      "command_interface": "commanded_torque_nm",
+      "max_torque_nm": 1.2,
+      "transmission": "belt + LARGE RUBBER PULLEY on the leg side (user 2026-07-03)",
+      "gear_ratio": "TODO: pulley diameter ratio (motor pulley dia / leg pulley dia)",
+      "series_stiffness_nm_per_rad": "TODO: torsional stiffness of belt+rubber \u2014 bench-measurable (lock motor, twist leg, measure torque/deflection)",
+      "series_damping": "TODO: rubber hysteresis damping",
+      "status": "SERIES-ELASTIC by design: the rubber pulley is the impact absorber for lateral blows \u2014 the deliberate compliant path that the self-locking worm pitch axis lacks. Backdrivable, shock-filtering; costs yaw control bandwidth (steering is springy) \u2014 must be modeled as motor->spring/damper->joint, NOT a rigid gear, or sim-trained policies will assume crisper steering than the hardware has."
+    }
+  },
+  "animation": {
+    "name": "full_range_of_motion",
+    "fps": 12,
+    "frames": 72,
+    "leg_swing_deg": [
+      -25.0,
+      25.0
+    ],
+    "knee_blade_deg": [
+      -90.0,
+      10.0
+    ],
+    "worm_deg": "20x inverse swing angle (physical worm ratio)",
+    "pushrod_drop_mm_at_limits": [
+      -41.14,
+      -0.29
+    ]
+  },
+  "notes": [
+    "48 unnamed flat mesh nodes; groups assigned from measured bounds/colors/shape.",
+    "Sector gear rim circle fit: center (-0.16269, 0.00000), R 0.0495, ~20 teeth over ~270 deg.",
+    "Design intent per user: drive frame [4] + guide rails [7] are NOT fixed - they swing with the sector gear about the gear axle pin (worm-driven).",
+    "A separate KNEE motor at the knee carrier drives the foot blade + pushrod.",
+    "The blade is TWO lengths hinged at the yellow toe pin: upper straight strip (knee crank, r 75 mm) and lower curved perforated plates (conrod, L 100 mm) whose ear wraps the heel pin on top of the piston. Slider-crank: as the blade sweeps out the heel pin lowers 41 mm toward the ground, weight keeping the joints seated. The distal-carrier bushing restricts the piston to up/down motion colinear with the shin rail (no tilt).",
+    "Knee-blade ROM per design intent: toe pin pivots OUT IN FRONT of the knee pin (-90 deg, blade horizontal toe-forward) with a small +10 deg back-reach; the heel ear swings back through the knee carrier's internal slot region. Swing ROM +/-25 deg. Both verified against rendered frames.",
+    "Mass/friction values are placeholders for downstream schema testing.",
+    "The GIF is keyframed kinematics, not a Bullet rigid-body simulation.",
+    "FOURTH PASS (2026-07-03, from user): a THIRD motor beside the worm input yaws the whole drive assembly left-right \u2014 3 motors/leg (yaw, worm-pitch, knee). Foot workspace becomes a cone: stride can come from yaw sweep while \u00b125\u00b0 pitch handles clearance. Mesh membership of the true fixed mount vs the yaw rotor, yaw ROM, and yaw gearing are PENDING confirmation; rig_foot_7_1.py and scripts/drake_leg_analysis.py still model the third pass (no yaw) and need the same joint added once confirmed.",
+    "YAW DRIVE (user 2026-07-03): belt system with a large rubber pulley as the compliant element \u2014 series-elastic yaw. Pulley ratio + torsional stiffness/damping TODO (both bench-measurable). Sim model: SEA (rotor dof + torsional spring-damper to the yaw joint) or minimum-viable joint stiffness/damping; rigid-gear modeling would overstate steering bandwidth.",
+    "KNEE = ACTIVE WEAPON (user 2026-07-03): powered downward blade strike, gravity-assisted. Toggle-press force profile (huge near stowed, ~40 N + weight at -90 deg). The mesh_blade sim variant should model the knee as a strike actuator, not just a foot deployer \u2014 this mechanism, not the pneumatic rod, may be the real robot's primary attack."
+  ]
+}

@@ -147,6 +147,28 @@ MOTORS: dict[str, Motor] = {
                    "for torque+speed+backdrivability; values representative, confirm vs the chosen unit"),
     # Premium: maxon EC 45 flat 50 W 12 V (p/n 251601). Datasheet-typical -
     # confirm exact values against the maxon 251601 datasheet.
+    "go_m8010": Motor(
+        name="go_m8010", label="Unitree GO-M8010-6 (motor side; 6.33:1 in robot.toml)",
+        r_line_line=0.23,                 # assumed (datasheet lists actuator-level only)
+        l_line_line=0.06e-3,
+        ke_line_line_peak=0.162,          # kt~=0.094: 23.7 N.m peak output / 6.33 / (4x 10A) - datasheet-derived
+        pole_count=28, inertia_kg_m2=1.2e-4,   # large-gap outrunner rotor (assumed)
+        damping=2.0e-5, trapezoid_blend=0.0,
+        rated_current_a=10.0, rated_voltage_v=24.0, price_usd=280.0,
+        provenance="Unitree GO-M8010-6 standalone actuator: 23.7 N.m peak / ~30 rad/s at output, 530 g, "
+                   "integrated driver+encoder. Motor-side constants back-derived from actuator datasheet; "
+                   "R/L/poles/inertia ASSUMED - bench-verify before hardware commit."),
+    "diy_qdd_8308": Motor(
+        name="diy_qdd_8308", label="DIY QDD: Eaglepower EA8308 KV90 + 8:1 printed planetary (own FOC stack)",
+        r_line_line=0.09,                 # typical 8308 KV90 stator
+        l_line_line=0.045e-3,
+        ke_line_line_peak=0.184,          # kt~=0.106 from KV90 (9.55/KV), datasheet-derived
+        pole_count=40, inertia_kg_m2=1.4e-4,   # large pancake rotor (assumed)
+        damping=2.5e-5, trapezoid_blend=0.05,
+        rated_current_a=9.0, rated_voltage_v=24.0, price_usd=150.0,
+        provenance="DIY quasi-direct-drive: ~$85 EA8308 KV90 + printed 8:1 planetary + this repo's "
+                   "DRV8316R/AS5047P FOC stack. Cheapest N.m; gear wear + thermal limits ASSUMED "
+                   "(9A rated is conservative with airflow); bench-measure like the others."),
     "maxon_ec45": Motor(
         name="maxon_ec45", label="maxon EC 45 flat 50W",
         r_line_line=0.8,                  # datasheet-typical (confirm 251601)

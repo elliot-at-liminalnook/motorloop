@@ -34,13 +34,16 @@ abd_range = [-0.80, 0.80]           # rad, assumed
 flex_range = [-1.50, 1.50]          # rad, assumed
 knee_range = [-2.60, -0.40]         # rad, assumed (knee bends one way)
 joint_damping = 0.05                # N·m·s/rad — SLASHED 0.5->0.05: a QDD actuator is BACKDRIVABLE;
-joint_stiffness = 2.0                # N·m/rad — modest crouch-centered passive support; enough to keep early
-                                    # policies alive while torque control learns gait, not enough to lock stance.
+joint_stiffness = 0.5                # N·m/rad — retuned 2.0→0.5 after the gear fix (2026-07): the 2.0 springs
+                                    # were propping up a body that had ~8% of design torque (missing MJCF gear).
+                                    # At real ±12.97 N·m the validator passes identically at 2.0/0.5/0.0
+                                    # (margin 0.36 all three); keep 0.5 as mild passive support for early
+                                    # exploration, not stance scaffolding.
 
 [actuator]
 motor = "qdd_mc"                     # ref into sim/tests/motors.py (the torque envelope)
-peak_factor = 4.0                   # burst current multiple, decided
-gear = 12.0                         # transmission ratio (6→12: 2× joint torque, ½ leg
+peak_factor = 6.0                   # burst current multiple (4→6 2026-07-02: QDD-class bursts; +50% torque for "athletic" body)
+gear = 10.0                         # transmission ratio (12→10 2026-07-02: +20% leg speed; with pf6 net +25% torque AND faster
                                     # speed). With torso 3.5 kg → ~3.4× τ/weight vs the old build,
                                     # clearing the measured ~3× needed to stand controllably.
                                     # Striker speed unaffected (pneumatic, not geared).
@@ -83,4 +86,4 @@ thigh_len = [0.21, 0.27]
 calf_len = [0.21, 0.27]
 gear = [8.0, 14.0]                   # brackets the gear=12 center; keeps DR off the
                                     # under-torqued regime that made the old body unable to stand
-joint_stiffness = [0.0, 2.0]
+joint_stiffness = [0.0, 1.0]         # brackets the 0.5 center (was [0,2] around the spring-crutch 2.0)

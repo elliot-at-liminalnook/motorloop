@@ -1,0 +1,297 @@
+<mujoco model="mesh_robot_7_3">
+  <compiler angle="radian" autolimits="true"/>
+  <!-- dt=0.002 (NOT the fleet's 0.004): the slider-crank connect near its toggle
+       dead-center flips constraint-force direction as the piston reverses; at
+       dt=0.004 that explicit stiff system explodes (measured: 10 m slide error,
+       |qacc| 7e9), at dt=0.002 it tracks the closed form to <1 mm. Keep control
+       at 50 Hz via frame_skip=10 instead of 5. -->
+  <option timestep="0.002" integrator="implicitfast"/>
+  <default>
+    <joint damping="0.02"/>
+    <geom friction="1.2 0.1 0.1" contype="1" conaffinity="1"/>
+  </default>
+  <worldbody>
+    <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"/>
+    <body name="torso" pos="0.0 0.0 0.4602">
+      <freejoint name="root"/>
+      <!-- torso: PLACEHOLDER box (structure not designed); mass placeholder 3.0 kg -->
+      <geom name="torso" type="box" size="0.14965 0.08065 0.05000"
+            mass="3.0" rgba="0.3 0.3 0.6 1"/>
+      <!-- striker: COSMETIC placeholder, non-colliding, no actuator -->
+      <geom name="striker_ph" type="cylinder" pos="0.23965 0 0"
+            quat="0.707107 0 0.707107 0" size="0.012 0.09000"
+            mass="0.1" contype="0" conaffinity="0" rgba="0.8 0.8 0.85 1"/>
+
+    <body name="FL_base_housing" pos="0.099634 0.080669 -0.138029"
+          quat="0.707107 0.707107 0.000000 0.000000">
+      <joint name="FL_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
+             armature="0.000135" damping="0.08"/>
+      <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
+      <geom name="FL_housing" type="box" pos="-0.19084 0 0"
+            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+      <body name="FL_swing_link" pos="-0.162690 0 0">
+        <joint name="FL_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
+               armature="0.006" frictionloss="2.0"/>
+        <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
+        <geom name="FL_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
+              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+        <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
+        <geom name="FL_shin" type="capsule"
+              fromto="0.16269 0 0 0.16269 -0.2405 0"
+              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+        <body name="FL_blade_upper" pos="0.162690 0 0">
+          <joint name="FL_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
+                 armature="1.5e-05"/>
+          <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
+          <geom name="FL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
+                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+          <body name="FL_blade_lower" pos="0 0.075 0">
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
+                 connect constraint is stiff; bearing-scale armature+damping keep the
+                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
+                 singular. Values are numerical regularization, not bench data. -->
+            <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
+                 ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
+                 (heel ear in the carrier slot) and block the flipped-elbow branch of
+                 the slider-crank, which otherwise engages under zero-g whip (measured:
+                 airborne strike flipped the loop to slide=+27 mm without this). -->
+            <joint name="FL_toe_hinge" axis="0 0 1" range="-0.15 0.85"
+                   damping="0.1" armature="2e-4"/>
+            <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
+                 COLLIDES: it is the strike face -->
+            <geom name="FL_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
+                  size="0.010" mass="0.07"/>
+          </body>
+        </body>
+        <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
+        <body name="FL_pushrod" pos="0.162690 -0.025 0">
+          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
+               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+               toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
+               branch of the crank (which would need s=+200 mm). -->
+          <joint name="FL_pushrod_slide" type="slide" axis="0 1 0"
+                 range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
+          <geom name="FL_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
+                size="0.008" mass="0.064"/>
+          <geom name="FL_foot" type="sphere" pos="0 -0.24600 0"
+                size="0.012" mass="0.016"/>
+        </body>
+      </body>
+    </body>
+    <body name="FR_base_housing" pos="0.099634 -0.080669 -0.138029"
+          quat="0.707107 0.707107 0.000000 0.000000">
+      <joint name="FR_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
+             armature="0.000135" damping="0.08"/>
+      <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
+      <geom name="FR_housing" type="box" pos="-0.19084 0 0"
+            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+      <body name="FR_swing_link" pos="-0.162690 0 0">
+        <joint name="FR_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
+               armature="0.006" frictionloss="2.0"/>
+        <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
+        <geom name="FR_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
+              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+        <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
+        <geom name="FR_shin" type="capsule"
+              fromto="0.16269 0 0 0.16269 -0.2405 0"
+              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+        <body name="FR_blade_upper" pos="0.162690 0 0">
+          <joint name="FR_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
+                 armature="1.5e-05"/>
+          <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
+          <geom name="FR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
+                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+          <body name="FR_blade_lower" pos="0 0.075 0">
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
+                 connect constraint is stiff; bearing-scale armature+damping keep the
+                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
+                 singular. Values are numerical regularization, not bench data. -->
+            <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
+                 ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
+                 (heel ear in the carrier slot) and block the flipped-elbow branch of
+                 the slider-crank, which otherwise engages under zero-g whip (measured:
+                 airborne strike flipped the loop to slide=+27 mm without this). -->
+            <joint name="FR_toe_hinge" axis="0 0 1" range="-0.15 0.85"
+                   damping="0.1" armature="2e-4"/>
+            <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
+                 COLLIDES: it is the strike face -->
+            <geom name="FR_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
+                  size="0.010" mass="0.07"/>
+          </body>
+        </body>
+        <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
+        <body name="FR_pushrod" pos="0.162690 -0.025 0">
+          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
+               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+               toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
+               branch of the crank (which would need s=+200 mm). -->
+          <joint name="FR_pushrod_slide" type="slide" axis="0 1 0"
+                 range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
+          <geom name="FR_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
+                size="0.008" mass="0.064"/>
+          <geom name="FR_foot" type="sphere" pos="0 -0.24600 0"
+                size="0.012" mass="0.016"/>
+        </body>
+      </body>
+    </body>
+    <body name="RL_base_housing" pos="-0.099634 0.080669 -0.138029"
+          quat="0.000000 0.000000 0.707107 0.707107">
+      <joint name="RL_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
+             armature="0.000135" damping="0.08"/>
+      <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
+      <geom name="RL_housing" type="box" pos="-0.19084 0 0"
+            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+      <body name="RL_swing_link" pos="-0.162690 0 0">
+        <joint name="RL_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
+               armature="0.006" frictionloss="2.0"/>
+        <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
+        <geom name="RL_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
+              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+        <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
+        <geom name="RL_shin" type="capsule"
+              fromto="0.16269 0 0 0.16269 -0.2405 0"
+              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+        <body name="RL_blade_upper" pos="0.162690 0 0">
+          <joint name="RL_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
+                 armature="1.5e-05"/>
+          <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
+          <geom name="RL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
+                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+          <body name="RL_blade_lower" pos="0 0.075 0">
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
+                 connect constraint is stiff; bearing-scale armature+damping keep the
+                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
+                 singular. Values are numerical regularization, not bench data. -->
+            <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
+                 ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
+                 (heel ear in the carrier slot) and block the flipped-elbow branch of
+                 the slider-crank, which otherwise engages under zero-g whip (measured:
+                 airborne strike flipped the loop to slide=+27 mm without this). -->
+            <joint name="RL_toe_hinge" axis="0 0 1" range="-0.15 0.85"
+                   damping="0.1" armature="2e-4"/>
+            <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
+                 COLLIDES: it is the strike face -->
+            <geom name="RL_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
+                  size="0.010" mass="0.07"/>
+          </body>
+        </body>
+        <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
+        <body name="RL_pushrod" pos="0.162690 -0.025 0">
+          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
+               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+               toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
+               branch of the crank (which would need s=+200 mm). -->
+          <joint name="RL_pushrod_slide" type="slide" axis="0 1 0"
+                 range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
+          <geom name="RL_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
+                size="0.008" mass="0.064"/>
+          <geom name="RL_foot" type="sphere" pos="0 -0.24600 0"
+                size="0.012" mass="0.016"/>
+        </body>
+      </body>
+    </body>
+    <body name="RR_base_housing" pos="-0.099634 -0.080669 -0.138029"
+          quat="0.000000 0.000000 0.707107 0.707107">
+      <joint name="RR_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
+             armature="0.000135" damping="0.08"/>
+      <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
+      <geom name="RR_housing" type="box" pos="-0.19084 0 0"
+            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+      <body name="RR_swing_link" pos="-0.162690 0 0">
+        <joint name="RR_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
+               armature="0.006" frictionloss="2.0"/>
+        <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
+        <geom name="RR_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
+              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+        <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
+        <geom name="RR_shin" type="capsule"
+              fromto="0.16269 0 0 0.16269 -0.2405 0"
+              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+        <body name="RR_blade_upper" pos="0.162690 0 0">
+          <joint name="RR_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
+                 armature="1.5e-05"/>
+          <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
+          <geom name="RR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
+                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+          <body name="RR_blade_lower" pos="0 0.075 0">
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
+                 connect constraint is stiff; bearing-scale armature+damping keep the
+                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
+                 singular. Values are numerical regularization, not bench data. -->
+            <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
+                 ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
+                 (heel ear in the carrier slot) and block the flipped-elbow branch of
+                 the slider-crank, which otherwise engages under zero-g whip (measured:
+                 airborne strike flipped the loop to slide=+27 mm without this). -->
+            <joint name="RR_toe_hinge" axis="0 0 1" range="-0.15 0.85"
+                   damping="0.1" armature="2e-4"/>
+            <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
+                 COLLIDES: it is the strike face -->
+            <geom name="RR_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
+                  size="0.010" mass="0.07"/>
+          </body>
+        </body>
+        <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
+        <body name="RR_pushrod" pos="0.162690 -0.025 0">
+          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
+               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+               toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
+               branch of the crank (which would need s=+200 mm). -->
+          <joint name="RR_pushrod_slide" type="slide" axis="0 1 0"
+                 range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
+          <geom name="RR_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
+                size="0.008" mass="0.064"/>
+          <geom name="RR_foot" type="sphere" pos="0 -0.24600 0"
+                size="0.012" mass="0.016"/>
+        </body>
+      </body>
+    </body>
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="FL_blade_lower" body2="FL_pushrod"/>
+    <exclude body1="FL_blade_upper" body2="FL_pushrod"/>
+    <exclude body1="FR_blade_lower" body2="FR_pushrod"/>
+    <exclude body1="FR_blade_upper" body2="FR_pushrod"/>
+    <exclude body1="RL_blade_lower" body2="RL_pushrod"/>
+    <exclude body1="RL_blade_upper" body2="RL_pushrod"/>
+    <exclude body1="RR_blade_lower" body2="RR_pushrod"/>
+    <exclude body1="RR_blade_upper" body2="RR_pushrod"/>
+  </contact>
+  <equality>
+    <connect name="FL_heel_pin" body1="FL_blade_lower" body2="FL_pushrod"
+             anchor="0 -0.1 0"/>
+    <connect name="FR_heel_pin" body1="FR_blade_lower" body2="FR_pushrod"
+             anchor="0 -0.1 0"/>
+    <connect name="RL_heel_pin" body1="RL_blade_lower" body2="RL_pushrod"
+             anchor="0 -0.1 0"/>
+    <connect name="RR_heel_pin" body1="RR_blade_lower" body2="RR_pushrod"
+             anchor="0 -0.1 0"/>
+  </equality>
+  <actuator>
+    <motor name="FL_yaw_m" joint="FL_hip_yaw" gear="1.2" ctrlrange="-1 1"
+           forcerange="-1.2 1.2"/>
+    <motor name="FL_swing_m" joint="FL_leg_swing" gear="24.0" ctrlrange="-1 1"
+           forcerange="-24 24"/>
+    <motor name="FL_knee_m" joint="FL_knee_blade" gear="3.0" ctrlrange="-1 1"
+           forcerange="-3 3"/>
+    <motor name="FR_yaw_m" joint="FR_hip_yaw" gear="1.2" ctrlrange="-1 1"
+           forcerange="-1.2 1.2"/>
+    <motor name="FR_swing_m" joint="FR_leg_swing" gear="24.0" ctrlrange="-1 1"
+           forcerange="-24 24"/>
+    <motor name="FR_knee_m" joint="FR_knee_blade" gear="3.0" ctrlrange="-1 1"
+           forcerange="-3 3"/>
+    <motor name="RL_yaw_m" joint="RL_hip_yaw" gear="1.2" ctrlrange="-1 1"
+           forcerange="-1.2 1.2"/>
+    <motor name="RL_swing_m" joint="RL_leg_swing" gear="24.0" ctrlrange="-1 1"
+           forcerange="-24 24"/>
+    <motor name="RL_knee_m" joint="RL_knee_blade" gear="3.0" ctrlrange="-1 1"
+           forcerange="-3 3"/>
+    <motor name="RR_yaw_m" joint="RR_hip_yaw" gear="1.2" ctrlrange="-1 1"
+           forcerange="-1.2 1.2"/>
+    <motor name="RR_swing_m" joint="RR_leg_swing" gear="24.0" ctrlrange="-1 1"
+           forcerange="-24 24"/>
+    <motor name="RR_knee_m" joint="RR_knee_blade" gear="3.0" ctrlrange="-1 1"
+           forcerange="-3 3"/>
+  </actuator>
+</mujoco>

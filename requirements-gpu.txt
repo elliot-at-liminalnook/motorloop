@@ -15,6 +15,10 @@ flax==0.10.7
 optax==0.2.8
 numpy==2.2.6
 tomli ; python_version < "3.11"
+pydantic==2.*  # typed robot.toml spec validation at model build (sim/robot/spec_schema.py)
 # Note: mujoco-mjx 3.9 prints "Failed to import warp: No module named 'warp'" on import.
 # HARMLESS — warp is an optional alternate MJX backend; we use the JAX backend. Don't chase
 # it (installing warp-lang just to silence it pulls a large unused dep).
+# drake==1.54.0  # V.8/DR sidecar (CPU verification only, not needed on GPU pods) — kept
+#                # commented out so pod installs don't pull the ~600MB wheel; install into
+#                # .venv-sim locally for gen_robot_drake.py / test_cross_engine.py.

@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parent
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--a", required=True)
-    ap.add_argument("--b", required=True)
+    ap.add_argument("--b", default="")
     ap.add_argument("--out", default="fight.mp4")
     ap.add_argument("--steps", type=int, default=220)
     ap.add_argument("--sep", type=float, default=0.5)
@@ -33,13 +33,47 @@ def main():
     ap.add_argument("--w", type=int, default=640)
     ap.add_argument("--h", type=int, default=480)
     ap.add_argument("--label", default="", help="overlay text (e.g. the milestone tag); reads {label}.json sidecar for win/ratio")
-    args = ap.parse_args()
+    # asymmetric / lidar checkpoints: B has no lidar sensors, so a lidar policy cannot
+    # drive a frozen B. --passive-b renders the trained policy (A) against a passive B,
+    # building an env whose obs matches the checkpoint (lidar/her dims). Forwarded
+    # train-only flags are ignored (parse_known_args).
+    ap.add_argument("--passive-b", action="store_true",
+                    help="render A vs a passive B (required for lidar/asymmetric checkpoints)")
+    ap.add_argument("--lidar-obs", action="store_true")
+    ap.add_argument("--lidar-n-rays", type=int, default=128)
+    ap.add_argument("--lidar-n-vertical", type=int, default=16)
+    ap.add_argument("--lidar-max-range", type=float, default=2.0)
+    ap.add_argument("--lidar-frame-stack", type=int, default=3)
+    ap.add_argument("--lidar-latency-steps", type=int, default=0)
+    ap.add_argument("--hierarchical", action="store_true")
+    ap.add_argument("--gate-threshold", type=float, default=0.3)
+    ap.add_argument("--engage-obs", action="store_true")
+    ap.add_argument("--contact-obs", action="store_true")
+    ap.add_argument("--her-coefficient", type=float, default=0.0)
+    args, _ignored = ap.parse_known_args()
 
-    infA = T.load_opponent(args.a)
-    infB = T.load_opponent(args.b)
-
-    env = T.AdversarialEnv(frame_skip=5, striker=True, sep=args.sep, azimuth=0.3,
-                           opponent="frozen", opp_infer=infB)
+    # Build an env whose observation matches the trained checkpoint. For a lidar
+    # checkpoint, B cannot be driven by the policy (no B-side lidar) -> passive B.
+    env_kw = dict(frame_skip=5, striker=True, sep=args.sep, azimuth=0.3,
+                  engage_obs=args.engage_obs, contact_obs=args.contact_obs,
+                  hierarchical=args.hierarchical, gate_threshold=args.gate_threshold,
+                  her_coefficient=args.her_coefficient)
+    if args.lidar_obs:
+        env_kw.update(lidar=True, lidar_n_rays=args.lidar_n_rays,
+                      lidar_n_vertical=args.lidar_n_vertical, lidar_max_range=args.lidar_max_range,
+                      lidar_frame_stack=args.lidar_frame_stack,
+                      lidar_latency_steps=args.lidar_latency_steps,
+                      lidar_noise_sigma=0.0, lidar_dropout_rate=0.0)  # deterministic render
+    infB = None
+    if args.passive_b or not args.b:
+        env = T.AdversarialEnv(opponent="passive", **env_kw)
+    else:
+        # non-lidar self-play: B is a flat frozen snapshot
+        infB = T.load_opponent(args.b)
+        env = T.AdversarialEnv(opponent="frozen", opp_infer=infB, **env_kw)
+    # Build A's inference matching the env's obs structure (dict for lidar) so the
+    # asymmetric normalizer + dict obs are consumed correctly.
+    infA = T.load_policy(args.a, env.observation_size, env.action_size)
     step = jax.jit(env.step)
     key = jax.random.PRNGKey(args.seed)
     state = env.reset_with(key, jnp.full(3, 0.5))          # nominal body = matches the CPU render model
@@ -55,8 +89,9 @@ def main():
     print(f"rollout: {len(qpos_log)} steps  cum dealt={cum_dealt:.3f} taken={cum_taken:.3f} "
           f"ratio={cum_dealt/max(cum_taken,1e-6):.2f}")
 
+    # Match the env's qpos layout: B has striker DOFs only when armed (frozen opponent).
     m = mujoco.MjModel.from_xml_string(build_match(T.SPEC, T.SPEC, sep=args.sep, self_collision=True,
-                                                   striker=True, striker_b=True))  # B armed too (opp=frozen)
+                                                   striker=True, striker_b=infB is not None))
     d = mujoco.MjData(m)
     renderer = mujoco.Renderer(m, args.h, args.w)
     cam = mujoco.MjvCamera()
@@ -95,6 +130,7 @@ def main():
             print(f"label skipped ({e})")
 
     out = args.out if os.path.isabs(args.out) else str(HERE / args.out)
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     try:
         imageio.mimsave(out, frames, fps=args.fps, codec="libx264", quality=8)
         print(f"wrote {out} ({len(frames)} frames @ {args.fps}fps)")

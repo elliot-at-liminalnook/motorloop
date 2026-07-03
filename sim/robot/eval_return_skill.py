@@ -77,7 +77,7 @@ def main():
     })
     sys.path.insert(0, str(HERE))
     from brax.training.acme import running_statistics  # noqa: E402
-    from brax.training.agents.ppo import networks as ppo_networks  # noqa: E402
+    import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)  # noqa: E402
     from commanded_env import FALL_Z, MIN_UP_Z  # noqa: E402
     from return_skill_env import _build  # noqa: E402
 

@@ -25,7 +25,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 def build_fire_overlay_benchmark(env: AdversarialEnv, n_epis: int, steps: int, seeds: list[int]):
     from brax.training.acme import running_statistics
-    from brax.training.agents.ppo import networks as ppo_networks
+    import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)
 
     net = ppo_networks.make_ppo_networks(
         env.observation_size,

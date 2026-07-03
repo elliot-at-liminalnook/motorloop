@@ -69,7 +69,7 @@ def _apply_overrides(args) -> None:
 
 def _make_infer(params, obs_dim: int, act_dim: int):
     from brax.training.acme import running_statistics
-    from brax.training.agents.ppo import networks as ppo_networks
+    import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)
 
     net = ppo_networks.make_ppo_networks(
         obs_dim, act_dim, preprocess_observations_fn=running_statistics.normalize

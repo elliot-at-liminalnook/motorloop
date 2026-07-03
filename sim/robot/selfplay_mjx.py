@@ -27,7 +27,7 @@ import jax, jax.numpy as jnp, numpy as np, mujoco
 from mujoco import mjx
 from brax.envs.base import Env, State
 from brax.training.agents.ppo import train as ppo
-from brax.training.agents.ppo import networks as ppo_networks
+import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)
 from brax.training.acme import running_statistics
 
 HERE = Path(__file__).resolve().parent

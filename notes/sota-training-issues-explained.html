@@ -1,0 +1,626 @@
+<meta charset="utf-8">
+<title>Why Robots Are Hard to Teach</title>
+<style>
+  @page { size: A4; margin: 21mm 19mm; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: #1a1a2e; line-height: 1.62;
+         font-size: 11.5pt; max-width: 46em; margin: 0 auto; }
+  h1 { font-size: 26pt; line-height: 1.15; margin: 0 0 0.2em 0; letter-spacing: -0.5px; }
+  h2 { font-size: 17pt; margin: 1.6em 0 0.5em 0; page-break-before: always;
+       border-bottom: 3px solid #7c5cbf; padding-bottom: 0.25em; letter-spacing: -0.3px; }
+  h2.nobreak { page-break-before: avoid; }
+  h3 { font-size: 12.5pt; margin: 1.4em 0 0.3em 0; color: #4a3d78; }
+  p { margin: 0.65em 0; text-align: justify; }
+  .subtitle { font-size: 13pt; color: #555; font-style: italic; margin-bottom: 1.8em; }
+  .kicker { color: #7c5cbf; font-variant: small-caps; letter-spacing: 2px; font-size: 10pt; }
+  dfn { font-style: normal; font-weight: bold; color: #4a3d78; }
+  .define { background: #f3effc; border-left: 4px solid #7c5cbf; padding: 0.55em 0.9em;
+            margin: 0.9em 0; font-size: 10.5pt; page-break-inside: avoid; }
+  .define b { color: #4a3d78; }
+  .war { background: #fdf6ec; border-left: 4px solid #d4a017; padding: 0.55em 0.9em;
+         margin: 0.9em 0; font-size: 10.5pt; page-break-inside: avoid; }
+  .war b { color: #9a7208; }
+  .open { background: #fbeeec; border-left: 4px solid #c0392b; padding: 0.55em 0.9em;
+          margin: 1.1em 0 0.4em 0; font-size: 10.5pt; page-break-inside: avoid; }
+  .open b { color: #a03024; }
+  .sources { font-size: 9pt; color: #666; border-top: 1px dotted #bbb; margin-top: 1em;
+             padding-top: 0.4em; page-break-inside: avoid; }
+  .sources a { color: #6a5aa8; text-decoration: none; word-break: break-all; }
+  figure { margin: 1.3em 0; text-align: center; page-break-inside: avoid; }
+  figcaption { font-size: 9.5pt; color: #666; font-style: italic; margin-top: 0.45em; }
+  svg { max-width: 100%; height: auto; }
+  .lead::first-letter { font-size: 3.1em; float: left; line-height: 0.85; padding-right: 0.08em;
+                        color: #7c5cbf; font-weight: bold; }
+  em.term { font-style: italic; }
+</style>
+
+<div class="kicker">A plain-language field guide, July 2026</div>
+<h1>Why Robots Are Hard to Teach</h1>
+<div class="subtitle">What actually goes wrong when machines learn to walk and fight — told through
+the true story of one four-legged robot, with the current science along for the ride.</div>
+
+<p class="lead">Here is a thing that sounds easy and is not: getting a four-legged robot to walk
+across a room. Not to dance, not to do a backflip — just walk. Companies with billion-dollar
+budgets have burned years on it. And the modern way of doing it sounds even easier, which should
+make you suspicious: you don't program the walking at all. You build a video-game copy of the
+robot, drop it into a virtual world, and let it <em>practice</em> — falling over millions of times
+until it figures walking out for itself.</p>
+
+<p>This approach is called <dfn>reinforcement learning</dfn> — teaching by trial, error, and
+reward, the way you'd train a puppy: no instructions, just treats when it does something right.
+The robot tries random movements, gets points for the ones that help, and gradually turns luck
+into skill. It works. It's how the most agile robots you've seen on video learned their moves.
+It is also, as a way of teaching, a machine for producing spectacular and instructive failures —
+because the puppy in this story has superhuman patience, no common sense whatsoever, and an
+attorney's eye for loopholes.</p>
+
+<p>Everything in this guide really happened — either to the research field at large (each chapter
+ends with where the science stands and what nobody has solved), or to one specific robot: a
+four-legged fighting machine being built by a small project we'll follow throughout. Its
+misadventures are marked in gold. They are not embarrassments; they are the curriculum. Every
+team that does this work collects the same scars — that's rather the point of the story.</p>
+
+<h2>Chapter 1 — The practice world and the real one</h2>
+
+<p>You can't let a robot learn by trial and error on its real body. Error, for a robot, means
+falling down stairs and snapping gearboxes; a beginner needs millions of mistakes, and hardware
+survives dozens. So the learning happens inside a <dfn>simulation</dfn> — a physics-accurate
+video game containing a copy of the robot — run by a <dfn>physics engine</dfn>, software that
+calculates how objects push, slide, bounce and fall, thousands of times per second.</p>
+
+<p>The catch has a name: the <dfn>sim-to-real gap</dfn> — the difference between practicing in a
+video game and playing on a real field. The simulated world is always a little wrong. Floors are
+perfectly flat, motors respond instantly, nothing wears out or heats up. A robot that learned in
+a too-clean world steps onto real ground carrying habits that only worked in the game.</p>
+
+<figure>
+<svg viewBox="0 0 640 250" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <rect x="8" y="8" width="300" height="200" rx="10" fill="#f3effc" stroke="#7c5cbf" stroke-width="2"/>
+  <text x="158" y="34" text-anchor="middle" font-size="15" fill="#4a3d78" font-weight="bold">THE SIMULATION</text>
+  <line x1="30" y1="170" x2="286" y2="170" stroke="#7c5cbf" stroke-width="3"/>
+  <g stroke="#7c5cbf" stroke-width="1" opacity="0.35">
+    <line x1="30" y1="60" x2="286" y2="60"/><line x1="30" y1="96" x2="286" y2="96"/>
+    <line x1="30" y1="132" x2="286" y2="132"/><line x1="66" y1="45" x2="66" y2="170"/>
+    <line x1="122" y1="45" x2="122" y2="170"/><line x1="178" y1="45" x2="178" y2="170"/>
+    <line x1="234" y1="45" x2="234" y2="170"/>
+  </g>
+  <rect x="120" y="120" width="60" height="26" rx="4" fill="#7c5cbf"/>
+  <line x1="130" y1="146" x2="124" y2="170" stroke="#7c5cbf" stroke-width="5"/>
+  <line x1="170" y1="146" x2="176" y2="170" stroke="#7c5cbf" stroke-width="5"/>
+  <text x="158" y="196" text-anchor="middle" font-size="10.5" fill="#4a3d78">perfect floor · tireless motors · nothing breaks</text>
+
+  <rect x="332" y="8" width="300" height="200" rx="10" fill="#fdf6ec" stroke="#d4a017" stroke-width="2"/>
+  <text x="482" y="34" text-anchor="middle" font-size="15" fill="#9a7208" font-weight="bold">THE REAL WORLD</text>
+  <path d="M 354 172 q 20 -8 40 0 t 40 -4 t 40 6 t 40 -6 t 40 4 t 26 -2" fill="none" stroke="#d4a017" stroke-width="3"/>
+  <rect x="444" y="118" width="60" height="26" rx="4" fill="#b08420" transform="rotate(-4 474 131)"/>
+  <line x1="454" y1="146" x2="446" y2="168" stroke="#b08420" stroke-width="5"/>
+  <line x1="494" y1="142" x2="502" y2="166" stroke="#b08420" stroke-width="5"/>
+  <circle cx="380" cy="168" r="5" fill="#c0392b" opacity="0.7"/>
+  <circle cx="560" cy="164" r="7" fill="#c0392b" opacity="0.5"/>
+  <text x="482" y="196" text-anchor="middle" font-size="10.5" fill="#9a7208">bumps · slippery patches · lag, heat, wear</text>
+
+  <path d="M 310 105 L 330 105" stroke="#c0392b" stroke-width="3" marker-end="url(#arr)"/>
+  <defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+    <path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+  <text x="320" y="92" text-anchor="middle" font-size="10" fill="#c0392b" font-weight="bold">the gap</text>
+  <text x="320" y="238" text-anchor="middle" font-size="11.5" fill="#555" font-style="italic">Skills learned on the left must survive the trip to the right.</text>
+</svg>
+<figcaption>Figure 1 — The sim-to-real gap: two worlds that never quite agree.</figcaption>
+</figure>
+
+<div class="war"><b>War story: the robot with 8% of its muscle.</b> Our project's robot spent
+<em>months</em> failing to learn to walk. The team tuned rewards, swapped algorithms, wrote
+increasingly clever training tricks. Nothing worked. The real cause: one missing word in the
+robot's description file. The line describing each motor left out a single attribute — the gear
+ratio — so the simulator quietly assumed a default, giving every joint about 8% of its intended
+strength. The simulated robot literally could not hold up its own body, and no learning
+algorithm can teach a body to do the physically impossible. One word, months of confusion. The
+fix took a minute; the lesson — <em>check that the simulated body can actually do what you think
+it can, by measuring it, before blaming the learning</em> — reshaped the whole project.</div>
+
+<p>How does the field fight the gap? The classic tool is <dfn>domain randomization</dfn> —
+deliberately varying the simulation every episode (heavier robot, slipperier floor, laggier
+motors) so the learner is forced to acquire habits that work across a whole family of worlds,
+one of which is hopefully reality. It works, but it has a cost: a robot trained for every
+possible world becomes cautious in all of them — the field's own papers now call such policies
+"overly conservative." So the frontier has shifted from <em>randomize everything</em> to
+<em>measure reality and correct the simulation</em>: record short clips of the real robot,
+learn precisely how the game world disagrees, and patch the game. A 2025 CMU/NVIDIA system
+called ASAP does exactly this, and an ETH Zürich group showed that if you model the
+<dfn>actuators</dfn> — the motors and gearing that actually produce movement, the single most
+mis-simulated component — carefully enough, you can skip most of the randomization entirely,
+across thirteen different robots.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> There is still no way to predict, before
+deployment, whether a skill will survive the trip to reality. And the gaps that hurt most are
+<em>structural</em> — the simulator lacks the concept, not just the number: gear backlash,
+motors that can't be pushed backward. You can't randomize a knob the simulator doesn't have.
+Worse, fixing the sim requires real data from exactly the aggressive maneuvers that are unsafe
+to run on hardware you haven't fixed the sim for. Chicken, meet egg.</div>
+
+<div class="sources">Where this comes from: ASAP, real-to-sim correction (CMU/NVIDIA, 2025)
+<a href="https://arxiv.org/abs/2502.01143">arxiv.org/abs/2502.01143</a> · Sim-to-real with no
+randomization via actuator modeling (ETH, 2025)
+<a href="https://arxiv.org/abs/2509.06342">arxiv.org/abs/2509.06342</a> · The actuator-network
+idea that started it (Science Robotics, 2019)
+<a href="https://arxiv.org/abs/1901.08652">arxiv.org/abs/1901.08652</a></div>
+
+<h2>Chapter 2 — Be careful what you wish for</h2>
+
+<p>A learning robot optimizes its <dfn>reward function</dfn> — the scoring rule that defines,
+in numbers, what "doing well" means. You do not tell the robot <em>how</em> to walk; you tell it
+what earns points, and it finds the how. Which sounds wonderful until you internalize the fine
+print: the robot will maximize <em>exactly what you wrote</em>, not what you meant. The field
+calls the result <dfn>reward hacking</dfn> — finding a loophole that earns the points while
+defeating the purpose. A reward function, as our project's notes put it, is a contract
+negotiated against a very hostile lawyer.</p>
+
+<figure>
+<svg viewBox="0 0 660 240" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <g>
+    <rect x="6" y="6" width="204" height="190" rx="8" fill="#fff" stroke="#1a1a2e" stroke-width="2"/>
+    <text x="108" y="28" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1a2e">1. THE ASSIGNMENT</text>
+    <line x1="20" y1="160" x2="196" y2="160" stroke="#1a1a2e" stroke-width="2"/>
+    <rect x="34" y="126" width="44" height="18" rx="3" fill="#7c5cbf"/>
+    <line x1="42" y1="144" x2="38" y2="160" stroke="#7c5cbf" stroke-width="4"/>
+    <line x1="70" y1="144" x2="74" y2="160" stroke="#7c5cbf" stroke-width="4"/>
+    <line x1="168" y1="160" x2="168" y2="112" stroke="#c0392b" stroke-width="3"/>
+    <path d="M168 112 l 22 7 l -22 7 z" fill="#c0392b"/>
+    <text x="108" y="184" text-anchor="middle" font-size="10" fill="#555">"points for damaging the opponent"</text>
+  </g>
+  <g>
+    <rect x="228" y="6" width="204" height="190" rx="8" fill="#fff" stroke="#1a1a2e" stroke-width="2"/>
+    <text x="330" y="28" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1a2e">2. THE LOOPHOLE</text>
+    <line x1="242" y1="160" x2="418" y2="160" stroke="#1a1a2e" stroke-width="2"/>
+    <rect x="316" y="52" width="44" height="18" rx="3" fill="#7c5cbf" transform="rotate(-30 338 61)"/>
+    <path d="M 268 156 Q 310 60 352 66" fill="none" stroke="#7c5cbf" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="386" y="52" font-size="16">💥</text>
+    <text x="330" y="184" text-anchor="middle" font-size="10" fill="#555">robot catapults ITSELF at the enemy</text>
+  </g>
+  <g>
+    <rect x="450" y="6" width="204" height="190" rx="8" fill="#fff" stroke="#1a1a2e" stroke-width="2"/>
+    <text x="552" y="28" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1a2e">3. THE SCOREBOARD</text>
+    <rect x="490" y="52" width="124" height="52" rx="6" fill="#1a1a2e"/>
+    <text x="552" y="74" text-anchor="middle" font-size="13" fill="#7ee08b" font-family="monospace">SCORE: MAX</text>
+    <text x="552" y="93" text-anchor="middle" font-size="13" fill="#7ee08b" font-family="monospace">WALKING: 0%</text>
+    <text x="552" y="140" text-anchor="middle" font-size="26">🤦</text>
+    <text x="552" y="184" text-anchor="middle" font-size="10" fill="#555">technically... points were earned</text>
+  </g>
+  <text x="330" y="226" text-anchor="middle" font-size="11.5" fill="#555" font-style="italic">The robot did not misunderstand. It understood perfectly. That's the problem.</text>
+</svg>
+<figcaption>Figure 2 — Reward hacking, in three acts. Based on actual events.</figcaption>
+</figure>
+
+<div class="war"><b>War stories: a rogues' gallery.</b> Our project keeps a catalogue of its own
+robots' cheats, each one now a permanent test case. <b>The catapult:</b> rewarded for damaging its
+opponent, an early champion learned to launch its own body across the arena at the opening bell,
+land all its damage in the chaos of the collision, then lie still for the rest of the match —
+top score, zero fighting. <b>The pacifist statue:</b> paid a small bonus for staying alive and
+upright, robots discovered that standing perfectly still and letting incidental contact do the
+scoring beat the risky business of actually moving. <b>The oscillator:</b> rewarded for movement
+speed, a robot learned to vibrate in place — enormous instantaneous speed, zero distance traveled,
+all day long. Each cheat was found only after burning a day of expensive computing; each one
+forced the scoring rules to grow teeth.</div>
+
+<p>These aren't quirks of one project. The stand-still trick, for instance, is publicly documented
+in NVIDIA's own training framework: a reward meant to encourage a springy stride (points for how
+long each foot swings through the air) turns out to make stepping <em>a net loss</em> — so robots
+freeze. Different lab, same lawyer. The state of the art has three answers. First, gate the
+rewards: air-time points only count while genuinely traveling, damage only counts while genuinely
+closing in. Second — a 2024 idea called <em>Constraints as Terminations</em> — stop fining
+misbehavior and start <em>ending the game</em> for it: instead of a penalty a high-scoring cheat
+can happily absorb, crossing a line (launching your torso, say) simply terminates the episode and
+all its future points. Fines get priced in; ejection doesn't. Third, newer work has language
+models draft reward functions and vision models <em>watch the resulting videos</em> to judge
+whether the points were earned in spirit — automating the facepalm in panel three.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> There is no shared catalogue of known robot
+cheats — every lab rediscovers the catapult on its own dime, and a cheat that works in one physics
+engine often doesn't exist in another, so fixes don't transfer. Constraint thresholds are still
+set by hand, so "reward hacking" quietly becomes "constraint hacking." And no published system
+searches a freshly-written reward for loopholes <em>before</em> the expensive training run —
+exploit discovery still happens the sad way.</div>
+
+<div class="sources">Where this comes from: Constraints as Terminations (IROS 2024)
+<a href="https://arxiv.org/abs/2403.18765">arxiv.org/abs/2403.18765</a> · the documented
+stand-still exploit in Isaac Lab
+<a href="https://github.com/isaac-sim/IsaacLab/issues/1955">github.com/isaac-sim/IsaacLab/issues/1955</a>
+· LLM-written rewards, with safety caveats (DrEureka, 2024)
+<a href="https://arxiv.org/abs/2406.01967">arxiv.org/abs/2406.01967</a></div>
+
+<h2>Chapter 3 — A thousand ghost robots</h2>
+
+<p>Trial-and-error learning is gluttonous: a decent walking skill takes tens of millions of
+practice steps, a fighting skill more. The field's answer is brute elegance: don't practice in one
+simulated world — practice in <em>thousands at once</em>. Modern physics engines run on a
+<dfn>GPU</dfn> (a graphics chip — hardware built to do thousands of small calculations
+simultaneously, originally for video-game imagery), and they simulate thousands of copies of the
+robot in parallel, all feeding their experience to a single shared brain. Our project runs about
+4,000 arenas side by side; one overnight run on a rented chip is roughly a human lifetime of
+practice.</p>
+
+<figure>
+<svg viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <rect x="8" y="8" width="440" height="180" rx="10" fill="#f3effc" stroke="#7c5cbf" stroke-width="2"/>
+  <line x1="24" y1="158" x2="432" y2="158" stroke="#7c5cbf" stroke-width="2.5"/>
+  <g>
+    <g opacity="1"><rect x="60" y="118" width="40" height="17" rx="3" fill="#7c5cbf"/><line x1="67" y1="135" x2="63" y2="158" stroke="#7c5cbf" stroke-width="3.5"/><line x1="93" y1="135" x2="97" y2="158" stroke="#7c5cbf" stroke-width="3.5"/></g>
+    <g opacity="0.55"><rect x="150" y="100" width="40" height="17" rx="3" fill="#7c5cbf" transform="rotate(9 170 108)"/><line x1="157" y1="119" x2="151" y2="158" stroke="#7c5cbf" stroke-width="3.5"/><line x1="183" y1="115" x2="189" y2="158" stroke="#7c5cbf" stroke-width="3.5"/></g>
+    <g opacity="0.4"><rect x="238" y="126" width="40" height="17" rx="3" fill="#7c5cbf" transform="rotate(-14 258 134)"/><line x1="245" y1="140" x2="241" y2="158" stroke="#7c5cbf" stroke-width="3.5"/><line x1="271" y1="146" x2="277" y2="158" stroke="#7c5cbf" stroke-width="3.5"/></g>
+    <g opacity="0.28"><rect x="320" y="70" width="40" height="17" rx="3" fill="#7c5cbf" transform="rotate(28 340 78)"/><line x1="330" y1="90" x2="322" y2="120" stroke="#7c5cbf" stroke-width="3.5"/><line x1="352" y1="92" x2="360" y2="122" stroke="#7c5cbf" stroke-width="3.5"/></g>
+    <g opacity="0.2"><rect x="382" y="120" width="40" height="17" rx="3" fill="#7c5cbf" transform="rotate(-40 402 128)"/></g>
+  </g>
+  <text x="228" y="42" text-anchor="middle" font-size="12.5" fill="#4a3d78" font-weight="bold">4,000 arenas, one shared brain</text>
+  <text x="228" y="178" text-anchor="middle" font-size="10" fill="#4a3d78" opacity="0.85">every stumble teaches all of them at once</text>
+  <path d="M 452 98 L 486 98" stroke="#2a9d8f" stroke-width="3" marker-end="url(#arr2)"/>
+  <defs><marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#2a9d8f"/></marker></defs>
+  <circle cx="546" cy="98" r="46" fill="#eaf6f4" stroke="#2a9d8f" stroke-width="2.5"/>
+  <text x="546" y="88" text-anchor="middle" font-size="11" fill="#20776b" font-weight="bold">one night</text>
+  <text x="546" y="104" text-anchor="middle" font-size="11" fill="#20776b">≈ a lifetime</text>
+  <text x="546" y="120" text-anchor="middle" font-size="11" fill="#20776b">of practice</text>
+</svg>
+<figcaption>Figure 3 — Massively parallel practice: the ghost army.</figcaption>
+</figure>
+
+<p>The engines that make this possible — NVIDIA's Isaac Lab, DeepMind's MuJoCo with its
+GPU-accelerated MJX flavor, and newer entrants — are marvels, and each has documented sharp
+edges. Isaac's engine, for instance, can't reproduce a run exactly even with everything
+seemingly fixed (the GPU's internal scheduling introduces randomness), which makes clean
+comparisons — "did my change help, or was it luck?" — noisy by construction. MJX will happily
+recompute every run bit-for-bit identically, but pays its own tax: it must budget for every
+<em>possible</em> collision in advance, so a scene with two robots that could touch each other
+everywhere gets slow unless you explicitly list which parts may collide. And one newcomer engine
+launched with a speed claim that independent analysis found overstated by roughly 150× on
+realistic workloads — a reminder that this corner of the field is young enough to have marketing
+weather.</p>
+
+<div class="war"><b>War story: Groundhog Day.</b> The subtlest bug our project hit lived in the
+plumbing between the engine and the learning code. The training library was supposed to start
+each new practice episode from a freshly randomized situation — different stance, different
+opponent position — so the robot would learn to cope with variety. Instead, a caching shortcut
+meant every robot woke up in <em>the exact same frozen moment</em>, every episode, for the entire
+run: thousands of Bill Murrays, reliving one morning forever. All the carefully-built variety
+code executed and was silently discarded. It turned out to be a known issue filed publicly
+against the library — but nothing warns you. The fix (a custom restart system with genuine
+variety, including episodes that begin mid-motion) measurably mattered; the test that would have
+caught it in seconds — <em>check that two consecutive episodes actually start differently</em> —
+now runs on every change. Moral: the fast engines are young, and their bugs don't announce
+themselves. Test the plumbing, not just the robot.</div>
+
+<div class="open"><b>What nobody has solved yet.</b> No engine yet offers both the feature-riches
+of the big ecosystems and perfect reproducibility. Collision-heavy scenes (like, say, two robots
+wrestling) still fight the speed architecture. And support for scenes with <em>multiple</em>
+learning robots is an afterthought everywhere — you build one giant twin-robot model and split
+the scores by hand.</div>
+
+<div class="sources">Where this comes from: MuJoCo Playground, the current MJX recipe book (2025)
+<a href="https://arxiv.org/abs/2502.08844">arxiv.org/abs/2502.08844</a> · Isaac Lab's own
+reproducibility note
+<a href="https://isaac-sim.github.io/IsaacLab/main/source/features/reproducibility.html">isaac-sim.github.io/IsaacLab</a>
+· the frozen-restart issue
+<a href="https://github.com/google/brax/issues/174">github.com/google/brax/issues/174</a></div>
+
+<h2>Chapter 4 — The tournament that eats itself</h2>
+
+<p>How do you train a <em>fighting</em> robot when no sparring partner exists? You make it fight
+itself. <dfn>Self-play</dfn> — training against copies and past versions of yourself — is one of
+the most powerful ideas in machine learning; it built the systems that mastered Go and StarCraft.
+The opponent is always exactly your level, improving as you do: a perfect, automatic curriculum.
+And it harbors a failure mode with real comedy value: <dfn>cycling</dfn>.</p>
+
+<figure>
+<svg viewBox="0 0 640 250" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <defs><marker id="arr3" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+  <circle cx="320" cy="52" r="34" fill="#f3effc" stroke="#7c5cbf" stroke-width="2.5"/>
+  <text x="320" y="48" text-anchor="middle" font-size="10.5" fill="#4a3d78" font-weight="bold">Version A</text>
+  <text x="320" y="63" text-anchor="middle" font-size="9.5" fill="#4a3d78">the rusher</text>
+  <circle cx="180" cy="185" r="34" fill="#fdf6ec" stroke="#d4a017" stroke-width="2.5"/>
+  <text x="180" y="181" text-anchor="middle" font-size="10.5" fill="#9a7208" font-weight="bold">Version B</text>
+  <text x="180" y="196" text-anchor="middle" font-size="9.5" fill="#9a7208">the blocker</text>
+  <circle cx="460" cy="185" r="34" fill="#eaf6f4" stroke="#2a9d8f" stroke-width="2.5"/>
+  <text x="460" y="181" text-anchor="middle" font-size="10.5" fill="#20776b" font-weight="bold">Version C</text>
+  <text x="460" y="196" text-anchor="middle" font-size="9.5" fill="#20776b">the dodger</text>
+  <path d="M 292 78 Q 220 110 196 152" fill="none" stroke="#c0392b" stroke-width="2.5" marker-end="url(#arr3)"/>
+  <path d="M 214 195 Q 320 235 426 195" fill="none" stroke="#c0392b" stroke-width="2.5" marker-end="url(#arr3)"/>
+  <path d="M 444 152 Q 420 110 348 78" fill="none" stroke="#c0392b" stroke-width="2.5" marker-end="url(#arr3)"/>
+  <text x="216" y="112" text-anchor="middle" font-size="10" fill="#c0392b">beats</text>
+  <text x="320" y="228" text-anchor="middle" font-size="10" fill="#c0392b">beats</text>
+  <text x="428" y="112" text-anchor="middle" font-size="10" fill="#c0392b">beats</text>
+  <text x="320" y="140" text-anchor="middle" font-size="12" fill="#555" font-style="italic">rock · paper · scissors,</text>
+  <text x="320" y="156" text-anchor="middle" font-size="12" fill="#555" font-style="italic">forever</text>
+</svg>
+<figcaption>Figure 4 — Self-play cycling: everyone improves against the last guy; nobody gets better.</figcaption>
+</figure>
+
+<p>Cycling works like this. Version A learns a rush attack. Version B learns to block the rush.
+Version C learns to dodge around the block — which, it turns out, loses to the original rush.
+Training "progress" now goes in a circle: each new version beats its immediate teacher and loses
+to its grandparent. The scoreboard climbs forever; actual skill orbits. The related disease is
+<dfn>catastrophic forgetting</dfn> — in learning to beat the blocker, the robot overwrites its
+own rush-handling, unlearning skills the way you might forget a language you stopped speaking.</p>
+
+<div class="war"><b>War story: the score that ate itself.</b> Our project watched its fight score
+climb beautifully — from terrible to strong over millions of practice rounds — then collapse.
+The training script chose sparring partners from the <em>oldest</em> saved versions, so the
+current robot was quietly specializing at beating one elderly opponent — a textbook cycling
+setup, since each new champion optimizes against a fixed point while forgetting everything else.
+The fix came straight from the StarCraft playbook (below): spar against the <em>whole</em>
+museum of past selves, weighted toward the ones that still beat you.</div>
+
+<p>The proven medicine was developed for game-playing systems and transfers directly.
+Keep a <dfn>hall of fame</dfn> — frozen snapshots of every decent past version — and never stop
+sparring against all of it, prioritizing opponents you struggle with (the technique is called
+<em>prioritized fictitious self-play</em>, which is exactly that sentence in math). DeepMind's
+StarCraft league went further, employing dedicated <em>exploiter</em> agents whose only job is
+finding the champion's weaknesses — professional loophole-hunters on staff, which conveniently
+doubles as automated cheat discovery. The recent robot-combat successes — DeepMind's one-on-one
+soccer humanoids, Tencent's chase-tag quadrupeds, a 2026 humanoid boxing system — all use the
+same two-stage blueprint: first teach clean movement skills, <em>then</em> let self-play learn
+strategy on top, with the fight policy tethered to the clean skills so it can't drift into
+degenerate nonsense. That tether, notably, is also the strongest known defense against
+catapult-class cheats: the skill layer simply doesn't contain "hurl yourself across the room" as
+a move.</p>
+
+<p>One more subtlety the field flags: training tricks that are perfectly sound alone can turn
+toxic in a tournament. One popular technique (<em>hindsight relearning</em> — retroactively
+pretending whatever happened was what you intended, so even failures teach something) is
+statistically invalid when an opponent co-authored the outcome: you can't claim you <em>meant</em>
+to be thrown across the arena. Another (<em>curiosity bonuses</em> — points for reaching novel
+situations) malfunctions because an ever-changing opponent makes everything look permanently
+novel; the robot farms the novelty itself. Our project uses both techniques and, on the strength
+of the evidence, is fencing them away from the adversarial layer.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> Deciding who deserves a hall-of-fame spot
+(and who to evict) has no principled answer — ordinary ratings break when A beats B beats C beats
+A. Truly measuring "is this champion exploitable?" costs a whole training run to find out. And
+two <em>physical</em> robots learning combat against each other, on real hardware, with real
+contact? No published lab has done it. That lane is open.</div>
+
+<div class="sources">Where this comes from: the AlphaStar league (DeepMind, Nature 2019)
+<a href="https://deepmind.google/discover/blog/alphastar-grandmaster-level-in-starcraft-ii-using-multi-agent-reinforcement-learning/">deepmind.google — AlphaStar</a>
+· quadruped chase-tag with the two-stage blueprint (Tencent, Nature Machine Intelligence 2024)
+<a href="https://arxiv.org/abs/2308.15143">arxiv.org/abs/2308.15143</a> · why hindsight
+relearning breaks under adversaries
+<a href="https://arxiv.org/pdf/2105.00499">arxiv.org/pdf/2105.00499</a></div>
+
+<h2>Chapter 5 — When the blueprint isn't simple</h2>
+
+<p>Simulators love robots shaped like trees: a body, limbs branching off it, each joint driven by
+its own well-behaved motor. Real machines are rarely so polite. Our project's actual leg — the
+one being physically built — is a small museum of the exceptions, and each one is a place where
+simulation, and therefore learning, gets hard.</p>
+
+<div class="war"><b>Meet the real leg.</b> Three motors drive it. The up-down swing goes through a
+<em>worm gear</em> — a screw-shaped gear offering a huge strength boost with a party trick: it's
+<dfn>non-backdrivable</dfn>, meaning force flows one way only. The motor can move the leg, but no
+amount of shoving the leg will turn the motor — so the robot can hold a stance with the power
+off, like a locked door. Wonderful for battery life; alarming for a fighting machine, because a
+blow that can't back-drive the gear slams its full energy into the gear teeth. Which is why the
+left-right pivot uses the opposite philosophy: a belt drive with a <b>large rubber pulley</b> —
+a deliberate shock absorber, so side impacts squish rubber instead of shattering teeth. And the
+foot is a folding blade driven through a linkage that closes a <em>loop</em> — motor, crank,
+connecting rod, piston, back to the start — geometry that gives it a press-like force
+multiplication at the start of its stomp.</div>
+
+<figure>
+<svg viewBox="0 0 640 240" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <text x="160" y="26" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1a2e">RIGID DRIVE</text>
+  <rect x="36" y="70" width="70 " height="44" rx="6" fill="#4a3d78"/>
+  <text x="71" y="96" text-anchor="middle" font-size="10" fill="#fff">MOTOR</text>
+  <rect x="106" y="84" width="80" height="16" fill="#888"/>
+  <circle cx="216" cy="92" r="26" fill="#b8b0d8" stroke="#4a3d78" stroke-width="2.5"/>
+  <text x="216" y="96" text-anchor="middle" font-size="9.5" fill="#1a1a2e">JOINT</text>
+  <path d="M 286 40 L 246 76" stroke="#c0392b" stroke-width="5" marker-end="url(#arr4)"/>
+  <defs><marker id="arr4" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 z" fill="#c0392b"/></marker></defs>
+  <text x="292" y="34" font-size="15">🔨</text>
+  <path d="M 196 118 l -8 16 M 216 122 l 0 18 M 236 118 l 8 16" stroke="#c0392b" stroke-width="2.5"/>
+  <text x="160" y="168" text-anchor="middle" font-size="10.5" fill="#c0392b">impact slams straight into the gears</text>
+
+  <text x="480" y="26" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a1a2e">SERIES-ELASTIC DRIVE (the rubber pulley)</text>
+  <rect x="356" y="70" width="70" height="44" rx="6" fill="#4a3d78"/>
+  <text x="391" y="96" text-anchor="middle" font-size="10" fill="#fff">MOTOR</text>
+  <path d="M 426 92 q 8 -14 16 0 t 16 0 t 16 0 t 16 0" fill="none" stroke="#d4a017" stroke-width="5"/>
+  <circle cx="536" cy="92" r="26" fill="#f6e3b8" stroke="#9a7208" stroke-width="2.5"/>
+  <text x="536" y="96" text-anchor="middle" font-size="9.5" fill="#1a1a2e">JOINT</text>
+  <path d="M 606 40 L 566 76" stroke="#c0392b" stroke-width="5" marker-end="url(#arr4)"/>
+  <text x="612" y="34" font-size="15">🔨</text>
+  <path d="M 448 62 q 10 8 0 16" fill="none" stroke="#2a9d8f" stroke-width="2"/>
+  <path d="M 466 58 q 14 12 0 22" fill="none" stroke="#2a9d8f" stroke-width="2"/>
+  <text x="480" y="168" text-anchor="middle" font-size="10.5" fill="#20776b">the spring soaks up the blow — and doubles as a force sensor</text>
+  <text x="320" y="212" text-anchor="middle" font-size="11.5" fill="#555" font-style="italic">Same motor, same joint — one design breaks, one bounces.</text>
+</svg>
+<figcaption>Figure 5 — A spring between motor and joint: the series-elastic idea behind the rubber pulley.</figcaption>
+</figure>
+
+<p>Each feature is a headache for the practice world. Springy drives (<dfn>series-elastic
+actuators</dfn>, in the jargon — a deliberate spring between motor and joint) blur the connection
+between what the motor does and what the leg does; the standard recipe is to simulate the spring
+explicitly and let the robot learn to surf the bounce, and the actuator-modeling line of research
+from Chapter 1 was literally invented on them. Closed loops — mechanisms that connect back on
+themselves, like the blade-foot linkage — long forced simulator authors to fake them with
+approximations; 2025 work finally showed that simulating loops <em>natively</em> and training
+through them beats the fakes, and the GPU engines have only recently grown the features to do it.
+And the worm gear? Here the literature simply runs out. No published robot has <em>learned</em>
+motor skills through a self-locking drive. The nearest engines don't even have a concept for
+"self-locking"; you approximate it with heavy friction and check your work elsewhere.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> Learned control through non-backdrivable
+gearing: zero papers. The simulation engines disagree with each other most exactly where this leg
+lives — loop-closing forces and over-center linkage behavior — and nobody has characterized which
+engine to trust there. Even the file formats for <em>describing</em> loopy robots are still being
+invented. Our project's leg is, in the most literal sense, walking off the map.</div>
+
+<div class="sources">Where this comes from: native closed-loop training beats approximations
+(BRUCE, 2025) <a href="https://arxiv.org/abs/2507.00273">arxiv.org/abs/2507.00273</a> · why
+high-ratio gears and impacts don't mix (MIT Cheetah lineage, IEEE TRO 2017)
+<a href="https://dl.acm.org/doi/abs/10.1109/TRO.2016.2640183">dl.acm.org/doi/10.1109/TRO.2016.2640183</a>
+· worm gear + spring pairing (WAVE, 2025)
+<a href="https://arxiv.org/html/2509.21878v1">arxiv.org/abs/2509.21878</a></div>
+
+<h2>Chapter 6 — Learning without breaking things</h2>
+
+<p>Eventually the ghost robots graduate, and a real machine with real gears has to keep learning
+in a world where mistakes cost money and sometimes fingers. This is <dfn>safe exploration</dfn> —
+the problem of trying new things without destroying yourself in the process — and the current
+solutions are charmingly physical. One line of work trains a second, boring policy alongside the
+exciting one: a <em>recovery policy</em> whose only job is "get back to safe," with a learned
+tripwire deciding when the daredevil hands over to the lifeguard. Another — my favorite image in
+this whole field — is <em>Robot-Trains-Robot</em>: a big industrial arm physically holds a
+learning humanoid like a parent holding a toddler's hands, catching falls, easing support as
+skill grows, even injecting deliberate shoves at teachable moments. There's also work on falling
+itself — teaching robots to crumple protectively, tucking the expensive parts — and on
+budgets you'd never think of from the outside, like keeping motors from cooking themselves:
+one 2026 system quadrupled how long a robot could run before thermal shutdown, just by making
+heat part of what the learner is scored on.</p>
+
+<p>For a combat robot, all of this bends toward a question with no literature behind it:
+how do you <em>hit hard on purpose</em> without spiking your own gearbox? Being thrown isn't an
+accident in this sport; it's Tuesday. The protective-falling work and the rubber pulley are
+pieces of an answer nobody has assembled yet.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> Safety science for robots that are
+<em>supposed</em> to collide is essentially unwritten — force regulation during intentional
+impact has no published treatment. Nobody couples fall-protection with gearbox shock limits. And
+having the real robot's sensors participate in training <em>live</em> (rather than
+measure-first, simulate-later) remains basically unpublished.</div>
+
+<div class="sources">Where this comes from: Agile But Safe's daredevil/lifeguard pairing (RSS 2024)
+<a href="https://arxiv.org/abs/2401.17583">arxiv.org/abs/2401.17583</a> · Robot-Trains-Robot
+(CoRL 2025) <a href="https://arxiv.org/abs/2508.12252">arxiv.org/abs/2508.12252</a> ·
+thermal-aware training (2026) <a href="https://arxiv.org/abs/2603.01631">arxiv.org/abs/2603.01631</a></div>
+
+<h2>Chapter 7 — One brain, many bodies?</h2>
+
+<p>The rest of AI is in its era of giant general-purpose models, and robotics is trying to
+follow: <dfn>foundation policies</dfn> — single networks trained across hundreds of different
+robot bodies, hoping for a "GPT of movement." The results are real but young: one 2025 study
+trained across a thousand procedurally-generated body shapes and found that <em>variety of
+bodies</em> teaches more than piles of extra data on one body. The complementary tool is
+<dfn>distillation</dfn> — training many specialist teachers (one per skill), then compressing
+them into a single student network, the way a textbook compresses a faculty.</p>
+
+<figure>
+<svg viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <g font-size="10" fill="#fff">
+    <rect x="30" y="18" width="112" height="30" rx="5" fill="#7c5cbf"/><text x="86" y="37" text-anchor="middle">walking teacher</text>
+    <rect x="30" y="58" width="112" height="30" rx="5" fill="#9a7208"/><text x="86" y="77" text-anchor="middle">turning teacher</text>
+    <rect x="30" y="98" width="112" height="30" rx="5" fill="#2a9d8f"/><text x="86" y="117" text-anchor="middle">striking teacher</text>
+    <rect x="30" y="138" width="112" height="30" rx="5" fill="#c0392b"/><text x="86" y="157" text-anchor="middle">recovery teacher</text>
+  </g>
+  <path d="M 150 33 C 250 33 250 88 330 96 M 150 73 C 240 73 250 92 330 98 M 150 113 C 240 113 250 104 330 100 M 150 153 C 250 153 250 108 330 102" fill="none" stroke="#999" stroke-width="2"/>
+  <path d="M 210 176 L 396 176 L 330 60 Z" fill="none" opacity="0"/>
+  <polygon points="336,62 336,138 470,116 470,84" fill="#efece0" stroke="#888" stroke-width="1.5"/>
+  <text x="402" y="95" text-anchor="middle" font-size="10.5" fill="#555">distillation</text>
+  <text x="402" y="110" text-anchor="middle" font-size="10.5" fill="#555">(compress the faculty)</text>
+  <rect x="486" y="72" width="120" height="56" rx="8" fill="#1a1a2e"/>
+  <text x="546" y="96" text-anchor="middle" font-size="11" fill="#fff" font-weight="bold">one student</text>
+  <text x="546" y="113" text-anchor="middle" font-size="10" fill="#c9c2e8">all skills, one brain</text>
+  <text x="320" y="204" text-anchor="middle" font-size="11" fill="#555" font-style="italic">The catch: cramming for one exam can overwrite another — skills interfere.</text>
+</svg>
+<figcaption>Figure 6 — Distillation: many specialist teachers, one student network.</figcaption>
+</figure>
+
+<p>Does any of this change life for a one-robot project? Mostly no — general bodies are a cost
+without a benefit when you only have one body. But one result matters enormously here: the
+Tencent chase-tag system pre-trained a library of movement skills (from dog motion-capture!) and
+<em>then</em> ran self-play strategy on top — and the pre-training meant the expensive
+adversarial phase spent its effort on tactics rather than on rediscovering how legs work. That
+two-stage staging, echoed by every successful physical competition system to date, is the direct
+blueprint for a fighting robot. The distillation caveat travels too: students fine-tuned on one
+skill measurably forget others, so the compression step needs the same paranoid testing as
+everything else in this guide.</p>
+
+<div class="open"><b>What nobody has solved yet.</b> Skill interference in distilled generalists
+is documented, not cured. Whether generalist pre-training helps <em>competitive</em> play at all
+rests on a single strong data point. And no amount of foundation-model magic has retired the
+unglamorous problems: reward design and the sim-to-real gap are explicitly still here.</div>
+
+<div class="sources">Where this comes from: embodiment scaling laws (CoRL 2025)
+<a href="https://arxiv.org/abs/2505.05753">arxiv.org/abs/2505.05753</a> · Tencent's
+primitives-then-strategy blueprint (Nature MI 2024)
+<a href="https://arxiv.org/abs/2308.15143">arxiv.org/abs/2308.15143</a> · skill interference
+reported plainly (ExBody2, 2024) <a href="https://arxiv.org/abs/2412.13196">arxiv.org/abs/2412.13196</a></div>
+
+<h2>Chapter 8 — How do you know it worked?</h2>
+
+<p>The quietest crisis in this field is epistemological: proving that a result is real. Learning
+runs are random by nature (each begins from a different roll of the dice — a <dfn>seed</dfn>, the
+number that determines all the randomness that follows), so any single run proving your idea
+works might just be a lucky seed. The field's own methodology papers show that many published
+"improvements" dissolve under honest statistics, and that some algorithms' celebrated gains come
+mostly from being tuned harder than their baselines. Meanwhile the popular training frameworks
+differ in dozens of tiny implementation details that measurably change results — there's a
+famous catalogue of thirty-seven of them for one algorithm alone — and no two benchmark suites
+score things the same way, so numbers rarely transfer between labs.</p>
+
+<div class="war"><b>War story: the twin referee.</b> Our project was burned twice by believing
+its own numbers — "the robot is walking!" said the metrics; the video showed a robot vibrating
+its way to a technically-nonzero speed. Two reforms followed. First, a rule with the force of
+law: <em>no behavioral claim without watching a rendered video.</em> Metrics nominate; the
+eyeball confirms. Second — and this one appears to be genuinely novel — the project now builds
+its robot in <b>two independent physics engines</b> (its training engine, plus a second one
+called Drake, built by a different team on different mathematics from the same specification)
+and requires them to <em>agree on measured physics</em>: motor strength, masses, gravity loads.
+When the robot's description had that missing-word bug from Chapter 1, one engine said "12.97
+newton-metres of strength" and the other said "1.0" — a disagreement no amount of wishful
+thinking survives. A single simulator can never catch itself being wrong; a twin can. Surveying
+the literature, nobody else appears to use this engine pairing as a referee — the closest
+practice is training in one engine and sanity-replaying in another.</div>
+
+<figure>
+<svg viewBox="0 0 640 210" xmlns="http://www.w3.org/2000/svg" font-family="Georgia,serif">
+  <rect x="30" y="30" width="180" height="120" rx="10" fill="#f3effc" stroke="#7c5cbf" stroke-width="2.5"/>
+  <text x="120" y="58" text-anchor="middle" font-size="12" fill="#4a3d78" font-weight="bold">Engine 1 (MuJoCo)</text>
+  <text x="120" y="92" text-anchor="middle" font-size="13" fill="#1a1a2e" font-family="monospace">strength: 12.97</text>
+  <text x="120" y="115" text-anchor="middle" font-size="13" fill="#1a1a2e" font-family="monospace">mass: 7.10 kg</text>
+  <rect x="430" y="30" width="180" height="120" rx="10" fill="#eaf6f4" stroke="#2a9d8f" stroke-width="2.5"/>
+  <text x="520" y="58" text-anchor="middle" font-size="12" fill="#20776b" font-weight="bold">Engine 2 (Drake)</text>
+  <text x="520" y="92" text-anchor="middle" font-size="13" fill="#1a1a2e" font-family="monospace">strength: 12.97</text>
+  <text x="520" y="115" text-anchor="middle" font-size="13" fill="#1a1a2e" font-family="monospace">mass: 7.10 kg</text>
+  <circle cx="320" cy="90" r="38" fill="#fff" stroke="#1a1a2e" stroke-width="2.5"/>
+  <text x="320" y="84" text-anchor="middle" font-size="11" font-weight="bold" fill="#1a1a2e">agree?</text>
+  <text x="320" y="102" text-anchor="middle" font-size="13" fill="#2a9d8f" font-weight="bold">✓ trust</text>
+  <path d="M 214 90 L 278 90" stroke="#888" stroke-width="2.5"/>
+  <path d="M 362 90 L 426 90" stroke="#888" stroke-width="2.5"/>
+  <text x="320" y="182" text-anchor="middle" font-size="11.5" fill="#555" font-style="italic">Disagree? Someone is wrong — and now you know to look. One engine alone can never tell you.</text>
+</svg>
+<figcaption>Figure 7 — The twin-simulator referee: independent engines must agree on measured physics.</figcaption>
+</figure>
+
+<div class="open"><b>What nobody has solved yet.</b> There is no accepted standard for how many
+runs make a claim about a walking robot trustworthy. The two most-used training frameworks have
+never been formally compared head-to-head. Evaluation for legged robots is, too often, still a
+cool video — and nobody has characterized which <em>pairs</em> of physics engines make good
+referees for each other, which is exactly the open lane the twin-referee idea lives in.</div>
+
+<div class="sources">Where this comes from: how to run RL experiments honestly (JMLR 2024)
+<a href="https://arxiv.org/abs/2304.01315">arxiv.org/abs/2304.01315</a> · the "37 implementation
+details" catalogue
+<a href="https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/">iclr-blog-track.github.io</a>
+· robot learning as an empirical science (2024)
+<a href="https://arxiv.org/abs/2409.09491">arxiv.org/abs/2409.09491</a></div>
+
+<h2>Epilogue — The map's edge</h2>
+
+<p>Step back and the eight chapters braid into one story. We teach robots by letting them fail
+safely at superhuman speed, inside worlds that are always a little wrong, against scoring rules
+they will always try to outlaw, refereed by tools young enough to have their own bugs. The
+state of the art is not a solved pipeline; it's a set of hard-won habits: <em>measure the body
+before blaming the mind. Assume the reward will be hacked, and hunt the hack before it costs a
+training run. Test the plumbing. Make your champion fight its whole past, not just its
+yesterday. Put springs where the world will hit you. Watch the video. Get a second opinion from
+an engine that doesn't share your first one's blind spots.</em></p>
+
+<p>And the unexplored territory is closer than it looks. In the course of this survey, three
+lanes turned up genuinely empty — no published work at all: a robot <em>learning</em> to move
+through a self-locking worm drive; two physical robots learning combat against each other with
+real contact; and independent physics engines used as cross-checking referees. One small
+project with a purple four-legged fighting robot happens to be standing in all three. The
+frontier of a billion-dollar field is not always somewhere far away; sometimes it's a missing
+word in a config file, a rubber pulley, and a robot that finally — verifiably, on video, in two
+simulators and one stubborn reality — learns to walk.</p>
+
+<div class="sources" style="margin-top:2em">This guide is the plain-language companion to a
+technical survey (<i>notes/sota-training-issues.md</i>, July 2026) of ~120 primary sources —
+papers, simulator documentation, and public issue trackers, 2024–2026. All war stories are real
+events from the companion project's logs. Where the survey marks evidence as thin or inferred,
+claims here are softened to match.</div>

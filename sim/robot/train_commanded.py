@@ -28,6 +28,7 @@ from commanded_env import (  # noqa: E402
     _build,
 )
 from brax.training.agents.ppo import train as ppo  # noqa: E402
+import ppo_nets as ppo_networks  # noqa: E402  shared (512,256,128) + small-final-init factory (audit item 5)
 
 OUT = Path(os.environ.get("CODESIGN_OUT", "/root/proj/out")); OUT.mkdir(parents=True, exist_ok=True)
 
@@ -108,9 +109,23 @@ def main():
     ap.add_argument("--tag", default="cmd")
     ap.add_argument("--resume", default=None)
     ap.add_argument("--tiny", action="store_true")
+    ap.add_argument("--preflight", choices=["strict", "warn", "off"],
+                    default=os.environ.get("CMD_PREFLIGHT", "strict"),
+                    help="T2 config sanity gate (strict refuses <200-iteration from-scratch runs "
+                         "and sub-stride credit horizons); --tiny smoke runs auto-downgrade to warn")
+    # T6 stagnation tripwire: the 12M-step run that moved 0.18 m should have
+    # self-terminated at ~2M. If mean speed is still under the floor once this
+    # fraction of the budget is spent, stop the run and stop billing.
+    ap.add_argument("--stagnation-speed-floor", type=float, default=0.03,
+                    help="mean |v| (m/s) the policy must exceed by --stagnation-frac of "
+                         "the step budget, else the run aborts (0 = tripwire off)")
+    ap.add_argument("--stagnation-frac", type=float, default=0.3,
+                    help="fraction of --steps at which the stagnation floor is enforced")
     args = ap.parse_args()
     if args.tiny:
         args.steps, args.envs, args.batch, args.minibatches, args.unroll, args.evals = 16000, 256, 256, 8, 5, 2
+        if args.preflight == "strict":
+            args.preflight = "warn"          # a smoke run is not a training run
     n_eval = args.evals or max(6, args.steps // 1_000_000)
 
     Env = _build(); env = Env()
@@ -160,20 +175,49 @@ def main():
               f"track/step {tr/ep:.3f} verr/step {ve/ep:.3f} "
               f"progress/step {pr/ep:+.3f} align/step {al/ep:+.3f} "
               f"({time.time()-t0:.0f}s)", flush=True)
+        # T6 stagnation tripwire — behavioral metric, not reward: reward can climb
+        # while the robot farms standing terms; mean speed cannot be farmed motionless.
+        if (args.stagnation_speed_floor > 0 and s >= args.stagnation_frac * args.steps
+                and (sp / ep) < args.stagnation_speed_floor):
+            print(f"  [{args.tag}] TRIPWIRE-STAGNATION: mean speed {sp/ep:.4f} m/s < "
+                  f"{args.stagnation_speed_floor} at {int(s):,}/{args.steps:,} steps — "
+                  f"aborting the run (the 0.18m/12M-step lesson).", flush=True)
+            os._exit(3)
+    import ckpt_meta
+    from gen_robot_mjcf import build_mjcf as _bm, load_spec as _ls
+    _model_hash = ckpt_meta.current_model_hash(_bm(_ls(Path(__file__).resolve().parent / "robot.toml")))
+    def _write_meta(path):
+        ckpt_meta.write_meta(path, action_semantics=ckpt_meta.COMMANDED_PD_SEMANTICS,
+                             obs_size=env.observation_size, model_hash=_model_hash,
+                             behavior={k: last.get(k) for k in ("track_mean", "verr_mean", "step")},
+                             extra=dict(tag=args.tag, control_mode=os.environ.get("CMD_CONTROL_MODE", "pd")))
     def ck(*a):
         try:
             with open(OUT / f"{args.tag}_ckpt.pkl", "wb") as f:
                 pickle.dump(a[-1], f)
+            _write_meta(OUT / f"{args.tag}_ckpt.pkl")
         except Exception as e:
             print(f"  [ck] save {args.tag}_ckpt.pkl failed: {e}", flush=True)
 
+    if getattr(args, "preflight", "strict") != "off":
+        from preflight import preflight_check
+        preflight_check(steps=args.steps, batch=args.batch, minibatches=args.minibatches,
+                        unroll=args.unroll, episode_length=args.episode_length,
+                        discounting=0.99, control_dt=0.02, obs_dim=env.observation_size,
+                        hidden0=512, from_scratch=(args.resume is None),
+                        mode=getattr(args, "preflight", "strict"), tag=args.tag,
+                        run_dir=OUT, resolved=vars(args))
     make_inf, params, _ = ppo.train(
         environment=env, num_timesteps=args.steps, num_evals=n_eval, episode_length=args.episode_length,
         num_envs=args.envs, batch_size=args.batch, num_minibatches=args.minibatches,
         unroll_length=args.unroll, num_updates_per_batch=args.updates, learning_rate=args.lr,
-        entropy_cost=args.entropy, discounting=0.97, reward_scaling=0.1, normalize_observations=True,
+        entropy_cost=args.entropy, discounting=0.99, reward_scaling=0.1, normalize_observations=True,
+        # γ=0.99: 2 s credit horizon at 50 Hz — 0.97 gave 0.66 s, shorter than one stride
+        # (audit item 3); a swing phase couldn't see the reward of the step it set up.
+        network_factory=ppo_networks.make_ppo_networks,
         seed=args.seed, progress_fn=prog, policy_params_fn=ck, restore_params=restore)
     pickle.dump(params, open(OUT / f"{args.tag}.pkl", "wb"))
+    _write_meta(OUT / f"{args.tag}.pkl")
     METRIC(stage="cmd_train", train_s=f"{time.time()-t0:.1f}", env_steps=last["step"],
            final_track_mean=f"{last['track_mean']:.3f}", final_verr_mean=f"{last['verr_mean']:.3f}",
            final_align_mean=f"{last['align_mean']:.3f}")

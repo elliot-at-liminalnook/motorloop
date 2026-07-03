@@ -26,10 +26,23 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "sim" / "tests"))
 from motors import MOTORS  # noqa: E402
 
+# Typed spec validation (plan V.2): a malformed robot.toml dies HERE at model build,
+# not mid-training. spec_schema is a sibling module (sim/robot on sys.path for every
+# caller); the only acceptable failure is a pod without pydantic — degrade LOUDLY.
+try:
+    from spec_schema import validate_spec  # noqa: E402
+except ImportError as _e:
+    print(f"WARNING: robot spec validation disabled ({_e}); "
+          "install pydantic==2.* to validate robot.toml at model build", file=sys.stderr)
+
+    def validate_spec(d: dict) -> dict:
+        return d
+
 
 def load_spec(path: str | Path) -> dict:
     with open(path, "rb") as f:
-        return tomllib.load(f)
+        spec = tomllib.load(f)
+    return validate_spec(spec)
 
 
 def _deep_merge(base: dict, over: dict) -> dict:
@@ -49,6 +62,15 @@ def joint_torque_limit(spec: dict) -> float:
     peak_motor = m.kt * a["peak_factor"] * m.rated_current_a    # N·m at the motor
     return peak_motor * a["gear"]
 
+
+
+def _armature(spec: dict) -> float:
+    """Reflected rotor inertia at the joint = J_rotor x gear^2 — DERIVED from the
+    motor entry, never hardcoded. The old constant 0.01 was 'close by luck' for
+    gear 12 (6e-5 x 144 = 0.0086) — the same hidden-actuator-property class as
+    the gear bug; the model contract asserts dof_armature against this."""
+    a = spec["actuator"]
+    return MOTORS[a["motor"]].inertia_kg_m2 * float(a["gear"]) ** 2
 
 def striker_force(s: dict) -> float:
     """Pneumatic cylinder force F = pressure × piston area = P·π(bore/2)² (the strike push)."""
@@ -154,7 +176,10 @@ def _robot_xml(spec, prefix="", pos=(0.0, 0.0, None), quat=(1, 0, 0, 0), rgba=No
             f'<freejoint name="{prefix}root"/>'
             f'<geom name="{prefix}torso" type="box" size="{hx} {hy} {hz}" '
             f'mass="{t["mass"]}" rgba="{rgba}"{cc}/>{"".join(legs_xml)}</body>')
-    acts = [f'    <motor name="{j}_m" joint="{j}" ctrlrange="-1 1" '
+    # MuJoCo motor torque = gear × ctrl with ctrl clamped to ±1; forcerange only CLAMPS,
+    # never amplifies. gear must equal tau or the actuator silently defaults to gear=1
+    # (≈8% of design torque — the bug every pre-2026-07 training run ran under).
+    acts = [f'    <motor name="{j}_m" joint="{j}" gear="{tau:.3f}" ctrlrange="-1 1" '
             f'forcerange="{-tau:.3f} {tau:.3f}"/>' for j in joints]
     if strike_joints:                                  # pneumatic cylinders (constant force + valve lag)
         F = striker_force(sspec); vt = sspec["valve_tau"]
@@ -199,7 +224,9 @@ def _floor_calf_pairs(*prefixed_specs: tuple[str, dict]) -> list[str]:
     return pairs
 
 
-def _wrap(spec, bodies, acts, floor_cc="", contact_pairs: list[str] | None = None):
+def _wrap(spec, bodies, acts, floor_cc="", contact_pairs: list[str] | None = None,
+          lidar: bool = False, lidar_prefix: str = "A_", lidar_n_rays: int = 128,
+          lidar_n_vertical: int = 16, lidar_max_range: float = 2.0):
     d = spec["leg_defaults"]
     contact = spec.get("contact", {})
     fr = contact.get("friction", [1, 0.1, 0.1])
@@ -209,19 +236,36 @@ def _wrap(spec, bodies, acts, floor_cc="", contact_pairs: list[str] | None = Non
         contact_attrs += ' solref="' + " ".join(str(float(x)) for x in contact["solref"]) + '"'
     if contact.get("solimp") is not None:
         contact_attrs += ' solimp="' + " ".join(str(float(x)) for x in contact["solimp"]) + '"'
+    # Lidar requires a material on all geoms for MJX rangefinder ray casting
+    # (mat_rgba indexing bug in mujoco-mjx 3.9). Add the asset + default material.
+    asset_xml = ""
+    material_attr = ""
+    if lidar:
+        asset_xml = '\n  <asset>\n    <material name="mat0" rgba="0.5 0.5 0.5 1"/>\n  </asset>'
+        material_attr = ' material="mat0"'
+    # Insert lidar sites into the first body (A_torso) when lidar is enabled
+    lidar_sites_xml = ""
+    lidar_sensors_xml = ""
+    if lidar:
+        lidar_sites_xml, lidar_sensors_xml = _lidar_sites_xml(
+            lidar_prefix, lidar_n_rays, lidar_max_range, lidar_n_vertical)
+        # Insert sites before the first geom in the first body (A_torso)
+        bodies = list(bodies)
+        bodies[0] = bodies[0].replace(
+            '<geom name="A_torso"',
+            lidar_sites_xml + '<geom name="A_torso"')
     return f'''<mujoco model="{spec['meta']['name']}">
-  <compiler angle="radian" autolimits="true"/>
+  <compiler angle="radian" autolimits="true"/>{asset_xml}
   <option timestep="0.004" integrator="implicitfast"/>
   <default>
-    <joint damping="{d['joint_damping']}" armature="0.01"/>
-    <geom friction="{friction}" contype="1" conaffinity="1"{contact_attrs}/>
+    <joint damping="{d['joint_damping']}" armature="{_armature(spec):.5f}"/>
+    <geom friction="{friction}" contype="1" conaffinity="1"{material_attr}{contact_attrs}/>
   </default>
   <worldbody>
-    <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"{floor_cc}/>
+    <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"{floor_cc}{material_attr}/>
     {"".join(bodies)}
   </worldbody>
-{_contact_pair_xml(contact_pairs or [])}\
-  <actuator>
+{_contact_pair_xml(contact_pairs or [])}{lidar_sensors_xml}  <actuator>
 {chr(10).join(acts)}
   </actuator>
 </mujoco>
@@ -245,8 +289,80 @@ def build_mjcf(spec: dict, overrides: dict | None = None, self_collision: bool =
                  contact_pairs=_floor_calf_pairs(("", spec)))
 
 
+import math
+
+import numpy as np
+
+
+def _lidar_sites_xml(prefix: str, n_rays: int, max_range: float = 2.0,
+                     n_vertical: int = 0, v_fov: float = 0.3) -> tuple[str, str]:
+  """Generate lidar rangefinder sites on a torso and the corresponding <sensor> block.
+
+  Returns (sites_xml, sensors_xml) to be inserted into the MJCF.
+  Sites are placed at the torso center. Each ray is a rangefinder that shoots
+  along the site's -z axis. Horizontal rays sweep 360 degrees; optional
+  vertical rays fan forward at different pitch angles.
+
+  A material is required on all geoms for MJX rangefinder ray casting
+  (mat_rgba indexing bug in mujoco-mjx 3.9); callers must add
+  ``<material name="mat0" .../>`` to <asset> and ``material="mat0"`` to the
+  default <geom> when lidar is enabled.
+  """
+  sites = []
+  sensors = []
+  idx = 0
+  # Horizontal sweep
+  for i in range(n_rays):
+    angle = 2.0 * math.pi * i / n_rays
+    dx, dy = math.cos(angle), math.sin(angle)
+    # Rotate (0,0,-1) -> (dx,dy,0): axis = cross((0,0,-1),(dx,dy,0)) = (dy,-dx,0)
+    ax, ay = dy, -dx
+    n = math.sqrt(ax * ax + ay * ay)
+    if n < 1e-8:
+      quat = "1 0 0 0"
+    else:
+      ax, ay = ax / n, ay / n
+      a = math.pi / 2
+      w = math.cos(a / 2); s = math.sin(a / 2)
+      quat = f"{w:.6f} {ax * s:.6f} {ay * s:.6f} 0.0"
+    nm = f"{prefix}lidar_{idx}"
+    sites.append(f'<site name="{nm}" pos="0 0 0.03" quat="{quat}" size="0.005"/>')
+    sensors.append(f'    <rangefinder site="{nm}" cutoff="{max_range}"/>')
+    idx += 1
+  # Optional vertical fan (forward-facing only)
+  if n_vertical > 0:
+    for j in range(n_vertical):
+      pitch = -v_fov + 2.0 * v_fov * (j + 1) / (n_vertical + 1)
+      # Ray direction: (cos(pitch), 0, sin(pitch))
+      dx = math.cos(pitch); dz = math.sin(pitch)
+      # Rotate (0,0,-1) -> (dx,0,dz): axis = cross((0,0,-1),(dx,0,dz)) = (0,-dz,dx)... wait
+      # cross((0,0,-1),(dx,0,dz)) = (0*dz - (-1)*0, (-1)*dx - 0*dz, 0*0 - 0*dx) = (0, -dx, 0)
+      ax, ay, az = 0.0, -dx, 0.0
+      n = math.sqrt(ax * ax + ay * ay + az * az)
+      if n < 1e-8:
+        quat = "1 0 0 0"
+      else:
+        ax, ay, az = ax / n, ay / n, az / n
+        a = math.pi / 2
+        w = math.cos(a / 2); s = math.sin(a / 2)
+        quat = f"{w:.6f} {ax * s:.6f} {ay * s:.6f} {az * s:.6f}"
+      nm = f"{prefix}lidar_v{idx}"
+      sites.append(f'<site name="{nm}" pos="0 0 0.03" quat="{quat}" size="0.005"/>')
+      sensors.append(f'    <rangefinder site="{nm}" cutoff="{max_range}"/>')
+      idx += 1
+  sites_xml = "\n      ".join(sites)
+  sensors_xml = "  <sensor>\n" + "\n".join(sensors) + "\n  </sensor>\n"
+  return sites_xml, sensors_xml
+
+
+def _lidar_ray_count(n_rays: int, n_vertical: int) -> int:
+  """Total number of rangefinder rays (horizontal + vertical)."""
+  return n_rays + n_vertical
+
+
 def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bool = True,
-                striker=None, striker_b=False) -> str:
+                striker=None, striker_b=False, lidar=False, lidar_n_rays: int = 128,
+                lidar_n_vertical: int = 16, lidar_max_range: float = 2.0) -> str:
     """Two robots facing each other for a self-play match (A = ours, B = attacker).
     `self_collision=False` (F-SPEED) disables intra-robot self-collision via contype/conaffinity
     — keeps A↔B and X↔floor (the fight + support contacts) but drops the ~O(geoms²) self-pairs,
@@ -258,7 +374,9 @@ def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bo
         ba, aa, _ = _robot_xml(spec_a, "A_", pos=(-sep / 2, 0.0, None), quat=(1, 0, 0, 0), rgba="0.3 0.4 0.7 1", striker=striker)
         bb, ab, _ = _robot_xml(spec_b, "B_", pos=(sep / 2, 0.0, None), quat=(0, 0, 0, 1), rgba="0.7 0.3 0.3 1", striker=striker_b)
         return _wrap(spec_a, [ba, bb], aa + ab,
-                     contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)))
+                     contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)),
+                     lidar=lidar, lidar_prefix="A_", lidar_n_rays=lidar_n_rays,
+                     lidar_n_vertical=lidar_n_vertical, lidar_max_range=lidar_max_range)
     # lean: floor(1,6) ↔ A(2,5) ↔ B(4,3) — A-floor, B-floor, A-B collide; A-A, B-B do not.
     # AND drop hip/thigh from collision (cc_upper "0 0") so only torso/calf/foot/spear/rod collide
     # — shrinks the dominant A-B pair count (legs-as-weapons damage still works via calf/foot/spear/rod).
@@ -273,7 +391,9 @@ def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bo
     ba, aa, _ = _robot_xml(spec_a, "A_", pos=(-sep / 2, 0.0, None), quat=(1, 0, 0, 0), rgba="0.3 0.4 0.7 1", cc=_cc(2, 5), cc_upper=off, cc_calf=calf_a, striker=striker)
     bb, ab, _ = _robot_xml(spec_b, "B_", pos=(sep / 2, 0.0, None), quat=(0, 0, 0, 1), rgba="0.7 0.3 0.3 1", cc=_cc(4, 3), cc_upper=off, cc_calf=calf_b, striker=striker_b)
     return _wrap(spec_a, [ba, bb], aa + ab, floor_cc=_cc(1, 6),
-                 contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)))
+                 contact_pairs=_floor_calf_pairs(("A_", spec_a), ("B_", spec_b)),
+                 lidar=lidar, lidar_prefix="A_", lidar_n_rays=lidar_n_rays,
+                 lidar_n_vertical=lidar_n_vertical, lidar_max_range=lidar_max_range)
 
 
 def main():

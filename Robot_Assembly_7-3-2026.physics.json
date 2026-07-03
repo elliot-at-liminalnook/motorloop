@@ -1,0 +1,1150 @@
+{
+  "units": "meters_kilograms",
+  "generated_by": "scripts/assemble_robot_7_3.py",
+  "command": "blender --background --python scripts/assemble_robot_7_3.py",
+  "source_leg": {
+    "mesh": "Test_Mesh_Leg_7-1-2026.gltf",
+    "physics": "Test_Mesh_Leg_7-1-2026.physics.json",
+    "status": "fourth_pass_hip_yaw_CONFIRMED_at_body_mount"
+  },
+  "status": "first_pass_full_quadruped_assembly_placeholder_torso",
+  "reference_pose": "spawn = all joints 0 (blade vertical), yaw/swing neutral; the ANIMATION starts at blade -35 deg but all transforms below are at the joint-zero reference pose",
+  "torso": {
+    "type": "box_PLACEHOLDER",
+    "size_xyz_m": [
+      0.2993,
+      0.1613,
+      0.1
+    ],
+    "center_world": [
+      0.0,
+      0.0,
+      0.4602
+    ],
+    "mass_kg": "TODO placeholder (structure not designed yet)",
+    "mount_points_world": {
+      "FL": [
+        0.099634,
+        0.080669,
+        0.322171
+      ],
+      "FR": [
+        0.099634,
+        -0.080669,
+        0.322171
+      ],
+      "RL": [
+        -0.099634,
+        0.080669,
+        0.322171
+      ],
+      "RR": [
+        -0.099634,
+        -0.080669,
+        0.322171
+      ]
+    },
+    "sizing_reasoning": {
+      "housing_yaw_sweep_radius_m": 0.0676,
+      "rule_length": "front/rear hip-yaw circles (housing swept +/-45) must not overlap: mount_sep = 2*R_sweep + clearance = 2*0.0676 + 0.064 = 0.1993; torso length = mount_sep + 0.10 overhang",
+      "housing_width_m": 0.0607,
+      "rule_width": "~2x housing width + clearance = 2*0.0607 + 0.04 = 0.1613; mounts on the +/-width/2 edges",
+      "mount_height_m": 0.3222,
+      "rule_height": "deepest WALK foot pose (swing +/-15, blade to -60, closed-form slider-crank) reaches 0.3202 below the mount plane; mounts placed so that pose skims 2 mm above the floor. The STOMP (blade -90) reaches 0.3241 -> blades bite ~3 mm into the floor plane at full strike (intentional, reads as a strike; kinematic only)",
+      "rule_belly": "torso bottom clears the rubber-pulley tops by 6 mm"
+    }
+  },
+  "striker_placeholder": {
+    "type": "cylinder_COSMETIC_PLACEHOLDER",
+    "radius_m": 0.012,
+    "length_m": 0.18,
+    "pose": "front face center, along +X",
+    "note": "stand-in for the pneumatic striker rod; no joint, no actuator entry"
+  },
+  "legs": {
+    "FL": {
+      "mirrored": false,
+      "orientation": "front (arm fwd, Rx90)",
+      "gait_phase_deg": 0.0,
+      "mount_transform": {
+        "attachment_point_world": [
+          0.099634,
+          0.080669,
+          0.322171
+        ],
+        "quat_leg_local_to_world_wxyz": [
+          0.707107,
+          0.707107,
+          0.0,
+          0.0
+        ],
+        "leg_frame_origin_world": [
+          0.318634,
+          0.080669,
+          0.322171
+        ],
+        "note": "world = attachment + R @ (p_leg_local - hip_yaw_local); quat is the PURE ROTATION -- the sagittal mirror of FR/RR is baked into their mesh vertex data (leg-local z -> -z), NOT into this transform"
+      },
+      "sign_conventions": {
+        "swing_sign_local": 1.0,
+        "yaw_sign_outboard": 1.0,
+        "note": "+swing_sign_local * leg_swing moves the foot toward world +X; +yaw_sign * hip_yaw sweeps the leg outboard. Verified numerically at build."
+      },
+      "masses_kg": {
+        "base_housing_and_axle": 0.5,
+        "worm_input": 0.06,
+        "leg_swing_link": 0.55,
+        "blade_upper": 0.05,
+        "blade_lower": 0.07,
+        "pushrod": 0.08
+      },
+      "leg_total_mass_kg": 1.31,
+      "joints": [
+        {
+          "name": "FL_hip_yaw",
+          "type": "revolute",
+          "parent": "torso",
+          "child": "FL_base_housing_and_axle",
+          "origin_leg_local": [
+            -0.219,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.099634,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0,
+            0,
+            1
+          ],
+          "limit_deg": [
+            -45.0,
+            45.0
+          ],
+          "note": "PLACEHOLDER ROM +/-45 (leg json); series-elastic belt drive"
+        },
+        {
+          "name": "FL_leg_swing",
+          "type": "revolute",
+          "parent": "FL_base_housing_and_axle",
+          "child": "FL_leg_swing_link",
+          "origin_leg_local": [
+            -0.16269,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.155944,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -25.0,
+            25.0
+          ],
+          "note": "worm 20:1 on the sector gear; SELF-LOCKING (non-backdrivable)"
+        },
+        {
+          "name": "FL_knee_blade",
+          "type": "revolute",
+          "parent": "FL_leg_swing_link",
+          "child": "FL_blade_upper",
+          "origin_leg_local": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -90.0,
+            10.0
+          ],
+          "note": "POWERED downward strike (toggle-press); -90 = blade horizontal, toe out front"
+        },
+        {
+          "name": "FL_toe_hinge",
+          "type": "revolute_passive",
+          "parent": "FL_blade_upper",
+          "child": "FL_blade_lower",
+          "origin_leg_local": [
+            0.0,
+            0.075,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            0.080669,
+            0.397171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "note": "passive; part of the slider-crank loop"
+        },
+        {
+          "name": "FL_heel_pin",
+          "type": "revolute_passive",
+          "parent": "FL_blade_lower",
+          "child": "FL_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.025,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            0.080669,
+            0.297171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "note": "passive; the LOOP-CLOSURE joint (see mjcf_conversion.loop_closure)"
+        },
+        {
+          "name": "FL_pushrod_slide",
+          "type": "prismatic_passive",
+          "parent": "FL_leg_swing_link",
+          "child": "FL_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.2405,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            0.080669,
+            0.081671
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "travel_m": [
+            -0.04114,
+            -0.00029
+          ],
+          "note": "piston colinear with the shin rail; 41.14 mm travel at blade -90"
+        }
+      ],
+      "actuators": [
+        {
+          "name": "FL_hip_yaw_motor",
+          "type": "series_elastic_belt_drive",
+          "drives_joint": "FL_hip_yaw",
+          "max_torque_nm": 1.2,
+          "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
+          "gear_ratio": "TODO pulley dia ratio",
+          "series_stiffness_nm_per_rad": "TODO bench-measure",
+          "series_damping": "TODO rubber hysteresis",
+          "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
+        },
+        {
+          "name": "FL_worm_pitch_motor",
+          "type": "torque_motor",
+          "drives_joint": "FL_leg_swing",
+          "max_torque_nm": 1.2,
+          "gear_ratio": 20.0,
+          "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
+        },
+        {
+          "name": "FL_knee_strike_motor",
+          "type": "torque_motor",
+          "drives_joint": "FL_knee_blade",
+          "max_torque_nm": 3.0,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+        }
+      ]
+    },
+    "FR": {
+      "mirrored": true,
+      "orientation": "front (arm fwd, Rx90)",
+      "gait_phase_deg": 180.0,
+      "mount_transform": {
+        "attachment_point_world": [
+          0.099634,
+          -0.080669,
+          0.322171
+        ],
+        "quat_leg_local_to_world_wxyz": [
+          0.707107,
+          0.707107,
+          0.0,
+          0.0
+        ],
+        "leg_frame_origin_world": [
+          0.318634,
+          -0.080669,
+          0.322171
+        ],
+        "note": "world = attachment + R @ (p_leg_local - hip_yaw_local); quat is the PURE ROTATION -- the sagittal mirror of FR/RR is baked into their mesh vertex data (leg-local z -> -z), NOT into this transform"
+      },
+      "sign_conventions": {
+        "swing_sign_local": 1.0,
+        "yaw_sign_outboard": -1.0,
+        "note": "+swing_sign_local * leg_swing moves the foot toward world +X; +yaw_sign * hip_yaw sweeps the leg outboard. Verified numerically at build."
+      },
+      "masses_kg": {
+        "base_housing_and_axle": 0.5,
+        "worm_input": 0.06,
+        "leg_swing_link": 0.55,
+        "blade_upper": 0.05,
+        "blade_lower": 0.07,
+        "pushrod": 0.08
+      },
+      "leg_total_mass_kg": 1.31,
+      "joints": [
+        {
+          "name": "FR_hip_yaw",
+          "type": "revolute",
+          "parent": "torso",
+          "child": "FR_base_housing_and_axle",
+          "origin_leg_local": [
+            -0.219,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.099634,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0,
+            0,
+            1
+          ],
+          "limit_deg": [
+            -45.0,
+            45.0
+          ],
+          "note": "PLACEHOLDER ROM +/-45 (leg json); series-elastic belt drive"
+        },
+        {
+          "name": "FR_leg_swing",
+          "type": "revolute",
+          "parent": "FR_base_housing_and_axle",
+          "child": "FR_leg_swing_link",
+          "origin_leg_local": [
+            -0.16269,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.155944,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -25.0,
+            25.0
+          ],
+          "note": "worm 20:1 on the sector gear; SELF-LOCKING (non-backdrivable)"
+        },
+        {
+          "name": "FR_knee_blade",
+          "type": "revolute",
+          "parent": "FR_leg_swing_link",
+          "child": "FR_blade_upper",
+          "origin_leg_local": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -90.0,
+            10.0
+          ],
+          "note": "POWERED downward strike (toggle-press); -90 = blade horizontal, toe out front"
+        },
+        {
+          "name": "FR_toe_hinge",
+          "type": "revolute_passive",
+          "parent": "FR_blade_upper",
+          "child": "FR_blade_lower",
+          "origin_leg_local": [
+            0.0,
+            0.075,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            -0.080669,
+            0.397171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "note": "passive; part of the slider-crank loop"
+        },
+        {
+          "name": "FR_heel_pin",
+          "type": "revolute_passive",
+          "parent": "FR_blade_lower",
+          "child": "FR_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.025,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            -0.080669,
+            0.297171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          "note": "passive; the LOOP-CLOSURE joint (see mjcf_conversion.loop_closure)"
+        },
+        {
+          "name": "FR_pushrod_slide",
+          "type": "prismatic_passive",
+          "parent": "FR_leg_swing_link",
+          "child": "FR_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.2405,
+            0.0
+          ],
+          "origin_world_spawn": [
+            0.318634,
+            -0.080669,
+            0.081671
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "travel_m": [
+            -0.04114,
+            -0.00029
+          ],
+          "note": "piston colinear with the shin rail; 41.14 mm travel at blade -90"
+        }
+      ],
+      "actuators": [
+        {
+          "name": "FR_hip_yaw_motor",
+          "type": "series_elastic_belt_drive",
+          "drives_joint": "FR_hip_yaw",
+          "max_torque_nm": 1.2,
+          "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
+          "gear_ratio": "TODO pulley dia ratio",
+          "series_stiffness_nm_per_rad": "TODO bench-measure",
+          "series_damping": "TODO rubber hysteresis",
+          "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
+        },
+        {
+          "name": "FR_worm_pitch_motor",
+          "type": "torque_motor",
+          "drives_joint": "FR_leg_swing",
+          "max_torque_nm": 1.2,
+          "gear_ratio": 20.0,
+          "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
+        },
+        {
+          "name": "FR_knee_strike_motor",
+          "type": "torque_motor",
+          "drives_joint": "FR_knee_blade",
+          "max_torque_nm": 3.0,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+        }
+      ]
+    },
+    "RL": {
+      "mirrored": false,
+      "orientation": "rear (arm aft, Rz180@Rx90)",
+      "gait_phase_deg": 180.0,
+      "mount_transform": {
+        "attachment_point_world": [
+          -0.099634,
+          0.080669,
+          0.322171
+        ],
+        "quat_leg_local_to_world_wxyz": [
+          0.0,
+          0.0,
+          0.707107,
+          0.707107
+        ],
+        "leg_frame_origin_world": [
+          -0.318634,
+          0.080669,
+          0.322171
+        ],
+        "note": "world = attachment + R @ (p_leg_local - hip_yaw_local); quat is the PURE ROTATION -- the sagittal mirror of FR/RR is baked into their mesh vertex data (leg-local z -> -z), NOT into this transform"
+      },
+      "sign_conventions": {
+        "swing_sign_local": -1.0,
+        "yaw_sign_outboard": -1.0,
+        "note": "+swing_sign_local * leg_swing moves the foot toward world +X; +yaw_sign * hip_yaw sweeps the leg outboard. Verified numerically at build."
+      },
+      "masses_kg": {
+        "base_housing_and_axle": 0.5,
+        "worm_input": 0.06,
+        "leg_swing_link": 0.55,
+        "blade_upper": 0.05,
+        "blade_lower": 0.07,
+        "pushrod": 0.08
+      },
+      "leg_total_mass_kg": 1.31,
+      "joints": [
+        {
+          "name": "RL_hip_yaw",
+          "type": "revolute",
+          "parent": "torso",
+          "child": "RL_base_housing_and_axle",
+          "origin_leg_local": [
+            -0.219,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.099634,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0,
+            0,
+            1
+          ],
+          "limit_deg": [
+            -45.0,
+            45.0
+          ],
+          "note": "PLACEHOLDER ROM +/-45 (leg json); series-elastic belt drive"
+        },
+        {
+          "name": "RL_leg_swing",
+          "type": "revolute",
+          "parent": "RL_base_housing_and_axle",
+          "child": "RL_leg_swing_link",
+          "origin_leg_local": [
+            -0.16269,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.155944,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -25.0,
+            25.0
+          ],
+          "note": "worm 20:1 on the sector gear; SELF-LOCKING (non-backdrivable)"
+        },
+        {
+          "name": "RL_knee_blade",
+          "type": "revolute",
+          "parent": "RL_leg_swing_link",
+          "child": "RL_blade_upper",
+          "origin_leg_local": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -90.0,
+            10.0
+          ],
+          "note": "POWERED downward strike (toggle-press); -90 = blade horizontal, toe out front"
+        },
+        {
+          "name": "RL_toe_hinge",
+          "type": "revolute_passive",
+          "parent": "RL_blade_upper",
+          "child": "RL_blade_lower",
+          "origin_leg_local": [
+            0.0,
+            0.075,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            0.080669,
+            0.397171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "note": "passive; part of the slider-crank loop"
+        },
+        {
+          "name": "RL_heel_pin",
+          "type": "revolute_passive",
+          "parent": "RL_blade_lower",
+          "child": "RL_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.025,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            0.080669,
+            0.297171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "note": "passive; the LOOP-CLOSURE joint (see mjcf_conversion.loop_closure)"
+        },
+        {
+          "name": "RL_pushrod_slide",
+          "type": "prismatic_passive",
+          "parent": "RL_leg_swing_link",
+          "child": "RL_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.2405,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            0.080669,
+            0.081671
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            -0.0,
+            -0.0,
+            1.0
+          ],
+          "travel_m": [
+            -0.04114,
+            -0.00029
+          ],
+          "note": "piston colinear with the shin rail; 41.14 mm travel at blade -90"
+        }
+      ],
+      "actuators": [
+        {
+          "name": "RL_hip_yaw_motor",
+          "type": "series_elastic_belt_drive",
+          "drives_joint": "RL_hip_yaw",
+          "max_torque_nm": 1.2,
+          "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
+          "gear_ratio": "TODO pulley dia ratio",
+          "series_stiffness_nm_per_rad": "TODO bench-measure",
+          "series_damping": "TODO rubber hysteresis",
+          "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
+        },
+        {
+          "name": "RL_worm_pitch_motor",
+          "type": "torque_motor",
+          "drives_joint": "RL_leg_swing",
+          "max_torque_nm": 1.2,
+          "gear_ratio": 20.0,
+          "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
+        },
+        {
+          "name": "RL_knee_strike_motor",
+          "type": "torque_motor",
+          "drives_joint": "RL_knee_blade",
+          "max_torque_nm": 3.0,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+        }
+      ]
+    },
+    "RR": {
+      "mirrored": true,
+      "orientation": "rear (arm aft, Rz180@Rx90)",
+      "gait_phase_deg": 0.0,
+      "mount_transform": {
+        "attachment_point_world": [
+          -0.099634,
+          -0.080669,
+          0.322171
+        ],
+        "quat_leg_local_to_world_wxyz": [
+          0.0,
+          0.0,
+          0.707107,
+          0.707107
+        ],
+        "leg_frame_origin_world": [
+          -0.318634,
+          -0.080669,
+          0.322171
+        ],
+        "note": "world = attachment + R @ (p_leg_local - hip_yaw_local); quat is the PURE ROTATION -- the sagittal mirror of FR/RR is baked into their mesh vertex data (leg-local z -> -z), NOT into this transform"
+      },
+      "sign_conventions": {
+        "swing_sign_local": -1.0,
+        "yaw_sign_outboard": 1.0,
+        "note": "+swing_sign_local * leg_swing moves the foot toward world +X; +yaw_sign * hip_yaw sweeps the leg outboard. Verified numerically at build."
+      },
+      "masses_kg": {
+        "base_housing_and_axle": 0.5,
+        "worm_input": 0.06,
+        "leg_swing_link": 0.55,
+        "blade_upper": 0.05,
+        "blade_lower": 0.07,
+        "pushrod": 0.08
+      },
+      "leg_total_mass_kg": 1.31,
+      "joints": [
+        {
+          "name": "RR_hip_yaw",
+          "type": "revolute",
+          "parent": "torso",
+          "child": "RR_base_housing_and_axle",
+          "origin_leg_local": [
+            -0.219,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.099634,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            0,
+            0,
+            1
+          ],
+          "limit_deg": [
+            -45.0,
+            45.0
+          ],
+          "note": "PLACEHOLDER ROM +/-45 (leg json); series-elastic belt drive"
+        },
+        {
+          "name": "RR_leg_swing",
+          "type": "revolute",
+          "parent": "RR_base_housing_and_axle",
+          "child": "RR_leg_swing_link",
+          "origin_leg_local": [
+            -0.16269,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.155944,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -25.0,
+            25.0
+          ],
+          "note": "worm 20:1 on the sector gear; SELF-LOCKING (non-backdrivable)"
+        },
+        {
+          "name": "RR_knee_blade",
+          "type": "revolute",
+          "parent": "RR_leg_swing_link",
+          "child": "RR_blade_upper",
+          "origin_leg_local": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            -0.080669,
+            0.322171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "limit_deg": [
+            -90.0,
+            10.0
+          ],
+          "note": "POWERED downward strike (toggle-press); -90 = blade horizontal, toe out front"
+        },
+        {
+          "name": "RR_toe_hinge",
+          "type": "revolute_passive",
+          "parent": "RR_blade_upper",
+          "child": "RR_blade_lower",
+          "origin_leg_local": [
+            0.0,
+            0.075,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            -0.080669,
+            0.397171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "note": "passive; part of the slider-crank loop"
+        },
+        {
+          "name": "RR_heel_pin",
+          "type": "revolute_passive",
+          "parent": "RR_blade_lower",
+          "child": "RR_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.025,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            -0.080669,
+            0.297171
+          ],
+          "axis_leg_local": [
+            0,
+            0,
+            1
+          ],
+          "axis_world_spawn": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "note": "passive; the LOOP-CLOSURE joint (see mjcf_conversion.loop_closure)"
+        },
+        {
+          "name": "RR_pushrod_slide",
+          "type": "prismatic_passive",
+          "parent": "RR_leg_swing_link",
+          "child": "RR_pushrod",
+          "origin_leg_local": [
+            0.0,
+            -0.2405,
+            0.0
+          ],
+          "origin_world_spawn": [
+            -0.318634,
+            -0.080669,
+            0.081671
+          ],
+          "axis_leg_local": [
+            0,
+            1,
+            0
+          ],
+          "axis_world_spawn": [
+            -0.0,
+            -0.0,
+            1.0
+          ],
+          "travel_m": [
+            -0.04114,
+            -0.00029
+          ],
+          "note": "piston colinear with the shin rail; 41.14 mm travel at blade -90"
+        }
+      ],
+      "actuators": [
+        {
+          "name": "RR_hip_yaw_motor",
+          "type": "series_elastic_belt_drive",
+          "drives_joint": "RR_hip_yaw",
+          "max_torque_nm": 1.2,
+          "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
+          "gear_ratio": "TODO pulley dia ratio",
+          "series_stiffness_nm_per_rad": "TODO bench-measure",
+          "series_damping": "TODO rubber hysteresis",
+          "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
+        },
+        {
+          "name": "RR_worm_pitch_motor",
+          "type": "torque_motor",
+          "drives_joint": "RR_leg_swing",
+          "max_torque_nm": 1.2,
+          "gear_ratio": 20.0,
+          "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
+        },
+        {
+          "name": "RR_knee_strike_motor",
+          "type": "torque_motor",
+          "drives_joint": "RR_knee_blade",
+          "max_torque_nm": 3.0,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+        }
+      ]
+    }
+  },
+  "animation": {
+    "name": "walk_trot_then_power_strike",
+    "fps": 24,
+    "frames": 144,
+    "kinematics_only": true,
+    "walk": {
+      "frames": [
+        1,
+        108
+      ],
+      "cycle_s": 1.5,
+      "diagonal_pairs_antiphase": [
+        "FL+RR",
+        "FR+RL"
+      ],
+      "yaw_sweep_deg": 25.0,
+      "pitch_swing_deg": 15.0,
+      "blade_partial_deg": [
+        -60.0,
+        -10.0
+      ],
+      "pushrod": "closed-form slider-crank follower (reused from rig_foot_7_1)"
+    },
+    "finale": {
+      "frames": [
+        109,
+        144
+      ],
+      "tuck_frames": [
+        109,
+        116
+      ],
+      "strike_frames": [
+        117,
+        121
+      ],
+      "description": "all four blades POWER-STRIKE to -90 simultaneously (the toggle-press stomp), then hold"
+    }
+  },
+  "mjcf_conversion": {
+    "naming_convention": {
+      "pattern": "{leg}_{joint} with legs FL/FR/RL/RR, matching sim/robot/gen_robot_mjcf.py _leg_xml (n = prefix + leg name)",
+      "mapping_to_gen_robot_mjcf": {
+        "{leg}_hip_yaw": "{leg}_abd (the hip x-axis dof slot)",
+        "{leg}_leg_swing": "{leg}_flex",
+        "{leg}_knee_blade": "{leg}_knee",
+        "{leg}_pushrod_slide": "{leg}_strike slot if the blade is wired as the weapon dof (see loop_closure option_b)"
+      }
+    },
+    "loop_closure": {
+      "problem": "toe_hinge + heel_pin + pushrod_slide form a closed 4-bar (slider-crank) loop; MJCF kinematic trees cannot express it directly",
+      "option_a_equality_connect": {
+        "recipe": "build blade_lower as a child of blade_upper via {leg}_toe_hinge; build pushrod as a child of leg_swing_link via {leg}_pushrod_slide (slide, axis leg-local (0,1,0), range [-0.0412, 0]); then close the loop with <equality><connect body1='{leg}_blade_lower' body2='{leg}_pushrod' anchor='0 -0.100 0'/> -- the anchor is the HEEL PIN in blade_lower local coords (0.100 below the toe hinge)",
+        "note": "connect constrains 3 translations; the loop is planar so one component is redundant but consistent -- fine for MuJoCo's soft solver. Start solref='0.002 1' solimp defaults."
+      },
+      "option_b_closed_form": {
+        "recipe": "drop blade_lower+pushrod passive dofs entirely OR keep the slide and enslave it: <equality><joint joint1='{leg}_pushrod_slide' joint2='{leg}_knee_blade' polycoef='c0 c1 c2 c3 c4'/> using the quartic fit below (slide value in m vs knee angle in rad, both ABSOLUTE with qpos0 = 0 for the two joints, which is exactly MuJoCo's qpos0-relative convention then); attach the foot/strike geom to the pushrod tip",
+        "closed_form": "s(phi) = r*cos(phi) - sqrt(L^2 - r^2*sin(phi)^2) - (r - L); r=0.075, L=0.100; s(-pi/2) = -0.04114",
+        "quartic_fit": {
+          "polycoef_c0_to_c4": [
+            -2.53e-06,
+            8.037e-05,
+            -0.00927578,
+            -0.00078254,
+            -0.00349353
+          ],
+          "max_fit_error_m": 0.00010798,
+          "domain_rad": [
+            -1.570796,
+            0.174533
+          ]
+        }
+      }
+    },
+    "suggested_defaults": {
+      "armature_note": "reflected rotor inertia = J_rotor * gear^2 (the gen_robot_mjcf _armature convention); J_rotor placeholder 1.5e-05 kg.m2 (sim/tests/motors.py gimbal-class, Q1 estimate)",
+      "per_axis_armature_kg_m2": {
+        "hip_yaw": "TODO: 1.5e-05 * belt_ratio^2 (belt ratio unmeasured; 3:1 example -> 1.35e-04)",
+        "leg_swing": 0.006,
+        "knee_blade": "TODO: 1.5e-05 * knee_gear^2 (knee gearing unconfirmed; direct-drive example -> 1.50e-05)"
+      },
+      "hip_yaw_series_elasticity": "do NOT model as a rigid gear: either (a) add a rotor body + hinge behind {leg}_hip_yaw joined by a stiffness/damping equality (SEA), or (b) minimum-viable: position actuator whose kp = belt torsional stiffness (TODO bench) so yaw steering stays springy",
+      "leg_swing_self_locking": "worm is non-backdrivable: high joint damping or brake-when-idle; holds stance at zero power"
+    },
+    "contact_guidance": {
+      "colliding_geoms": "pushrod tip (foot), blade_lower (strike face), torso shell",
+      "non_colliding": "housing, worm, sector gear, drive frame, rails, carriers, pulley placeholders: contype='0' conaffinity='0' (the gen_robot_mjcf cc_upper reduced-collision lean mode)",
+      "note": "exclude intra-leg pairs (blade vs carrier slot overlaps in the real mesh); keep foot-floor and blade-opponent pairs"
+    }
+  },
+  "assembly_notes": [
+    "Mounting per task spec: leg-local -Y = world down, swing axis (leg-local Z) = body lateral (fore-aft stepping), yaw axis vertical at the attachment.",
+    "AMBIGUITY (arm direction): the spec fixes axes but not the sign of the leg's +X arm; front legs point the arm forward, rear legs are rotated 180 about vertical (arm aft) for fore/aft symmetry -- rear blades guard the rear.",
+    "AMBIGUITY (stride-via-yaw): with the prescribed mounting the yaw arm points fore-aft, so a symmetric yaw sweep at neutral moves the foot mostly LATERALLY; fore-aft stride in this animation comes from the +/-15 pitch swing while the +/-25 yaw sweep provides the design-intent workspace cone. TRUE stride-via-yaw would mount the arm laterally (outboard) instead -- flagged for the design pass.",
+    "AMBIGUITY (task brief said 'worm along X'): the worm SPIN AXIS is leg-local +Y (rig + json authoritative); the worm/housing assembly is OFFSET along -X from the knee. Interpreted as the latter.",
+    "MIRRORING: FR/RR are mirrored by negating leg-local z in the mesh data (+ normal flip). Valid because the mechanism is PLANAR (all axes +/-Z, all pivots at z=0): mirrored legs run identical joint values; only cosmetic lateral asymmetries flip.",
+    "Sign conventions (swing forward / yaw outboard) were verified NUMERICALLY at build time by perturbing each joint and checking the foot displacement.",
+    "Masses are the 7-1 leg-json placeholders; torso mass TODO.",
+    "The animation is keyframed kinematics (frame_set + empties), NOT a physics sim; feet skim up to ~30 mm above the floor mid-gait since body height is fixed."
+  ]
+}

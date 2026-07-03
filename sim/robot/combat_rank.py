@@ -26,7 +26,7 @@ import jax, jax.numpy as jnp, numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from train_adversarial import AdversarialEnv  # noqa: E402
-from brax.training.agents.ppo import networks as ppo_networks  # noqa: E402
+import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)  # noqa: E402
 from brax.training.acme import running_statistics  # noqa: E402
 from robust_codesign import cvar               # noqa: E402
 from reality_gap_eval import rank_correlation  # noqa: E402

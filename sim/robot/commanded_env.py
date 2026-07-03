@@ -29,7 +29,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-CMD_DIM = 2
+CMD_DIM = 3          # (vx, vy, yaw-rate). 2-D callers (eval/render scripts, deploy remotes)
+                     # are zero-padded by _pad_cmd — a 2-D command means "don't turn".
 DEFAULT_FAST_DESIGN = (0.5, 0.08, 1.0 / 3.0)  # mass x1.0, stiffness 2 N/m, damping x1.0
 VMAX = float(os.environ.get("CMD_VMAX", "1.2"))  # max commanded planar speed (m/s)
 TRACK_W = 5.0       # secondary: exact speed matching after progress is learned
@@ -45,8 +46,7 @@ CMD_TRAIN_MODE = os.environ.get("CMD_TRAIN_MODE", "cardinal")
 CMD_REWARD_MODE = os.environ.get("CMD_REWARD_MODE", "command")
 CMD_CONTROL_MODE = os.environ.get("CMD_CONTROL_MODE", "pd")
 RESET_NOISE = float(os.environ.get("CMD_RESET_NOISE", "0.05"))
-PD_KP = float(os.environ.get("CMD_PD_KP", "30.0"))
-PD_KD = float(os.environ.get("CMD_PD_KD", "1.0"))
+from constants import PD_KD, PD_KP  # V.1: gains live in ONE place (constants.py)
 PD_SCALE = float(os.environ.get("CMD_PD_SCALE", "1.0"))
 SIMPLE_FWD_W = float(os.environ.get("CMD_SIMPLE_FWD_W", "5.0"))
 SIMPLE_BACK_W = float(os.environ.get("CMD_SIMPLE_BACK_W", "3.0"))
@@ -126,10 +126,16 @@ from cpg_teacher import (  # noqa: E402
 AIRTIME_W = 1.0     # feet AIR-TIME: reward a foot for swinging ~AIRTIME_TARGET s before it touches down.
                     # THE term that yields a real stepping rhythm (vs flat-standing OR frantic tapping);
                     # negative when a foot lands too fast, so it shapes a proper gait cadence.
-AIRTIME_TARGET = 0.2   # s — desired swing duration per step
+from constants import AIRTIME_CAP, AIRTIME_TARGET, FOOT_CONTACT_Z  # V.1 shared gait constants
+                    # (cap: uncapped, one 1 s flight paid 4x a perfect landing — audit item 2a)
 ACTRATE_W = 0.05    # penalize |action_t − action_{t−1}|² without suppressing exploration
 VELZ_W = 0.5        # penalize vertical bounce (lin_vel_z²) → don't pogo
 ANGXY_W = 0.1       # penalize roll/pitch rate → stay flat while moving
+POSE_W = 0.2        # penalize hinge deviation from the stand pose (keeps gait near the
+                    # well-conditioned posture; standard Go2-recipe regularizer)
+SLIP_W = 0.1        # penalize foot planar motion while in CONTACT (feet push, not skate)
+YAWERR_W = 0.5      # yaw-rate command error weight inside the tracking kernel
+YAW_MAX = float(os.environ.get("CMD_YAW_MAX", "0.8"))   # rad/s commanded turn rate bound
 
 
 def parse_route_waypoints(text: str) -> np.ndarray:
@@ -165,10 +171,11 @@ def parse_route_starts(text: str):
 
 
 def sample_command(rng):
-    """A random world-frame velocity command: random heading × random speed, with ~20%
-    'hold' (zero) so the policy also learns to stand still + balance on command."""
+    """A random velocity command (vx, vy, yaw-rate): random heading × random speed +
+    random turn rate, with ~15% 'hold' (all-zero) so the policy also learns to stand
+    still + balance on command."""
     import jax, jax.numpy as jnp
-    a, s, h = jax.random.split(rng, 3)
+    a, s, h, y = jax.random.split(rng, 4)
     if CMD_TRAIN_MODE == "forward":
         direction = jnp.array([1.0, 0.0])
     elif CMD_TRAIN_MODE == "backward":
@@ -180,8 +187,10 @@ def sample_command(rng):
         ang = jax.random.uniform(a, (), minval=-jnp.pi, maxval=jnp.pi)
         direction = jnp.array([jnp.cos(ang), jnp.sin(ang)])
     spd = jax.random.uniform(s, (), minval=0.35 * VMAX, maxval=VMAX)
+    yaw = jnp.where(CMD_TRAIN_MODE in ("forward", "backward", "cardinal"), 0.0,
+                    jax.random.uniform(y, (), minval=-YAW_MAX, maxval=YAW_MAX))
     hold = (jax.random.uniform(h, ()) < 0.15).astype(jnp.float32)    # 15% stand-still
-    return direction * spd * (1.0 - hold)
+    return jnp.concatenate([direction * spd, yaw.reshape((1,))]) * (1.0 - hold)
 
 
 def _build():
@@ -218,7 +227,13 @@ def _build():
             self._qa = jnp.array([int(m.jnt_qposadr[j]) for j in aj], dtype=int)
             self._da = jnp.array([int(m.jnt_dofadr[j]) for j in aj], dtype=int)
             self._jr = jnp.array([m.jnt_range[j] for j in aj])
-            self._tmax = jnp.array(m.actuator_forcerange[:m.nu, 1])
+            # ctrl scale for PD torque mapping: delivered torque = gear × ctrl, so the
+            # correct divisor is GEAR. actuator_forcerange (the old divisor) merely
+            # documents intent — the pre-2026-07 validator trusted it and green-lit a
+            # body with 8% of design torque. Same-outcome today (gear == forcerange
+            # numerically) but the causal path is now the honest one.
+            gear = m.actuator_gear[:m.nu, 0]
+            self._tmax = jnp.array(np.where(gear > 0, gear, m.actuator_forcerange[:m.nu, 1]))
             self._stand = self._q0[self._qa]
             self._design = jnp.array(DEFAULT_FAST_DESIGN, dtype=jnp.float32)
             if CPG_WP2_ACTIONS is not None and CPG_WP2_ACTIONS.shape[1] != self._nu:
@@ -276,7 +291,11 @@ def _build():
             self._obs_size = (2 * self._nu + 11 + DESIGN_DIM
                               + (1 if OBS_PRIOR_STRENGTH else 0)
                               + (ROUTE_CONTEXT_DIM if OBS_ROUTE_CONTEXT else 0)
-                              + CMD_DIM)
+                              + self._nu          # prev_action (audit item 2a/7: at 50 Hz
+                                                  # with springs, stance/swing intent is
+                                                  # unobservable from one qpos/qvel frame)
+                              + CMD_DIM)          # cmd stays the FINAL slice (goal-tail
+                                                  # convention — insert new obs BEFORE it)
 
         @property
         def observation_size(self): return self._obs_size
@@ -293,13 +312,35 @@ def _build():
                 return jnp.asarray(0.0, dtype=jnp.float32)
             return 1.0 / (1.0 + jnp.maximum(jnp.asarray(residual_scale, dtype=jnp.float32), 0.0))
 
+        @staticmethod
+        def _pad_cmd(cmd):
+            """Accept legacy 2-D (vx, vy) commands from eval/render/deploy callers:
+            zero-pad the yaw-rate slot. Static shape at trace time — jit-safe."""
+            cmd = jnp.asarray(cmd, dtype=jnp.float32)
+            if cmd.shape[-1] < CMD_DIM:
+                cmd = jnp.concatenate([cmd, jnp.zeros(CMD_DIM - cmd.shape[-1], dtype=cmd.dtype)])
+            return cmd
+
+        @staticmethod
+        def _yaw_rot(dx):
+            """Planar rotation world->body-yaw frame from the root quaternion (w,x,y,z)."""
+            w, x, y, z = dx.qpos[3], dx.qpos[4], dx.qpos[5], dx.qpos[6]
+            yaw = jnp.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+            c, s = jnp.cos(yaw), jnp.sin(yaw)
+            return jnp.array([[c, s], [-s, c]])       # rows: body-forward, body-left
+
         def _obs(self, dx, design, cmd, prior_strength=None, route_wp=None, route_target=None,
-                 route_dist=None, transition_amount=None, prev_cmd=None):
+                 route_dist=None, transition_amount=None, prev_cmd=None, prev_action=None):
+            # BODY-frame planar velocity + command (audit item 2a): the policy should
+            # act on "how fast am I moving relative to my own heading", not on world
+            # coordinates its sensors can't know. Roll/pitch stay via the quaternion.
+            R = self._yaw_rot(dx)
+            v_body = R @ dx.qvel[0:2]
             parts = [
                 dx.qpos[7:7 + self._nu],
                 dx.qvel[6:6 + self._nu],
                 dx.qpos[3:7],
-                dx.qvel[0:6],
+                jnp.concatenate([v_body, dx.qvel[2:6]]),
                 dx.qpos[2:3],
                 design,
             ]
@@ -325,7 +366,9 @@ def _build():
                     prev / jnp.maximum(VMAX, 1e-6),
                 ])
                 parts.append(route_context)
-            parts.append(cmd)
+            parts.append(jnp.zeros(self._nu) if prev_action is None else prev_action)
+            # command in the BODY frame; yaw-rate passes through. Goal tail stays LAST.
+            parts.append(jnp.concatenate([R @ cmd[:2], cmd[2:3]]))
             return jnp.concatenate(parts)
 
         def _route_command(self, pos, waypoint):
@@ -356,7 +399,8 @@ def _build():
 
         def _metrics0(self):
             return {"track": jnp.zeros(()), "vx": jnp.zeros(()), "vy": jnp.zeros(()),
-                    "cmd_vx": jnp.zeros(()), "cmd_vy": jnp.zeros(()), "verr": jnp.zeros(()),
+                    "cmd_vx": jnp.zeros(()), "cmd_vy": jnp.zeros(()), "cmd_yaw": jnp.zeros(()),
+                    "slip": jnp.zeros(()), "pose_dev": jnp.zeros(()), "verr": jnp.zeros(()),
                     "align": jnp.zeros(()), "speed": jnp.zeros(()), "progress": jnp.zeros(()),
                     "up": jnp.zeros(()), "height": jnp.zeros(()),
                     "residual_scale": jnp.zeros(()), "prior_strength": jnp.zeros(()),
@@ -380,7 +424,7 @@ def _build():
             design = self._design
             dx = mjx.forward(self._model(design), mjx.make_data(self._mx).replace(qpos=qpos))
             route_cmd, route_target, route_dist = self._route_command(dx.qpos[:2], route_wp)
-            cmd = route_cmd if CMD_TRAIN_MODE == "route" else sample_command(cr)
+            cmd = self._pad_cmd(route_cmd if CMD_TRAIN_MODE == "route" else sample_command(cr))
             prior_strength = self._prior_strength(CPG_RESIDUAL_SCALE)
             return State(dx, self._obs(dx, design, cmd, prior_strength, route_wp, route_target, route_dist,
                                        jnp.zeros(()), cmd), jnp.zeros(()), jnp.zeros(()),
@@ -397,7 +441,8 @@ def _build():
                                             "route_prev_dist": route_dist,
                                             "wp2_residual_step": jnp.zeros((), dtype=jnp.int32),
                                             "wp3_residual_step": jnp.zeros((), dtype=jnp.int32),
-                                            "air_time": jnp.zeros(4), "prev_action": jnp.zeros(self._nu)})
+                                            "air_time": jnp.zeros(4), "prev_action": jnp.zeros(self._nu),
+                                            "prev_feet_xy": dx.geom_xpos[self._feet][:, :2]})
 
         def reset_with_command(self, rng, cmd):
             """Deploy: reset holding a GIVEN command (the remote controller's value)."""
@@ -407,7 +452,7 @@ def _build():
                 jax.random.uniform(nr, (self._nu,), minval=-RESET_NOISE, maxval=RESET_NOISE))
             design = self._design
             dx = mjx.forward(self._model(design), mjx.make_data(self._mx).replace(qpos=qpos))
-            cmd = jnp.asarray(cmd)
+            cmd = self._pad_cmd(cmd)
             route_wp = jnp.zeros((), dtype=jnp.int32)
             _, route_target, route_dist = self._route_command(dx.qpos[:2], route_wp)
             prior_strength = self._prior_strength(CPG_RESIDUAL_SCALE)
@@ -426,11 +471,13 @@ def _build():
                                             "route_prev_dist": route_dist,
                                             "wp2_residual_step": jnp.zeros((), dtype=jnp.int32),
                                             "wp3_residual_step": jnp.zeros((), dtype=jnp.int32),
-                                            "air_time": jnp.zeros(4), "prev_action": jnp.zeros(self._nu)})
+                                            "air_time": jnp.zeros(4), "prev_action": jnp.zeros(self._nu),
+                                            "prev_feet_xy": dx.geom_xpos[self._feet][:, :2]})
 
         def step(self, state, action):
-            cmd = state.info["cmd"]
-            prev_cmd = state.info["prev_cmd"]
+            # _pad_cmd: eval/render/deploy overwrite info["cmd"] with legacy 2-D commands
+            cmd = self._pad_cmd(state.info["cmd"])
+            prev_cmd = self._pad_cmd(state.info["prev_cmd"])
             rng, cr = jax.random.split(state.info["rng"])
             timer = state.info["cmd_timer"] + 1
             should_resample = jnp.logical_and(timer >= CMD_HOLD_STEPS,
@@ -445,7 +492,7 @@ def _build():
                 route_hit0 = route_dist0 <= CMD_ROUTE_RADIUS
                 route_wp0 = jnp.minimum(route_wp0 + route_hit0.astype(jnp.int32), self._route_n - 1)
                 route_cmd, route_target, route_dist0 = self._route_command(state.pipeline_state.qpos[:2], route_wp0)
-                cmd = jnp.where(state.info["remote"], cmd, route_cmd)
+                cmd = jnp.where(state.info["remote"], cmd, self._pad_cmd(route_cmd))
             raw_action = jnp.clip(action, -1.0, 1.0)
             wp2_residual_step0 = state.info["wp2_residual_step"]
             wp3_residual_step0 = state.info["wp3_residual_step"]
@@ -472,7 +519,7 @@ def _build():
                 jnp.asarray(CPG_TRANSITION_HOLD_STEPS, dtype=jnp.int32),
                 jnp.maximum(state.info["transition_timer"] - 1, 0),
             )
-            change_strength = cpg_transition_strength(cmd, prev_cmd, VMAX, xp=jnp)
+            change_strength = cpg_transition_strength(cmd[:2], prev_cmd[:2], VMAX, xp=jnp)
             if CPG_TRANSITION_HOLD_STEPS > 0:
                 timer_strength = transition_timer.astype(jnp.float32) / float(max(CPG_TRANSITION_HOLD_STEPS, 1))
             else:
@@ -492,9 +539,9 @@ def _build():
             prior_strength = self._prior_strength(residual_scale)
             if CMD_CONTROL_MODE == "cpg_pd":
                 target, motor_action, _ = cpg_pd_step_target(
-                    self._stand, self._jr, phase, cmd, raw_action, self._cpg_idx, self._nu,
+                    self._stand, self._jr, phase, cmd[:2], raw_action, self._cpg_idx, self._nu,
                     VMAX, residual_scale, PD_SCALE, directional=self._cpg,
-                    prev_command=prev_cmd, transition_amount=transition_amount, xp=jnp)
+                    prev_command=prev_cmd[:2], transition_amount=transition_amount, xp=jnp)
             else:
                 motor_action = raw_action
             if CMD_CONTROL_MODE in ("pd", "cpg_pd"):
@@ -510,7 +557,10 @@ def _build():
             mxd = self._model(design)
             dx = jax.lax.fori_loop(0, self._fs, lambda i, d: mjx.step(mxd, d), dx)
             v = dx.qvel[0:2]                                  # base planar velocity (world)
-            verr = jnp.sum((v - cmd) ** 2)
+            # tracking kernel over the FULL command: planar velocity + yaw rate. Rotation-
+            # invariant (|v−cmd| is the same in world and body frames), so reward math can
+            # stay world-frame while the OBS are body-frame.
+            verr = jnp.sum((v - cmd[:2]) ** 2) + YAWERR_W * (dx.qvel[5] - cmd[2]) ** 2
             track = jnp.exp(-verr / TRACK_SIGMA)              # 1 when matching the command
             up = 1.0 - 2.0 * (dx.qpos[4] ** 2 + dx.qpos[5] ** 2)
             route_dist1 = jnp.linalg.norm(route_target - dx.qpos[:2])
@@ -522,21 +572,31 @@ def _build():
             wp2_y_vel = wp2_active * jnp.maximum(0.0, dx.qvel[1])
             wp2_x_progress = wp2_active * jnp.maximum(0.0, -dx.qvel[0]) / jnp.maximum(VMAX, 1e-6)
             wp2_x_remaining = wp2_active * jnp.maximum(0.0, dx.qpos[0] - route_target[0])
-            cmd_norm = jnp.linalg.norm(cmd)
+            cmd_norm = jnp.linalg.norm(cmd[:2])
             speed = jnp.linalg.norm(v)
-            progress = jnp.dot(v, cmd) / (cmd_norm + 1e-6)
-            align = jnp.dot(v, cmd) / (speed * cmd_norm + 1e-6)
+            progress = jnp.dot(v, cmd[:2]) / (cmd_norm + 1e-6)
+            align = jnp.dot(v, cmd[:2]) / (speed * cmd_norm + 1e-6)
             active = (cmd_norm > 0.05).astype(jnp.float32)
             cmd_active = jnp.clip(cmd_norm / VMAX, 0.0, 1.0)
             # FOOT AIR-TIME — the gait-rhythm term: credit each foot, on the step it lands, for how long
             # it swung (air_time − target). Negative if it lands too fast → shapes a proper cadence, not
             # flat-standing and not frantic tapping. Per-foot air time tracked in info.
             foot_z = dx.geom_xpos[self._feet][:, 2]
-            contact = foot_z < 0.04
+            contact = foot_z < FOOT_CONTACT_Z
             air_time = state.info["air_time"]
             first_contact = jnp.logical_and(contact, air_time > 0.0)
-            air_rwd = jnp.sum((air_time - AIRTIME_TARGET) * first_contact.astype(jnp.float32))
+            # credit CAPS at AIRTIME_CAP: a long hop lands once and must not out-earn a
+            # cadence of on-target swings (uncapped, flight time was linear free money)
+            air_rwd = jnp.sum((jnp.minimum(air_time, AIRTIME_CAP) - AIRTIME_TARGET)
+                              * first_contact.astype(jnp.float32))
             new_air = jnp.where(contact, 0.0, air_time + self._dt)
+            # feet-slip: feet in CONTACT should hold ground, not skate (planar drift of
+            # contacting feet per control step, squared, normalized by dt -> a velocity²)
+            feet_xy = dx.geom_xpos[self._feet][:, :2]
+            slip = jnp.sum(contact.astype(jnp.float32)
+                           * jnp.sum((feet_xy - state.info["prev_feet_xy"]) ** 2, axis=1)) / (self._dt ** 2)
+            # pose regularization toward the stand posture (Go2-recipe term)
+            pose_dev = jnp.sum((dx.qpos[self._qa] - self._stand) ** 2)
             # smoothness + stability — kill the reckless lurch-and-fall
             act_rate = jnp.sum((motor_action - state.info["prev_action"]) ** 2)
             velz = dx.qvel[2] ** 2                             # vertical bounce
@@ -562,16 +622,28 @@ def _build():
                           - ACTRATE_W * act_rate - VELZ_W * velz - ANGXY_W * angxy
                           - 0.001 * jnp.sum(ctrl ** 2))
             else:
-                reward = (TRACK_W * track + UPRIGHT_W * up + 0.1
+                # PROGRESS credit CLAMPS at the commanded magnitude: exact tracking is the
+                # maximum — overspeeding past the command earns nothing extra (it used to
+                # out-earn exact tracking by +3.7-4.6/step; audit item 2a's headline exploit).
+                progress_capped = jnp.clip(progress, -cmd_norm, cmd_norm) / VMAX
+                # Nonzero commands should not pay track-kernel crumbs to passive
+                # settling or backsliding. Exact tracking keeps full credit; zero
+                # command still rewards holding position.
+                track_gate = jnp.where(active > 0.0,
+                                       jnp.clip(progress / jnp.maximum(cmd_norm, 1e-6), 0.0, 1.0),
+                                       1.0)
+                reward = (TRACK_W * track * track_gate + UPRIGHT_W * up + 0.1
                           + ALIGN_W * active * jnp.clip(align, -1.0, 1.0)
-                          + PROGRESS_W * active * jnp.clip(progress / VMAX, -1.0, 1.0)
+                          + PROGRESS_W * active * progress_capped
                           + AIRTIME_W * air_rwd * cmd_active
                           - BACKWARD_W * active * jnp.maximum(0.0, -progress)
+                          - POSE_W * pose_dev - SLIP_W * slip
                           - ACTRATE_W * act_rate - VELZ_W * velz - ANGXY_W * angxy
                           - 0.001 * jnp.sum(ctrl ** 2))
             done = jnp.where((dx.qpos[2] < FALL_Z) | (up < MIN_UP_Z), 1.0, 0.0)
             metrics = {**state.metrics, "track": track, "vx": v[0], "vy": v[1],
-                       "cmd_vx": cmd[0], "cmd_vy": cmd[1], "verr": jnp.sqrt(verr),
+                       "cmd_vx": cmd[0], "cmd_vy": cmd[1], "cmd_yaw": cmd[2],
+                       "slip": slip, "pose_dev": pose_dev, "verr": jnp.sqrt(verr),
                        "align": align, "speed": speed, "progress": progress,
                        "up": up, "height": dx.qpos[2], "residual_scale": residual_scale,
                        "prior_strength": prior_strength, "transition_amount": transition_amount,
@@ -600,10 +672,12 @@ def _build():
                     "route_wp": route_wp0, "route_prev_dist": route_dist1,
                     "wp2_residual_step": wp2_residual_step1,
                     "wp3_residual_step": wp3_residual_step1,
-                    "air_time": new_air, "prev_action": motor_action}
+                    "air_time": new_air, "prev_action": motor_action,
+                    "prev_feet_xy": feet_xy}
             return state.replace(pipeline_state=dx, obs=self._obs(dx, design, cmd, prior_strength, route_wp0,
                                                                   route_target, route_dist1,
-                                                                  transition_amount, prev_cmd),
+                                                                  transition_amount, prev_cmd,
+                                                                  prev_action=motor_action),
                                  reward=reward, done=done, metrics=metrics, info=info)
 
     return CommandedEnv

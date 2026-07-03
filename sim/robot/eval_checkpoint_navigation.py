@@ -19,7 +19,7 @@ sys.path.insert(0, str(HERE))
 from commanded_env import FALL_Z, MIN_UP_Z, VMAX, _build  # noqa: E402
 from eval_commanded import resolve_ckpt  # noqa: E402
 from brax.training.acme import running_statistics  # noqa: E402
-from brax.training.agents.ppo import networks as ppo_networks  # noqa: E402
+import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)  # noqa: E402
 
 OUT = Path(os.environ.get("CODESIGN_OUT", "/root/proj/out"))
 

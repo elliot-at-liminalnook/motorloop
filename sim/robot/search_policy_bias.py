@@ -256,7 +256,7 @@ def build_multiseed_benchmark(bench_env, n_epis: int, steps: int, seeds: list[in
     inside one jitted function.
     """
     from brax.training.acme import running_statistics
-    from brax.training.agents.ppo import networks as ppo_networks
+    import ppo_nets as ppo_networks  # shared (512,256,128) + small-final-init factory (audit item 5)
 
     net = ppo_networks.make_ppo_networks(
         bench_env.observation_size,
