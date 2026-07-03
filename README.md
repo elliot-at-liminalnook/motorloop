@@ -156,6 +156,19 @@ See [notes/gpu-pod-setup.md](notes/gpu-pod-setup.md) for the exact RunPod
 recipe and [notes/gpu-runbook.md](notes/gpu-runbook.md) for run order,
 expected costs, and gotchas.
 
+## Recent Notes
+
+- [notes/sim-engine-secret-sauce-explained.pdf](notes/sim-engine-secret-sauce-explained.pdf) - rendered PDF companion for the simulator-engine survey
+- [notes/sim-engine-secret-sauce-explained.html](notes/sim-engine-secret-sauce-explained.html) - rendered HTML companion for the simulator-engine survey
+- [notes/sim-engine-secret-sauce.md](notes/sim-engine-secret-sauce.md) - MuJoCo/MJX/Warp/Newton/PhysX/Genesis engine survey
+- [notes/sota-training-issues-explained.pdf](notes/sota-training-issues-explained.pdf) - rendered PDF companion for the SOTA training issues survey
+- [notes/sota-training-issues-explained.html](notes/sota-training-issues-explained.html) - rendered HTML companion for the SOTA training issues survey
+- [notes/sota-training-issues.md](notes/sota-training-issues.md) - cited survey of field-wide training issues, mapped to this stack
+- [notes/uplift-execution-plan.md](notes/uplift-execution-plan.md) - executed training-uplift plan, status logs, and gate verdicts
+- [notes/rl-verification-playbook.md](notes/rl-verification-playbook.md) - layered RL verification stack and why old checks missed failures
+- [notes/system-tour.md](notes/system-tour.md) - walkthrough of the full motor-control and robot simulation system
+- [notes/training-uplift-audit.md](notes/training-uplift-audit.md) - audit that found the 8%-torque bug and ranked training fixes
+
 ## Key Reports
 
 - [notes/architecture.md](notes/architecture.md) - component co-simulation architecture
