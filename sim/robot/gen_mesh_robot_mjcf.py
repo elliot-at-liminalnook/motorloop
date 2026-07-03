@@ -6,13 +6,24 @@ into a trainable robot XML, following the json's own `mjcf_conversion` recipe:
 
   * chain per leg: {L}_hip_yaw -> {L}_leg_swing -> {L}_knee_blade (+ passive
     {L}_toe_hinge, {L}_heel_pin*, {L}_pushrod_slide) at the json's origins/axes/limits
-  * loop closure OPTION A: <equality><connect> pinning the heel ear (blade_lower
-    local (0,-L,0)) to the pushrod's heel point — the slider-crank runs as a real
-    dynamic loop, so the toggle-press force profile is PHYSICS, not scripting.
-    (*heel_pin as a tree joint is subsumed by the connect: blade_lower's swing
-    relative to the pushrod IS the constrained dof; adding it as a tree joint too
-    would double-count. Documented deviation from the literal 6-joint chain —
-    the census test counts the 5 tree joints + connect per leg.)
+  * loop closure — two modes (notes/sim-engine-secret-sauce.md §8):
+      OPTION B "polycoef" (DEFAULT): two 1-row <equality><joint> quartic couplings
+        q_slide = poly_s(phi_knee), q_toe = poly_psi(phi_knee), least-squares fitted
+        to the closed forms over the knee ROM (TDC-weighted). Each row's Jacobian is
+        [1, -poly'(phi)] — the constant 1 keeps it FULL-RANK at the toggle's
+        dead center where the connect's anchor Jacobian goes singular, and the
+        single-valued polynomial makes the flipped-elbow branch unreachable.
+        Toggle force amplification is preserved: slide-force/crank-torque = 1/poly'.
+        This is what re-enables the fleet's dt=0.004 (see <option> comment).
+      OPTION A "connect" (RETIRED, in git history): <connect> pinning the heel ear
+        (blade_lower local (0,-L,0)) to the pushrod's heel point. Its anchor
+        Jacobian is what went singular at TDC and forced dt=0.002; the closed
+        forms live on as the fit reference and loop_consistent_pose(loop="connect").
+    Either way the toggle-press force profile is PHYSICS, not scripting.
+    (*heel_pin as a tree joint is subsumed by the loop constraint: blade_lower's
+    swing relative to the pushrod IS the constrained dof; adding it as a tree joint
+    too would double-count. Documented deviation from the literal 6-joint chain —
+    the census test counts 5 tree joints + 2 couplings per leg.)
   * primitives only (MJX v1): every geom is a capsule/box/sphere sized from the
     mechanism dimensions; each records what it approximates in a comment.
   * honest transmissions:
@@ -59,19 +70,88 @@ def slider_crank_s(phi: float) -> float:
             - (CRANK_R - CONROD_L))
 
 
-def loop_consistent_pose(phi: float) -> tuple[float, float]:
-    """(toe_hinge, pushrod_slide) that close the slider-crank at knee angle phi.
+def conrod_psi(phi: float) -> float:
+    """Conrod counter-rotation vs knee angle (closed form): psi(0)=0 at TDC.
 
     The conrod must counter-rotate so the heel stays on the slide lane:
-    psi(phi) = asin(r sin(phi)/L) - phi. Setting knee qpos WITHOUT these two is a
-    26 mm constraint violation at phi=-60 and the connect responds with ~1.2 kN —
+    psi(phi) = asin(r sin(phi)/L) - phi."""
+    return math.asin(CRANK_R * math.sin(phi) / CONROD_L) - phi
+
+
+def poly_eval(c, x: float) -> float:
+    """Horner eval of ascending polycoef c0..c4 — the relation the model enforces."""
+    return ((((c[4] * x + c[3]) * x + c[2]) * x + c[1]) * x + c[0])
+
+
+def loop_consistent_pose(phi: float, loop: str = "polycoef") -> tuple[float, float]:
+    """(toe_hinge, pushrod_slide) that close the slider-crank at knee angle phi.
+
+    MODEL-exact for the given loop mode: evaluates the SAME fitted polynomials
+    (POLY_TOE/POLY_SLIDE — single source of truth) that the build compiles into
+    <equality><joint>, or the closed forms for loop="connect" (the retired weld,
+    kept as the analytic reference). Setting knee qpos WITHOUT these two is a
+    26 mm constraint violation at phi=-60 (a connect responds with ~1.2 kN) —
     every reset/test that places the knee off zero MUST use this."""
-    psi = math.asin(CRANK_R * math.sin(phi) / CONROD_L) - phi
-    return psi, slider_crank_s(phi)
+    if loop == "polycoef":
+        return poly_eval(POLY_TOE, phi), poly_eval(POLY_SLIDE, phi)
+    return conrod_psi(phi), slider_crank_s(phi)
 
 
 def load_assembly(path=ASSEMBLY_JSON) -> dict:
     return json.loads(Path(path).read_text())
+
+
+# --- quartic loop couplings: fitted ONCE at import, pure python (numpy-free).
+# POLY_SLIDE/POLY_TOE are the single source of truth for the emitted XML,
+# loop_consistent_pose, and the tests. Fit domain = knee ROM from the json.
+KNEE_ROM = (math.radians(-90.0), math.radians(10.0))
+
+
+def _fit_quartic(f, lo: float, hi: float, n: int = 721, tdc_w: float = 25.0):
+    """Weighted least-squares quartic c0..c4 of f over [lo, hi] via 5x5 normal
+    equations + Gaussian elimination (partial pivoting). Pure python, deterministic;
+    the Gaussian weight bump at phi=0 pins the toggle's dead center."""
+    xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
+    ws = [1.0 + (tdc_w - 1.0) * math.exp(-((x / 0.05) ** 2)) for x in xs]
+    A = [[sum(w * x ** (i + j) for x, w in zip(xs, ws)) for j in range(5)]
+         for i in range(5)]
+    b = [sum(w * f(x) * x ** i for x, w in zip(xs, ws)) for i in range(5)]
+    for col in range(5):
+        piv = max(range(col, 5), key=lambda r: abs(A[r][col]))
+        A[col], A[piv] = A[piv], A[col]
+        b[col], b[piv] = b[piv], b[col]
+        for r in range(col + 1, 5):
+            k = A[r][col] / A[col][col]
+            A[r] = [a - k * ac for a, ac in zip(A[r], A[col])]
+            b[r] -= k * b[col]
+    c = [0.0] * 5
+    for i in range(4, -1, -1):
+        c[i] = (b[i] - sum(A[i][j] * c[j] for j in range(i + 1, 5))) / A[i][i]
+    return tuple(c)
+
+
+POLY_SLIDE = _fit_quartic(slider_crank_s, *KNEE_ROM)   # q_slide = poly(phi_knee)
+POLY_TOE = _fit_quartic(conrod_psi, *KNEE_ROM)         # q_toe   = poly(phi_knee)
+_LOOP_RESID = None
+
+
+def loop_polycoefs():
+    """(POLY_SLIDE, POLY_TOE, resid_slide, resid_toe) with §8 gate (a) enforced:
+    the generator refuses to build if the quartics can't hold 0.5 mm / 0.3 deg
+    over the knee ROM. Single source of truth for helper, emission, and tests."""
+    global _LOOP_RESID
+    if _LOOP_RESID is None:
+        lo, hi = KNEE_ROM
+        xs = [lo + (hi - lo) * i / 720 for i in range(721)]
+        rs = max(abs(poly_eval(POLY_SLIDE, x) - slider_crank_s(x)) for x in xs)
+        rp = max(abs(poly_eval(POLY_TOE, x) - conrod_psi(x)) for x in xs)
+        if rs > 5e-4:
+            raise ValueError(f"slide quartic residual {rs * 1e3:.3f} mm > 0.5 mm — "
+                             f"restrict ROM or build the connect option + dt=0.002")
+        if rp > math.radians(0.3):
+            raise ValueError(f"toe quartic residual {math.degrees(rp):.3f} deg > 0.3 deg")
+        _LOOP_RESID = (rs, rp)
+    return POLY_SLIDE, POLY_TOE, _LOOP_RESID[0], _LOOP_RESID[1]
 
 
 def _leg_xml(L: str, leg: dict, torso_center) -> tuple[str, str]:
@@ -117,10 +197,10 @@ def _leg_xml(L: str, leg: dict, torso_center) -> tuple[str, str]:
           <geom name="{L}_bladeU" type="capsule" fromto="0 0 0 0 {CRANK_R} 0"
                 size="0.008" mass="{m['blade_upper']}"{cc0}/>
           <body name="{L}_blade_lower" pos="0 {CRANK_R} 0">
-            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
-                 connect constraint is stiff; bearing-scale armature+damping keep the
-                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
-                 singular. Values are numerical regularization, not bench data. -->
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
+                 loop coupling is stiff; bearing-scale armature+damping keep the loop
+                 well-posed through the toggle's TDC (phi=0). Values are numerical
+                 regularization, not bench data. -->
             <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
                  ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
                  (heel ear in the carrier slot) and block the flipped-elbow branch of
@@ -136,8 +216,8 @@ def _leg_xml(L: str, leg: dict, torso_center) -> tuple[str, str]:
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
         <body name="{L}_pushrod" pos="{-swing_x:.6f} -0.025 0">
-          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
-               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+          <!-- slide range: working stroke is [-41.14, 0] mm (the loop coupling enforces
+               the exact relation); +5 mm headroom stops limit-vs-loop chatter at the
                toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
                branch of the crank (which would need s=+200 mm). -->
           <joint name="{L}_pushrod_slide" type="slide" axis="0 1 0"
@@ -149,12 +229,31 @@ def _leg_xml(L: str, leg: dict, torso_center) -> tuple[str, str]:
         </body>
       </body>
     </body>'''
-    # loop closure (option_a): heel ear on blade_lower == heel point on pushrod.
-    # anchor is in body1 (blade_lower) local coords: (0, -CONROD_L, 0).
-    # solref default (0.02 1): the json's 0.002 suggestion violates MuJoCo's
-    # timeconst >= 2*timestep stability rule at dt=0.004 and blows the loop up.
-    extras = f'''    <connect name="{L}_heel_pin" body1="{L}_blade_lower" body2="{L}_pushrod"
-             anchor="0 {-CONROD_L} 0"/>'''
+    # loop closure via 1-row QUARTIC JOINT COUPLINGS (secret-sauce §8), replacing the
+    # 3-row <connect> whose Jacobian went rank-deficient at the toggle dead center and
+    # forced dt=0.002. q_slide = poly_s(q_knee), q_toe = poly_psi(q_knee); efc Jacobian
+    # [1, -poly'] is full-rank at TDC by construction, and poly'->0 there reproduces the
+    # toggle-press force amplification exactly. Fit residuals gated at build (<0.5 mm /
+    # <0.3 deg over the ROM, Gaussian TDC weighting). Side benefit: the polynomial is
+    # single-valued, so the flipped-elbow branch is unreachable by construction.
+    # NEAR-HARD coupling rows (measured, 2026-07-03): solref tc=0.008 = the 2*dt
+    # refsafe bound at the fleet dt=0.004, dmax=0.9999 = MuJoCo's own impedance
+    # ceiling for ~hard constraints. Soft rows (tc 0.02-0.04, dmax 0.9) could NOT
+    # bear load through the 80 g pushrod (force capacity scales with the coupled
+    # inertia): the loaded stomp sagged to the +limit and lifted nothing. At
+    # 0.008/0.9999: loaded stomp lifts +31 mm (vs +12 mm in the old connect model),
+    # slides reach -36 mm under body weight, unloaded sweep tracks the closed form
+    # to 0.116 mm (= the fit residual) at dt=0.004, and the free system holds
+    # consistency to 1e-13. The full-rank [1, -poly'] Jacobian is what tolerates
+    # this stiffness at TDC — the connect could not. If dt ever rises above 0.004,
+    # solref must rise with it (tc >= 2*dt).
+    cs, cp = POLY_SLIDE, POLY_TOE      # SINGLE source of truth, shared with loop_consistent_pose
+    extras = f'''    <joint name="{L}_loop_slide" joint1="{L}_pushrod_slide" joint2="{L}_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="{cs[0]:.17g} {cs[1]:.17g} {cs[2]:.17g} {cs[3]:.17g} {cs[4]:.17g}"/>
+    <joint name="{L}_loop_toe" joint1="{L}_toe_hinge" joint2="{L}_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="{cp[0]:.17g} {cp[1]:.17g} {cp[2]:.17g} {cp[3]:.17g} {cp[4]:.17g}"/>'''
     excludes = f'''    <exclude body1="{L}_blade_lower" body2="{L}_pushrod"/>
     <exclude body1="{L}_blade_upper" body2="{L}_pushrod"/>'''
     acts = f'''    <motor name="{L}_yaw_m" joint="{L}_hip_yaw" gear="1.2" ctrlrange="-1 1"
@@ -167,6 +266,7 @@ def _leg_xml(L: str, leg: dict, torso_center) -> tuple[str, str]:
 
 
 def build_mesh_robot(asm: dict | None = None, floor: bool = True) -> str:
+    loop_polycoefs()                     # §8 gates fire here — a bad fit refuses to build
     asm = asm or load_assembly()
     t = asm["torso"]
     c = t["center_world"]
@@ -180,12 +280,12 @@ def build_mesh_robot(asm: dict | None = None, floor: bool = True) -> str:
     sk = asm["striker_placeholder"]
     return f'''<mujoco model="mesh_robot_7_3">
   <compiler angle="radian" autolimits="true"/>
-  <!-- dt=0.002 (NOT the fleet's 0.004): the slider-crank connect near its toggle
-       dead-center flips constraint-force direction as the piston reverses; at
-       dt=0.004 that explicit stiff system explodes (measured: 10 m slide error,
-       |qacc| 7e9), at dt=0.002 it tracks the closed form to <1 mm. Keep control
-       at 50 Hz via frame_skip=10 instead of 5. -->
-  <option timestep="0.002" integrator="implicitfast"/>
+  <!-- dt=0.004 (fleet standard) RESTORED by the quartic loop couplings: the old
+       <connect> Jacobian went rank-deficient at the toggle dead center and needed
+       dt=0.002 (measured: 10 m slide error, |qacc| 7e9 at 0.004). The polynomial
+       coupling row [1, -poly'] stays full-rank at TDC — see secret-sauce §8.
+       Control at 50 Hz via frame_skip=5, matching the paramquad fleet. -->
+  <option timestep="0.004" integrator="implicitfast"/>
   <default>
     <joint damping="0.02"/>
     <geom friction="1.2 0.1 0.1" contype="1" conaffinity="1"/>
@@ -225,9 +325,11 @@ def main():
     asm = load_assembly(args.json)
     xml = build_mesh_robot(asm)
     Path(args.out).write_text(xml)
+    _, _, rs, rp = loop_polycoefs()
     print(f"mesh_robot: 4 legs (yaw 1.2 / worm-swing 24 / knee 3 N.m), "
-          f"toggle-press loop via <connect>, torso placeholder {TORSO_MASS_PLACEHOLDER} kg "
-          f"-> {args.out}")
+          f"toggle-press loop via quartic couplings (fit resid {rs * 1e3:.3f} mm / "
+          f"{math.degrees(rp):.3f} deg), dt=0.004, "
+          f"torso placeholder {TORSO_MASS_PLACEHOLDER} kg -> {args.out}")
     if args.summary:
         import mujoco
         m = mujoco.MjModel.from_xml_string(xml)

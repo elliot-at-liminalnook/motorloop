@@ -131,7 +131,10 @@ def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
         xml += f'''
             <body name="{n}_carriage" pos="0 0 0">
               <joint name="{sj}" type="slide" axis="1 0 0" range="0 {st}" damping="2" armature="0.005" stiffness="{s['return_stiffness']}" springref="0" solreflimit="0.002 1"/>
-              <geom name="{n}_rod" type="capsule" fromto="0 0 0 {rl} 0 0" size="{rr}" density="{s['rod_density']}" rgba="0.85 0.85 0.9 1"{cc}/>
+              <!-- rod z+2mm: at qpos0 the rod axis EXACTLY intersected the thigh-guard axis -> undefined
+            contact normal (C picked ±y, warp +x; cross-engine parity 3.5e-2). Degenerate geometry,
+            not an engine bug — L-R1 finding. -->
+              <geom name="{n}_rod" type="capsule" fromto="0 0 0.002 {rl} 0 0.002" size="{rr}" density="{s['rod_density']}" rgba="0.85 0.85 0.9 1"{cc}/>
             </body>'''
     elif leg.get("is_weapon"):
         # a rigid leg-weapon: a slim spear geom past the foot (kinetic; heater pending EO)

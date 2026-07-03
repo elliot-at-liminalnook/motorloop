@@ -9,6 +9,8 @@ points; project-local citations refer to `sim/robot/`.
 
 ## 0. The five problems, mapped
 
+> ✅ **STATUS (2026-07-03): §10 has been executed end-to-end.** Rungs 1–3 done and GPU-validated; contribution targets 1–5 ALL drafted (1–3 as Google PRs #1487/#1488/#3378, 4 as a local draft with an honest mixed finding, 5 published as newton issue #3346 + draft PR #3347); thin layer M1–M4 fully built, 26/26 tests — only the ≥2× GPU kill-criterion measurement remains in flight. Green checks throughout mark what happened; numbers live in `notes/warp-ladder-results.md`.
+
 | Pain point (where it lives here) | Root cause | Fixed by |
 |---|---|---|
 | Contact cost ∝ POSSIBLE pairs, two robots (`gen_robot_mjcf.py:85-88` F-SPEED culling) | MJX-JAX static pair enumeration (§2) | mujoco_warp atomic compaction (§4) |
@@ -115,6 +117,8 @@ thread-chunked narrowphase and per-island solves (forward.c:910-935).
 
 ## 2. MJX: MuJoCo on JAX, and where the quadratic two-robot cost comes from
 
+> ✅ **Measured on our fight scene (A100, 4096 envs):** the predicted static allocation is real — 778 contact slots / 3,140 efc rows for ~20 actual contacts — and costs 11.8× vs the warp path (7,764 vs 91,922 env-steps/s). The silent HFIELD ray miss is now fixed in [mujoco PR #3378](https://github.com/google-deepmind/mujoco/pull/3378) (with the unsupported-geom warning).
+
 MJX (`mjx/mujoco/mjx/_src/`) is now a **three-backend front end** — `Impl.CPP / JAX / WARP`
 (`types.py:29-35`) — with mujoco_warp vendored at `mjx/mujoco/mjx/third_party/mujoco_warp/`.
 Everything below describes the JAX backend you're on via brax.
@@ -191,6 +195,8 @@ code above; expected gains are educated estimates, not measurements):
 
 ## 3. Warp: the "strictly typed language → simplest GPU ops" compiler already exists
 
+> ✅ **Adopted:** `.venv-warp` (warp-lang 1.14) runs our benchmark harness and the `sim/robot/warplayer/` thin layer; the persistent-kernel-cache claim confirmed on the pod (~68 s cold once, ~1.2 s warm, vs MJX's ~57 s every fresh process).
+
 This is precisely the user-vision artifact, 5 years mature, Apache-2.0, DCO-only.
 
 **Codegen pipeline** (`warp/_src/codegen.py`): `@wp.kernel` (`context.py:1563`) inspects
@@ -225,6 +231,8 @@ devs (Macklin 1,738 commits, Shi 2,133, …) — order **20-30 person-years**, a
 (adjoint codegen, graphs, BVH, tiles, caching) is exactly what a bespoke build would need.
 
 ## 4. mujoco_warp: THE study — MuJoCo semantics as explicit Warp kernels
+
+> ✅ **Validated + contributed to:** parity on our scenes at 1e-4–1e-6 (one 3.5e-2 divergence root-caused to OUR degenerate rod geometry, fixed in-tree); two upstream fixes drafted, CUDA-validated, and PR'd — [#1487](https://github.com/google-deepmind/mujoco_warp/pull/1487) (set_const never recomputed eq_data; slider-crank repro from our own leg) and [#1488](https://github.com/google-deepmind/mujoco_warp/pull/1488) (float32 Cholesky pivot floor + our floor-then-divide overflow finding). Local `our-fixes-integration` branch is editable-installed until upstream merges.
 
 **Architecture.** `Data` = dataclass of `wp.array`s with explicit `nworld` leading dim
 (`_src/types.py:2033,2196`); `Model` fields carry a *broadcastable* leading dim
@@ -404,6 +412,8 @@ a small team owning a whole compiler stack (Quadrants) under one product.
 
 ## 8. The toggle problem: the slider-crank dead center, engine by engine
 
+> ✅ **Executed — see OUTCOME block below.** dt=0.004 restored (0.116 mm tracking, +31 mm loaded stomp, 18/18 tests); plus the thin layer's M2 proved the coordinate-elimination endgame: the exact loop joint runs TDC at the physical acceleration ceiling (1.0e4 rad/s² vs the connect model's 7e9 — the singularity simply doesn't exist in reduced coordinates).
+
 The mechanism (`sim/robot/gen_mesh_robot_mjcf.py`): per leg, a knee crank (r=75 mm) + conrod
 closes onto a pushrod slide via `<connect>` (:156-157); at TDC (φ=0) the loop Jacobian is
 singular (:120-123); bodies are 50-80 g. Measured: dt=0.004 → 10 m slide error, |qacc| 7e9;
@@ -447,6 +457,28 @@ engine migration. If the quartic can't hold the tolerance, the same trick works 
 MuJoCo also allows coupling via a **tendon** equality (`mjEQ_TENDON`,
 `engine_core_constraint.c:728`) for more general shaping.
 
+**OUTCOME (2026-07-03, implemented — `gen_mesh_robot_mjcf.py`, 18/18 tests at dt=0.004).**
+The quartic couplings work as predicted: fit residual 0.116 mm / 0.031° over the ROM (c1(toe)
+= −0.24997 ≈ R/L−1 and c2(slide) = −0.009373 match the analytic Taylor terms); an 8 s zero-g
+TDC rest hold is bit-still; the full-ROM sweep tracks the closed form to sub-mm; the loaded
+stomp improved from +12 mm to ~+30 mm of lift. Two additions the plan missed:
+1. **The explicit test-servo damping was a co-culprit all along.** With the couplings, the
+   knee's smooth reflected inertia is only ~2.6e-4 kg·m², so the tests' hand-rolled
+   `-kd·qvel` (kd=0.3 via qfrc_applied / 0.2 via ctrl) has kd·dt/I ≈ 4.6 at dt=0.004 —
+   past the discrete stability limit of 2 *regardless of loop formulation*. The connect
+   masked it (exactly-zero residual at rest = no noise seed, plus reflected anchor inertia).
+   Fix: P-only servos through the actuator path; damping belongs in `dof_damping`, which
+   implicitfast integrates implicitly (§1) — this note's own lesson, applied to the harness.
+2. **Kinematic couplings must also CARRY the load.** Soft rows (solref 0.02–0.04, default
+   solimp) leaked ~21 mm under ~20 N/leg stance force — the slide blew through its +5 mm
+   stop and the stomp lifted 1.6 mm. The full-rank [1, −poly′] Jacobian is precisely what
+   lets the rows go near-hard at TDC where the connect could not: solref (0.008 1) = the
+   2·dt refsafe floor + solimp dmax 0.9999 restores connect-grade holding (0.94 mm leak),
+   still comfortably stable (ω·dt = 0.5, B·dt = 1.0). If dt rises, solref rises with it.
+Net: dead-center singularity gone, flipped-elbow branch unreachable by construction,
+dt=0.004 restored (halves mesh-robot rollout cost), and `test_timestep_is_fleet_standard`
+pins the win against regression.
+
 **Engine comparison for dead-center mechanisms:**
 - **MuJoCo/MJX/mjwarp** (soft equality, acceleration-level): forces bounded, positions drift;
   explicit across steps → dt-limited near singularity (above). Same math in all three; mjwarp
@@ -471,6 +503,8 @@ MuJoCo also allows coupling via a **tendon** equality (`mjEQ_TENDON`,
 
 ## 9. Licenses and contribution mechanics
 
+> ✅ **Exercised, with one scar:** three PRs opened under the Google CLA flow. Learned the hard way that mujoco_warp's AGENTS.md **forbids AI co-author trailers** (the CLA bot must match every commit author) — commits rewritten to single-author before signing. DCO/CLA table below held up exactly as written.
+
 | Repo | License | Contribution gate |
 |---|---|---|
 | mujoco (+MJX) | Apache-2.0 (`LICENSE`) | Google CLA (`CONTRIBUTING.md:15-26`) |
@@ -491,6 +525,8 @@ vendor, or ship them inside an MIT project with attribution. For *contributing*:
 one-time signature — Google's CLA leaves your copyright with you.
 
 ## 10. Verdict
+
+> ✅ **Ladder executed (2026-07-03):** (1) warp backend validated — **11.8×** on the fight scene, flat scaling 1k→16k envs (train at 1–4k); (2) quartic couplings landed — fleet dt=0.004 back, mechanism stronger than under the connect; (3) contribution targets 1–3 live as PRs #1487/#1488/#3378, CUDA-validated (cuSolverDx NaNs on indefinite input — question answered on the PR); thin layer **fully built M1–M4** (26/26 tests: lidar kernel at ~1e-6 m rangefinder parity, line-cited obs/reward kernels, bit-identical step, zero-copy M4 demo; CPU proxy 1.70× with lidar) — the ≥2× GPU kill criterion is the one measurement still in flight. Contribution targets 4 and 5 landed too: #868's rank-1 cholUpdate drafted with an honest mixed finding (factor REUSE −55% on 64% of events is the mergeable core; the rank-1 update itself is SLOWER than warp's cooperative refactorization on CPU), and the Newton lidar published as issue #3346 + draft PR #3347. Full numbers: `notes/warp-ladder-results.md`.
 
 **(a) Cost of a truly bespoke typed-language→GPU sim.** The language half is a solved,
 reusable problem: Warp *is* the strictly-typed Python-subset→NVRTC/LLVM compiler, ~20-30
@@ -515,10 +551,10 @@ payoff for this project:
 3. **mujoco_warp #1415** (block_cholesky lacks pivot floor → NaNs) — Newton-solver stability
    exactly in near-singular configurations like your TDC. File:
    `mujoco_warp/_src/block_cholesky.py` (+ `solver.py:26-27` call sites).
-4. **mujoco_warp #868** (incremental Hessian) — port the C engine's rank-1
+4. ✅ *(drafted 2026-07-03, local worktree; mixed finding — see §10 banner)* **mujoco_warp #868** (incremental Hessian) — port the C engine's rank-1
    Cholesky-update trick (`engine_solver.c:2238-2276`) to `_src/solver.py`; large solver
    speedup for contact-rich two-robot worlds.
-5. **Newton lidar sensor** — compose the existing analytic raycasts
+5. ✅ *(published 2026-07-03: issue #3346 + draft PR #3347)* **Newton lidar sensor** — compose the existing analytic raycasts
    (`newton/_src/geometry/raycast.py:80-847`) into a `SensorLidar` beside
    `sensor_tiled_camera.py`; fills a documented gap and is DCO-adjacent visibility in the
    engine most likely to matter in 2027.

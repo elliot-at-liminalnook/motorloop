@@ -106,6 +106,18 @@ V.4/V.5 remain (during B.6 window, before Phase C obs changes). **B.6 LAUNCHED**
 banked-resets+curriculum: loco 0.35 m/s, combat 0.3, drills 25%; ~4.5 h, sentinel
 watcher live). Render on pod needs `MUJOCO_GL=egl` + apt libegl1 (recorded).
 Spend so far: ~$4 of $34.
+**WARP LADDER (goal 2, 2026-07-03):** R1 ✅ — .venv-warp (mujoco 3.10/mujoco-warp/warp-lang 1.14);
+parity 1e-4..1e-6 on single+mesh; fight-scene 3.5e-2 divergence root-caused to OUR degenerate
+rod-axis geometry (fixed: rod z+2mm in gen_robot_mjcf, documented); MJX static alloc measured
+778 contacts/3140 efc for 20 real; warp 13-19× faster on CPU; bench_warp_vs_mjx.py harness ready.
+TL M1+M2 ✅ — sim/robot/warplayer/ 7/7 tests: analytic contacts 0.004-0.05% of MuJoCo-C (kill bar
+1%); EXACT loop-coordinate joint: dt=0.004 through TDC, peak |φ̈|=1e4 (physical ceiling) vs 7e9
+constraint-model — the reduced-coordinate thesis proven. M3/M4 need pod + fused obs/reward.
+R2 🔄 fork debugging first-hold transient (knee −587° windup; constraint math verified correct,
+consistent-pose 4e-5, late-sweep 2.1mm; mirrored-coefficient hypothesis first). R3 🔄 (clone diffs
+live: mjwarp +275 lines, mjx ray +81). POD 🔄 (A100 matrix running, <$2 guard). THROTTLE: no new
+agents; coordinator-only from here.
+
 **V.4+V.5 ✅ (fork): obs_schema.py named slices (her width owned by her_goal.GOAL_DIM),
 info_keys.py 27 fighter + 22 commanded keys tagged episodic/persistent with
 registration-completeness tests; 4 suites green (obs_schema+info_keys 9, rnd_her 7,
@@ -954,3 +966,19 @@ Phase C obs/self-play change → V.7 alongside B.6's analysis → V.8 after B.6 
    green in CI (including both historical-bug firing demos), and any A.13 verdict
    cites DR.3 artifacts (gait library or infeasibility certificates), not
    sampler silence.
+
+### STATUS LOG — WARP LADDER ROUND 2 (2026-07-03, user directive "work through the rest of §10")
+- **§10(b)4 #868**: rank-1 cholUpdate drafted in worktree ~/Projects/mujoco_warp-868
+  (branch incr-hessian-868; suite 1013 passed). HONEST MIXED FINDING: factor reuse
+  (64% of solver events) = −55% kernel time and is the mergeable core; the rank-1
+  update ITSELF is +4–26% slower than warp's cooperative tile refactorization on
+  CPU. GPU verdict: bench_cholupdate_868.py queued on pod.
+- **§10(b)5 Newton lidar**: built (12/12 tests, docs+example+CHANGELOG), published
+  proposal-first per their CONTRIBUTING: issue #3346 + DRAFT PR #3347. EasyCLA
+  blocked pending user: verify elliot@liminalnook.com on GitHub, sign LFX ICLA.
+- **§10(c) thin layer M3/M4**: (iii) lidar kernel + (iv) obs/reward kernels +
+  fused.py/bench_m3.py/m4_train_demo.py landed; 26/26 tests; physics bit-identical;
+  CPU proxy 1.70× (lidar dedup). ≥2× GPU kill criterion queued on pod.
+- **meshwalk1** (first mesh-robot training run): healthy to ~26M steps; reward
+  1.03→5.26 then plateau at lean-and-creep (progress ~0.05 m/s); full 40M will
+  complete in-timeout; render gate pending.

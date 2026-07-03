@@ -26,7 +26,7 @@ LEGS = ("FL", "FR", "RL", "RR")
 STAND_KNEE = math.radians(-50)
 XML = build_mesh_robot(floor=True)
 M = mujoco.MjModel.from_xml_string(XML)
-DT = M.opt.timestep                      # 0.002 (loop stability; see generator)
+DT = M.opt.timestep                      # 0.004 (fleet standard — quartic loop couplings)
 
 
 def jid(n):
@@ -53,15 +53,23 @@ def make_data(stand=True, drop_h=0.0):
     return d
 
 
-def pd_ctrl(d, targets, kp=(2.0, 40.0, 6.0), kd=(0.1, 1.0, 0.2)):
-    """Stance PD through the ACTUATORS (ctrl in [-1,1], honest force limits)."""
+def pd_ctrl(d, targets, kp=(2.0, 40.0, 6.0), kd=None):
+    """Stance P-control through the ACTUATORS (ctrl in [-1,1], honest force limits).
+
+    P-ONLY by design (2026-07-03): the old explicit -kd*qvel term through the
+    clipped ctrl was a bounded version of the same explicit-damping instability
+    that blew the contract sweep (c/m >> 2/dt on the light crank dofs once the
+    polycoef loop removed the connect's reflected inertia) — under contact load
+    it chattered the knees at 3 N.m bang-bang and tripped QACC warnings. Joint
+    damping (implicit under implicitfast, unconditionally stable) + actuator
+    saturation provide the damping path the hardware actually has. `kd` is kept
+    in the signature (ignored) so older call sites don't break."""
     for L in LEGS:
-        for k, (j, g, p, dv) in enumerate((("hip_yaw", "yaw", kp[0], kd[0]),
-                                           ("leg_swing", "swing", kp[1], kd[1]),
-                                           ("knee_blade", "knee", kp[2], kd[2]))):
+        for k, (j, g, p) in enumerate((("hip_yaw", "yaw", kp[0]),
+                                       ("leg_swing", "swing", kp[1]),
+                                       ("knee_blade", "knee", kp[2]))):
             q = d.qpos[M.jnt_qposadr[jid(f"{L}_{j}")]]
-            v = d.qvel[M.jnt_dofadr[jid(f"{L}_{j}")]]
-            tau = p * (targets[k] - q) - dv * v
+            tau = p * (targets[k] - q)
             d.ctrl[aid(f"{L}_{('yaw_m', 'swing_m', 'knee_m')[k]}")] = \
                 np.clip(tau / GEAR[g], -1, 1)
 

@@ -1,11 +1,11 @@
 <mujoco model="mesh_robot_7_3">
   <compiler angle="radian" autolimits="true"/>
-  <!-- dt=0.002 (NOT the fleet's 0.004): the slider-crank connect near its toggle
-       dead-center flips constraint-force direction as the piston reverses; at
-       dt=0.004 that explicit stiff system explodes (measured: 10 m slide error,
-       |qacc| 7e9), at dt=0.002 it tracks the closed form to <1 mm. Keep control
-       at 50 Hz via frame_skip=10 instead of 5. -->
-  <option timestep="0.002" integrator="implicitfast"/>
+  <!-- dt=0.004 (fleet standard) RESTORED by the quartic loop couplings: the old
+       <connect> Jacobian went rank-deficient at the toggle dead center and needed
+       dt=0.002 (measured: 10 m slide error, |qacc| 7e9 at 0.004). The polynomial
+       coupling row [1, -poly'] stays full-rank at TDC — see secret-sauce §8.
+       Control at 50 Hz via frame_skip=5, matching the paramquad fleet. -->
+  <option timestep="0.004" integrator="implicitfast"/>
   <default>
     <joint damping="0.02"/>
     <geom friction="1.2 0.1 0.1" contype="1" conaffinity="1"/>
@@ -46,10 +46,10 @@
           <geom name="FL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
                 size="0.008" mass="0.05" contype="0" conaffinity="0"/>
           <body name="FL_blade_lower" pos="0 0.075 0">
-            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
-                 connect constraint is stiff; bearing-scale armature+damping keep the
-                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
-                 singular. Values are numerical regularization, not bench data. -->
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
+                 loop coupling is stiff; bearing-scale armature+damping keep the loop
+                 well-posed through the toggle's TDC (phi=0). Values are numerical
+                 regularization, not bench data. -->
             <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
                  ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
                  (heel ear in the carrier slot) and block the flipped-elbow branch of
@@ -65,8 +65,8 @@
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
         <body name="FL_pushrod" pos="0.162690 -0.025 0">
-          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
-               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+          <!-- slide range: working stroke is [-41.14, 0] mm (the loop coupling enforces
+               the exact relation); +5 mm headroom stops limit-vs-loop chatter at the
                toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
                branch of the crank (which would need s=+200 mm). -->
           <joint name="FL_pushrod_slide" type="slide" axis="0 1 0"
@@ -102,10 +102,10 @@
           <geom name="FR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
                 size="0.008" mass="0.05" contype="0" conaffinity="0"/>
           <body name="FR_blade_lower" pos="0 0.075 0">
-            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
-                 connect constraint is stiff; bearing-scale armature+damping keep the
-                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
-                 singular. Values are numerical regularization, not bench data. -->
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
+                 loop coupling is stiff; bearing-scale armature+damping keep the loop
+                 well-posed through the toggle's TDC (phi=0). Values are numerical
+                 regularization, not bench data. -->
             <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
                  ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
                  (heel ear in the carrier slot) and block the flipped-elbow branch of
@@ -121,8 +121,8 @@
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
         <body name="FR_pushrod" pos="0.162690 -0.025 0">
-          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
-               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+          <!-- slide range: working stroke is [-41.14, 0] mm (the loop coupling enforces
+               the exact relation); +5 mm headroom stops limit-vs-loop chatter at the
                toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
                branch of the crank (which would need s=+200 mm). -->
           <joint name="FR_pushrod_slide" type="slide" axis="0 1 0"
@@ -158,10 +158,10 @@
           <geom name="RL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
                 size="0.008" mass="0.05" contype="0" conaffinity="0"/>
           <body name="RL_blade_lower" pos="0 0.075 0">
-            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
-                 connect constraint is stiff; bearing-scale armature+damping keep the
-                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
-                 singular. Values are numerical regularization, not bench data. -->
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
+                 loop coupling is stiff; bearing-scale armature+damping keep the loop
+                 well-posed through the toggle's TDC (phi=0). Values are numerical
+                 regularization, not bench data. -->
             <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
                  ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
                  (heel ear in the carrier slot) and block the flipped-elbow branch of
@@ -177,8 +177,8 @@
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
         <body name="RL_pushrod" pos="0.162690 -0.025 0">
-          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
-               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+          <!-- slide range: working stroke is [-41.14, 0] mm (the loop coupling enforces
+               the exact relation); +5 mm headroom stops limit-vs-loop chatter at the
                toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
                branch of the crank (which would need s=+200 mm). -->
           <joint name="RL_pushrod_slide" type="slide" axis="0 1 0"
@@ -214,10 +214,10 @@
           <geom name="RR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
                 size="0.008" mass="0.05" contype="0" conaffinity="0"/>
           <body name="RR_blade_lower" pos="0 0.075 0">
-            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g, and the
-                 connect constraint is stiff; bearing-scale armature+damping keep the
-                 loop well-posed at the toggle's TDC (phi=0) where its Jacobian is
-                 singular. Values are numerical regularization, not bench data. -->
+            <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
+                 loop coupling is stiff; bearing-scale armature+damping keep the loop
+                 well-posed through the toggle's TDC (phi=0). Values are numerical
+                 regularization, not bench data. -->
             <!-- toe range: working band psi(phi) spans [-0.05, +0.73] rad over the knee
                  ROM; stops at [-0.15, +0.85] mirror the real hinge's physical stops
                  (heel ear in the carrier slot) and block the flipped-elbow branch of
@@ -233,8 +233,8 @@
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
         <body name="RR_pushrod" pos="0.162690 -0.025 0">
-          <!-- slide range: working stroke is [-41.14, 0] mm (the connect enforces the
-               exact relation); +5 mm headroom stops limit-vs-loop chatter at the
+          <!-- slide range: working stroke is [-41.14, 0] mm (the loop coupling enforces
+               the exact relation); +5 mm headroom stops limit-vs-loop chatter at the
                toggle's TDC (s=0 at phi=0) while still blocking the flipped-elbow
                branch of the crank (which would need s=+200 mm). -->
           <joint name="RR_pushrod_slide" type="slide" axis="0 1 0"
@@ -259,14 +259,30 @@
     <exclude body1="RR_blade_upper" body2="RR_pushrod"/>
   </contact>
   <equality>
-    <connect name="FL_heel_pin" body1="FL_blade_lower" body2="FL_pushrod"
-             anchor="0 -0.1 0"/>
-    <connect name="FR_heel_pin" body1="FR_blade_lower" body2="FR_pushrod"
-             anchor="0 -0.1 0"/>
-    <connect name="RL_heel_pin" body1="RL_blade_lower" body2="RL_pushrod"
-             anchor="0 -0.1 0"/>
-    <connect name="RR_heel_pin" body1="RR_blade_lower" body2="RR_pushrod"
-             anchor="0 -0.1 0"/>
+    <joint name="FL_loop_slide" joint1="FL_pushrod_slide" joint2="FL_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+    <joint name="FL_loop_toe" joint1="FL_toe_hinge" joint2="FL_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+    <joint name="FR_loop_slide" joint1="FR_pushrod_slide" joint2="FR_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+    <joint name="FR_loop_toe" joint1="FR_toe_hinge" joint2="FR_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+    <joint name="RL_loop_slide" joint1="RL_pushrod_slide" joint2="RL_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+    <joint name="RL_loop_toe" joint1="RL_toe_hinge" joint2="RL_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+    <joint name="RR_loop_slide" joint1="RR_pushrod_slide" joint2="RR_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+    <joint name="RR_loop_toe" joint1="RR_toe_hinge" joint2="RR_knee_blade"
+           solref="0.008 1" solimp="0.95 0.9999 0.001"
+           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
   </equality>
   <actuator>
     <motor name="FL_yaw_m" joint="FL_hip_yaw" gear="1.2" ctrlrange="-1 1"

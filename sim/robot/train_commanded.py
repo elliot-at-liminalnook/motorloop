@@ -109,6 +109,8 @@ def main():
     ap.add_argument("--tag", default="cmd")
     ap.add_argument("--resume", default=None)
     ap.add_argument("--tiny", action="store_true")
+    ap.add_argument("--env", choices=["paramquad", "mesh"], default="paramquad",
+                    help="mesh = the real leg mechanism (mesh_robot.xml)")
     ap.add_argument("--preflight", choices=["strict", "warn", "off"],
                     default=os.environ.get("CMD_PREFLIGHT", "strict"),
                     help="T2 config sanity gate (strict refuses <200-iteration from-scratch runs "
@@ -128,7 +130,14 @@ def main():
             args.preflight = "warn"          # a smoke run is not a training run
     n_eval = args.evals or max(6, args.steps // 1_000_000)
 
-    Env = _build(); env = Env()
+    if args.env == "mesh":
+        # the REAL leg mechanism (mesh_robot.xml): same recipe, mesh-specific
+        # PD/stance/loop-consistent-reset rules live in mesh_commanded_env.py
+        from mesh_commanded_env import _build as _mesh_build
+        Env = _mesh_build()
+    else:
+        Env = _build()
+    env = Env()
     print(f"commanded env: obs={env.observation_size} (incl. 2-D command) act={env.action_size}", flush=True)
     restore = warm_start(args.resume, env.observation_size) if (args.resume and os.path.exists(args.resume)) else None
 
