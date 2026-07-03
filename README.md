@@ -169,10 +169,12 @@ expected costs, and gotchas.
 - [notes/codesign-fighter-report.md](notes/codesign-fighter-report.md) - fighter curriculum and combat ranking results
 - [notes/framework-build-checklist.md](notes/framework-build-checklist.md) - arena framework build record
 - [notes/training-uplift-audit.md](notes/training-uplift-audit.md) - the audit that found the 8%-torque bug + top-10 training fixes
+- [notes/advanced-rl-implementation.md](notes/advanced-rl-implementation.md) - implementation record for RND, HER, PBT, and self-play upgrades
 - [notes/rl-verification-playbook.md](notes/rl-verification-playbook.md) - why the old checks missed it; the layered check stack
 - [notes/uplift-execution-plan.md](notes/uplift-execution-plan.md) - the executed plan, with status logs and gate verdicts
 - [notes/system-tour.md](notes/system-tour.md) - the friendly walkthrough of the whole system
 - [notes/sota-training-issues.md](notes/sota-training-issues.md) - cited survey of field-wide training issues, mapped to this stack
+- [notes/sim-engine-secret-sauce.md](notes/sim-engine-secret-sauce.md) - simulator engine survey for MuJoCo/MJX/Warp/Newton/PhysX/Genesis ([HTML](notes/sim-engine-secret-sauce-explained.html), [PDF](notes/sim-engine-secret-sauce-explained.pdf))
 - [notes/gpu-runbook.md](notes/gpu-runbook.md) - remote GPU runbook
 
 ## Layout
