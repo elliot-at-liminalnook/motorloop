@@ -271,8 +271,9 @@ footer .big em{color:var(--warm-ink);font-style:italic}
       <a href="#task"><span class="n">04</span>Define the task</a>
       <a href="#walk"><span class="n">05</span>Learn to walk</a>
       <a href="#fight"><span class="n">06</span>Learn to fight</a>
-      <a href="#honest"><span class="n">07</span>Keep it honest</a>
-      <a href="#status"><span class="n">08</span>Where it stands</a>
+      <a href="#ladder"><span class="n">07</span>Training ladder</a>
+      <a href="#honest"><span class="n">08</span>Keep it honest</a>
+      <a href="#status"><span class="n">09</span>Where it stands</a>
     </nav>
     <button class="theme-btn" id="themeBtn" type="button"><span id="themeIcon">◐</span><span>Theme</span></button>
   </aside>
@@ -429,7 +430,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
             <div class="vs">vs</div>
             <div class="opt"><span class="ol">Rejected</span>Read the torque limit off the model’s declared attribute</div>
           </div>
-          <p class="dp-why">Why: this bug class can only be caught by measuring what the actuator <b>does</b>. A contract test now re-derives τ and even re-strips the gear to prove the check would fail on the historical model. <b>See Stage 07.</b></p>
+          <p class="dp-why">Why: this bug class can only be caught by measuring what the actuator <b>does</b>. A contract test now re-derives τ and even re-strips the gear to prove the check would fail on the historical model. <b>See Stage 08.</b></p>
         </div>
 
         <div class="note"><b>Since the audit,</b> the body has been re-specced onto the servo-true mesh leg and then upgraded to a “v2” actuator (peak-factor 6 / gear 10 ⇒ <b>16.21 N·m</b>, 32 rad/s), passing 18/18 verification tests including an independent cross-engine check. The 8% figure is the audit-era parametric body — the exact number that made the failure legible.</div>
@@ -607,9 +608,114 @@ footer .big em{color:var(--warm-ink);font-style:italic}
       </div>
     </section>
 
-    <!-- ============ 07 HONEST ============ -->
+    <!-- ============ 07 LADDER ============ -->
+    <section id="ladder" class="reveal">
+      <div class="sec-num">Stage 07 — The training ladder</div>
+      <h2>Thirty tasks, easiest to hardest</h2>
+      <p class="lede">You do not point reinforcement learning at “win a fight” and wait. The same body climbs a ladder of about thirty tasks whose difficulty rises one axis at a time — hold, then step, then travel, then survive a shove, then chase an opponent that fights back. Each rung warm-starts from the policy below it and carries its own cheap pass-check, so training and verification stay gradual instead of all-or-nothing.</p>
+
+      <div class="prose">
+        <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat"><div class="v cool">30</div><div class="l">Graduated tasks, easy → hard</div></div>
+          <div class="stat"><div class="v warm">6</div><div class="l">Difficulty tiers, one new demand each</div></div>
+          <div class="stat"><div class="v cool">1</div><div class="l">Metric-plus-video gate per rung</div></div>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Climb a gated ladder, don’t train the destination</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>~30 rungs of rising difficulty; each warm-starts from the last and clears its own gate first</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Point PPO straight at “fight and win” and hope it discovers the whole stack</div>
+          </div>
+          <p class="dp-why">Why: a regression stays <b>localized to one rung</b> instead of hiding inside an all-or-nothing run, and difficulty rises along <b>one axis at a time</b> — torque, then perturbation, then goals, then an adversary. Verification becomes incremental: the pass-signal in each row below is exactly what must go green — and be confirmed on video — before the next rung earns GPU time.</p>
+        </div>
+
+        <h3>Tier A · Foundations <span class="tag">posture, no travel</span></h3>
+        <p>Can the body even hold itself up? These rungs never leave the spawn tile; they exist to prove torque, balance and joint tracking before a single step is asked for — the tier that would have failed loudly on the 8%-torque body.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">01</td><td><b>Hold torque</b></td><td>deliver the derived τ at a loaded joint</td><td>measured τ = design ±tol; a <span class="k">--strip-gear</span> run must fail</td></tr>
+            <tr><td class="num">02</td><td><b>Stand and settle</b></td><td>reach the canonical stance from a noisy spawn and keep it</td><td>uprightness and base height stable; no tip termination for 600 steps</td></tr>
+            <tr><td class="num">03</td><td><b>Balance under push</b></td><td>reject a lateral impulse from standing</td><td>returns to upright across an impulse sweep</td></tr>
+            <tr><td class="num">04</td><td><b>Track a pose vector</b></td><td>drive all twelve joints to a commanded static target</td><td>steady-state joint-angle error below tolerance</td></tr>
+            <tr><td class="num">05</td><td><b>Height control</b></td><td>track a commanded crouch ↔ stand torso height</td><td>height-tracking error small across the range</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Tier B · Commanded locomotion <span class="tag">the core gait</span></h3>
+        <p>The heart of the stack: turn a velocity command into a gait. Difficulty rises from a single fixed speed to full omnidirectional control — and, crucially, to <em>stopping</em> on command without creeping.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">06</td><td><b>Step in place</b></td><td>rhythmic foot swings at zero commanded speed</td><td>air-time earned with net displacement ≈ 0; feet leave the ground on video</td></tr>
+            <tr><td class="num">07</td><td><b>Walk forward</b></td><td>the first true gait at one fixed speed</td><td>speed above the 0.3 m/s bar, survives 600 steps, gait confirmed on video</td></tr>
+            <tr><td class="num">08</td><td><b>Velocity tracking</b></td><td>match a commanded speed across a range</td><td>low tracking error over the speed sweep, no collapse at the extremes</td></tr>
+            <tr><td class="num">09</td><td><b>Turn in place</b></td><td>follow a yaw-rate command at zero linear velocity</td><td>yaw-rate tracked; net translation ≈ 0</td></tr>
+            <tr><td class="num">10</td><td><b>Omnidirectional</b></td><td>follow forward, lateral and yaw commands at once</td><td>three-axis command tracked on held-out commands</td></tr>
+            <tr><td class="num">11</td><td><b>Heading hold</b></td><td>keep facing a direction while translating or curving</td><td>heading error bounded throughout the commanded travel</td></tr>
+            <tr><td class="num">12</td><td><b>Stop on command</b></td><td>a zero command means stand still, no creep</td><td>stays put when told; the min-progress termination never misfires</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Tier C · Robust locomotion <span class="tag">perturbation and terrain</span></h3>
+        <p>The same gait, now under adversity: the real torque–speed envelope, trips, shoves, rough ground and added load. This is where a policy that only looked good on the ideal actuator gets found out.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">13</td><td><b>Servo-true motors</b></td><td>hold the gait as α → 1 (the real torque droop returns)</td><td>speed retained after the actuator curriculum completes</td></tr>
+            <tr><td class="num">14</td><td><b>Stumble recovery</b></td><td>trip on an obstacle and stay up</td><td>recovers to gait with no tip termination; confirmed on video</td></tr>
+            <tr><td class="num">15</td><td><b>Push recovery</b></td><td>reject an impulse mid-stride</td><td>resumes the commanded velocity across a push sweep</td></tr>
+            <tr><td class="num">16</td><td><b>Rough terrain</b></td><td>walk a randomized height field and friction</td><td>speed held on held-out terrain seeds; foot-slip penalty low</td></tr>
+            <tr><td class="num">17</td><td><b>Slope walking</b></td><td>ascend and descend an incline</td><td>commanded speed held on the grade; stays upright</td></tr>
+            <tr><td class="num">18</td><td><b>Payload carry</b></td><td>walk with added torso mass</td><td>gait holds across the domain-randomized mass range</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Tier D · Navigation <span class="tag">goal-directed</span></h3>
+        <p>Locomotion becomes a means, not the goal. The command stops being a velocity and becomes a place — and the sensor the robot must trust is the deliberately-degraded lidar, not privileged truth.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">19</td><td><b>Return to origin</b></td><td>walk back to the spawn point</td><td>reaches the origin radius within the time budget</td></tr>
+            <tr><td class="num">20</td><td><b>Go to waypoint</b></td><td>reach one commanded position</td><td>end-of-episode position error below the radius</td></tr>
+            <tr><td class="num">21</td><td><b>Route following</b></td><td>reach a sequence of waypoints in order</td><td>every goal hit in sequence; path-quality metric acceptable</td></tr>
+            <tr><td class="num">22</td><td><b>Route correction</b></td><td>re-acquire the route after a forced detour</td><td>reaches the goal despite the disturbance</td></tr>
+            <tr><td class="num">23</td><td><b>Degraded-lidar nav</b></td><td>navigate under noisy 144-ray sensing with dropouts and latency</td><td>goal reached on the degraded sensor model, not privileged truth</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Tier E · Combat and self-play <span class="tag">an opponent that learns</span></h3>
+        <p>The first time the environment fights back. Difficulty climbs from a stationary dummy to a scripted evader to a frozen past-self to the full hall-of-fame league — every rung watched for the reward hacks catalogued in Stage 08.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">24</td><td><b>Approach a dummy</b></td><td>close distance to a stationary target</td><td>genuine net approach, not oscillation-farmed distance</td></tr>
+            <tr><td class="num">25</td><td><b>Strike a target</b></td><td>aim and fire the striker to land a hit</td><td>contact hit registered; torque-ratio stays in the legal band (no catapult)</td></tr>
+            <tr><td class="num">26</td><td><b>Pursue an evader</b></td><td>track a scripted fleeing target</td><td>closes on the evader without cycling</td></tr>
+            <tr><td class="num">27</td><td><b>Beat a frozen self</b></td><td>win against one frozen snapshot opponent</td><td>win-rate above one-half, confirmed on video not scoreboard</td></tr>
+            <tr><td class="num">28</td><td><b>PFSP league</b></td><td>train against the whole weighted hall-of-fame</td><td>win-rate holds across the archive (no Red-Queen collapse); coach benchmark rises</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>Tier F · Co-design frontier <span class="tag">past the fixed body</span></h3>
+        <p>The last rungs stop holding the body fixed. Now the morphology itself is a variable, and the loop optimizes body and brain together — the open edge of the project.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
+          <tbody>
+            <tr><td class="num">29</td><td><b>Cross-morphology</b></td><td>one policy over a randomized body distribution</td><td>return retained across the morphology envelope</td></tr>
+            <tr><td class="num">30</td><td><b>Co-design loop</b></td><td>optimize body and brain together (CEM / coevolution)</td><td>fitness or Pareto gain on the multifidelity ladder, under the same launch gate</td></tr>
+          </tbody>
+        </table></div>
+
+        <div class="note">Every pass-signal above is an <b>outcome</b>, never an attribute — and the rule from the next stage still governs: <b>metrics select, videos confirm</b>. A rung is only “climbed” when its metric is green <em>and</em> the rendered behavior shows the real skill. The tiers map onto the same check stack: Tier A leans on the T0/T1 contract and static-capability tests, Tiers B–D on the preflight and reward red-teaming, Tiers E–F on checkpoint semantics and the cross-engine oracle.</div>
+      </div>
+    </section>
+
+    <!-- ============ 08 HONEST ============ -->
     <section id="honest" class="reveal">
-      <div class="sec-num">Stage 07 — Verification</div>
+      <div class="sec-num">Stage 08 — Verification</div>
       <h2>Keep it honest: metrics select, videos confirm</h2>
       <p class="lede">RL agents are amoral optimizers of exactly what you wrote. This project was burned twice — metrics claimed “walking,” video falsified it — and responded by treating the simulator itself as something to be audited.</p>
 
