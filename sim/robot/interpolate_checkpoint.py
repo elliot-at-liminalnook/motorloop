@@ -1,42 +1,34 @@
 # SPDX-License-Identifier: MIT
-"""Interpolate PPO checkpoint policy parameters for task-vector line search."""
-
-from __future__ import annotations
+"""Interpolate compatible Torch policy checkpoints."""
 
 import argparse
-import pickle
+import copy
 
-import jax
-import jax.numpy as jnp
+import torch
 
 
 def _blend_tree(base, other, alpha):
-    def blend(a, b):
-        if hasattr(a, "shape") and hasattr(b, "shape") and a.shape == b.shape:
-            return (1.0 - alpha) * a + alpha * b
-        return a
-    return jax.tree_util.tree_map(blend, base, other)
+    out = copy.deepcopy(base)
+    for section in ("actor", "critic", "obs_norm", "priv_norm"):
+        if section not in out or section not in other:
+            continue
+        for key, value in out[section].items():
+            peer = other[section].get(key)
+            if torch.is_tensor(value) and torch.is_tensor(peer) and value.shape == peer.shape:
+                out[section][key] = (1.0 - alpha) * value + alpha * peer
+    return out
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base", required=True)
-    ap.add_argument("--other", required=True)
-    ap.add_argument("--alpha", type=float, required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--blend-normalizer", action="store_true")
-    ap.add_argument("--blend-value", action="store_true")
-    args = ap.parse_args()
-
-    base = list(pickle.load(open(args.base, "rb")))
-    other = list(pickle.load(open(args.other, "rb")))
-    out = list(base)
-    if args.blend_normalizer:
-        out[0] = _blend_tree(base[0], other[0], args.alpha)
-    out[1] = _blend_tree(base[1], other[1], args.alpha)
-    if args.blend_value and len(base) > 2 and len(other) > 2:
-        out[2] = _blend_tree(base[2], other[2], args.alpha)
-    pickle.dump(tuple(out), open(args.out, "wb"))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base", required=True)
+    parser.add_argument("--other", required=True)
+    parser.add_argument("--alpha", type=float, required=True)
+    parser.add_argument("--out", required=True)
+    args = parser.parse_args()
+    base = torch.load(args.base, map_location="cpu", weights_only=False)
+    other = torch.load(args.other, map_location="cpu", weights_only=False)
+    torch.save(_blend_tree(base, other, args.alpha), args.out)
     print(f"saved {args.out} alpha={args.alpha}")
 
 

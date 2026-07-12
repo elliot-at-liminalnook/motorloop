@@ -380,7 +380,7 @@ def subprocess_video_runner(ckpt: str, out_path: str, label: str, render_args=()
            "--steps", str(steps), "--sep", str(sep), "--label", label,
            *list(render_args)]
     env = {**os.environ}
-    # Force a renderer GL backend (env.sh sets MUJOCO_GL="" for MJX physics, which
+    # Force a renderer GL backend (the headless physics environment leaves it empty,
     # the CPU renderer cannot use). Override with PBT_RENDER_GL if egl works.
     env["MUJOCO_GL"] = os.environ.get("PBT_RENDER_GL", "osmesa")
     try:

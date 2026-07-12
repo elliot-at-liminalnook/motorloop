@@ -1,5 +1,8 @@
 # Warp Ladder — GPU Validation Results (A100 80GB, 2026-07-03)
 
+> Historical benchmark record only. For current setup and launch validation,
+> use [`notes/pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md).
+
 Closes the pragmatic-ladder goal from `notes/sim-engine-secret-sauce.md` §10.
 Benchmarks via `sim/robot/bench_warp_vs_mjx.py` (1000 steps, 20-step warmup
 excluded, CUDA graphs on). Engines: pinned MJX (mujoco 3.9/jax 0.6.2, the
@@ -75,11 +78,25 @@ round-trip vs fused=one captured graph), `m4_train_demo.py` (M4: zero-copy
 rollout→update cycles). 26/26 tests; appending our kernels leaves qpos
 BIT-IDENTICAL to plain mujoco_warp.
 
-CPU proxy (fight scene, 64 worlds): 1.70× with lidar (mostly rangefinder
-dedup: wrapper evaluates 144 rays × 5 substeps, ours once per control step),
-~0.90× without lidar (noise). The ≥2× kill criterion is a GPU-only judgment —
-the D2H/H2D seam does not exist on CPU. GPU commands staged; verdict pending
-the pod (see status log in uplift-execution-plan.md when it lands).
+GPU VERDICT (A100, 4096 worlds, 200 ctrl steps, both modes graph-captured):
+**fused_over_baseline = 1.22× with lidar (102.3k vs 84.1k env-steps/s) and
+0.92× without — the ≥2× kill criterion FAILS on both configs. The layer is
+KILLED by its own charter.** The win that exists is lidar dedup (evaluate 144
+rays once per control step instead of every substep), worth ~22% end-to-end —
+available as a cheap wrapper-side optimization without any bespoke layer. The
+obs/reward device↔host seam the layer was built to kill turned out to cost
+almost nothing once the physics block is graph-captured: the solver dominates,
+exactly as the flat scaling curve predicted. M1/M2's findings (exact loop
+joint, analytic contacts) survive independently. M4 GPU demo blocked by a
+hardcoded njmax in the demo script (moot given the kill; CPU-validated 26/26).
+
+#868 GPU verdict (same pod, contact scene, nworld=8): reuse-only +1.9% and
+rank-1 +3.2% SLOWER than baseline wall-clock at mean solver_niter 1.9 — with
+~2 Newton iterations/step there is no refactorization to save and the caching
+is pure overhead. The CPU kernel microbench's −55% reuse win only monetizes on
+high-iteration scenes; the upstream story is the honest negative: measured,
+does not transfer at low solver_niter, rank-1 loses to cooperative
+refactorization everywhere we measured.
 
 ## Ladder verdict (all rungs)
 
@@ -88,10 +105,12 @@ the pod (see status log in uplift-execution-plan.md when it lands).
    loaded stomp (better than the connect model), 18/18 tests; GPU-validated.
 3. **R3 contributions** ✅ — three upstream PRs open (mujoco_warp #1487, #1488,
    mujoco #3378), CUDA-validated locally, awaiting CLA + review.
-4. **Thin layer** — ALL components built + tested (M1-M4, 26/26); the ≥2×
-   GPU kill-criterion measurement is the one open box (queued on pod).
+4. **Thin layer** — ALL components built + tested (M1-M4, 26/26); GPU verdict
+   1.22×/0.92× vs the ≥2× bar → **killed by its own criterion, as designed**.
+   Salvage: lidar dedup (~22%) portable to the wrapper; M1/M2 stand.
 
 ## Cost
 
-Benchmark + validation pod session: ~$2.7 total (balance 24.92 → 22.57 →
-final recorded after teardown). All pods terminated at session end.
+Benchmark + validation session 1: ~$2.7. Session 2 (meshwalk1 training 40.5M
+steps + render + M3/M4/#868 GPU verdicts): ~$2.75. Balance $24.92 → $19.70.
+All pods terminated at each session end (verified 0 remaining).

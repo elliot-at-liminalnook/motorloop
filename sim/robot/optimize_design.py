@@ -27,6 +27,7 @@ import numpy as np  # noqa: E402
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from gen_robot_mjcf import build_mjcf, load_spec  # noqa: E402
+from gen_mesh_robot_mjcf import MAX_ROBOT_MASS_KG  # noqa: E402
 
 SPEC = load_spec(HERE / "robot.toml")
 
@@ -34,9 +35,9 @@ SPEC = load_spec(HERE / "robot.toml")
 PARAMS = [
     ("thigh_len", 0.14, 0.28, ("leg_defaults", "thigh_len")),
     ("calf_len", 0.14, 0.28, ("leg_defaults", "calf_len")),
-    ("gear", 4.0, 12.0, ("actuator", "gear")),
+    ("gear", 1.0, 6.0, ("actuator", "gear")),
     ("joint_stiffness", 0.0, 25.0, ("leg_defaults", "joint_stiffness")),
-    ("torso_mass", 3.0, 9.0, ("torso", "mass")),
+    ("torso_mass", 0.35, 0.5479633165, ("torso", "mass")),
 ]
 STAND_TARGET = {"abd": 0.0, "flex": 0.8, "knee": -1.5}    # a crouch stance
 
@@ -112,7 +113,9 @@ def proxy_fitness(x: np.ndarray) -> float:
     clear = np.clip((_retract_clearance(model, data) - 0.12) / 0.20, 0, 1)
     # 3. mass penalty (lighter -> faster dodge / less power)
     mass = float(model.body_mass.sum())
-    return 2.0 * stand + 1.5 * clear - 0.5 * (mass / 6.0)
+    if mass > MAX_ROBOT_MASS_KG + 1e-9:
+        return -10.0
+    return 2.0 * stand + 1.5 * clear - 0.5 * (mass / MAX_ROBOT_MASS_KG)
 
 
 def cem(pop, gens, seed, fitness=proxy_fitness):

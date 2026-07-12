@@ -1,65 +1,105 @@
 # SPDX-License-Identifier: MIT
-# Docs site (robotics-ip-checklist stage 7). Assemble site-src/ with
-# `scripts/gen_docs.py`, then `mkdocs build`. WaveDrom timing diagrams render
-# client-side from ```wavedrom code blocks. docs_dir is site-src/ (generated);
-# docs/ holds the vendor datasheets and is NOT the mkdocs source.
 site_name: motorloop
-site_description: Robotics HDL blocks with claims, proofs, tests, timing, wrappers
+site_description: Motor-control verification, robot simulation, and evidence-backed learning
+repo_url: https://github.com/elliot-at-liminalnook/motorloop
 docs_dir: site-src
 
 theme:
   name: material
   features:
     - navigation.sections
+    - navigation.indexes
     - content.code.copy
 
 markdown_extensions:
   - admonition
   - tables
+  - attr_list
   - pymdownx.superfences:
       custom_fences:
         - name: wavedrom
           class: wavedrom
           format: !!python/name:pymdownx.superfences.fence_code_format
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 extra_javascript:
   - https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/skins/default.js
   - https://cdnjs.cloudflare.com/ajax/libs/wavedrom/3.5.0/wavedrom.min.js
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
   - js/wavedrom-init.js
+  - js/mermaid-init.js
+
+# Repository-local links are checked before assembly by scripts/check_docs.py.
+# During assembly, links to curated pages remain inside the site and links to
+# non-curated repository records are rewritten to their GitHub source pages.
 
 nav:
   - Home: index.md
-  - Status matrix: status-matrix.md
-  - Verification plan: verification-plan.md
+  - Start here:
+      - Getting started: notes/getting-started.md
+      - Current status: notes/current-status.md
+      - Reader paths: notes/reader-paths.md
+      - Glossary: notes/glossary.md
+  - System:
+      - Whole-system architecture: notes/system-architecture.md
+      - Component-bench decision: notes/architecture.md
+      - Robot hardware contract: notes/robot-hardware-contract.md
+      - Open questions: notes/open-questions.md
+  - Workflows:
+      - Reproduce the repository: notes/reproduce.md
+      - Robot and RL launch gate: notes/pre-gpu-test-entrypoint.md
+      - Component simulation: sim/README.md
+      - Formal verification: formal/README.md
+      - Hardware bring-up: notes/hardware-bringup-notes.md
+  - Evidence:
+      - Generated status matrix: notes/status-matrix-generated.md
+      - Formal proof report: formal/proof_report.md
+      - ECP5 synthesis report: synth/synth_report.md
+      - Warp launch-gate evidence: notes/runpod-warp-validation-2026-07-10.md
+      - Verification plan: notes/verification-plan.md
+      - RL verification playbook: notes/rl-verification-playbook.md
+  - Active work:
+      - Locomotion and combat status: notes/locomotion-status.md
+      - Historical uplift result: notes/training-uplift-results.md
+  - Background:
+      - Project ethos: notes/ethos.md
+      - Component facts digest: notes/docs-digest.md
+  - Documentation:
+      - Documentation home: notes/README.md
+      - Contributor guide: notes/documentation-guide.md
+      - Complete catalog: notes/document-catalog.md
+      - Historical archive: notes/archive/README.md
   - Timing diagrams: timing.md
   - Contracts:
-      - adc_sequencer: contracts/adc_sequencer.md
-      - adc_spi_master: contracts/adc_spi_master.md
-      - ads9224r_master: contracts/ads9224r_master.md
-      - as5047p_spi_master: contracts/as5047p_spi_master.md
-      - as5600_pwm_capture: contracts/as5600_pwm_capture.md
-      - axil_regfile: contracts/axil_regfile.md
-      - axis_sampler: contracts/axis_sampler.md
-      - circle_limit: contracts/circle_limit.md
-      - circle_limit_seq: contracts/circle_limit_seq.md
-      - clarke: contracts/clarke.md
-      - commutation: contracts/commutation.md
-      - current_pi: contracts/current_pi.md
-      - divider32: contracts/divider32.md
-      - drv_manager: contracts/drv_manager.md
-      - foc_core: contracts/foc_core.md
-      - inv_park: contracts/inv_park.md
-      - open_loop_ramp: contracts/open_loop_ramp.md
-      - park: contracts/park.md
-      - pwm_generator: contracts/pwm_generator.md
-      - sincos: contracts/sincos.md
-      - speed_iq_pi: contracts/speed_iq_pi.md
-      - speed_meter: contracts/speed_meter.md
-      - speed_pi: contracts/speed_pi.md
-      - spi_drv_master: contracts/spi_drv_master.md
-      - svpwm: contracts/svpwm.md
-      - svpwm_seq: contracts/svpwm_seq.md
-      - uart_regfile: contracts/uart_regfile.md
-      - uart_rx: contracts/uart_rx.md
-      - uart_tx: contracts/uart_tx.md
-      - wb_regfile: contracts/wb_regfile.md
+      - adc_sequencer: rtl/contracts/adc_sequencer.md
+      - adc_spi_master: rtl/contracts/adc_spi_master.md
+      - ads9224r_master: rtl/contracts/ads9224r_master.md
+      - as5047p_spi_master: rtl/contracts/as5047p_spi_master.md
+      - as5600_pwm_capture: rtl/contracts/as5600_pwm_capture.md
+      - axil_regfile: rtl/contracts/axil_regfile.md
+      - axis_sampler: rtl/contracts/axis_sampler.md
+      - circle_limit: rtl/contracts/circle_limit.md
+      - circle_limit_seq: rtl/contracts/circle_limit_seq.md
+      - clarke: rtl/contracts/clarke.md
+      - commutation: rtl/contracts/commutation.md
+      - current_pi: rtl/contracts/current_pi.md
+      - divider32: rtl/contracts/divider32.md
+      - drv_manager: rtl/contracts/drv_manager.md
+      - foc_core: rtl/contracts/foc_core.md
+      - inv_park: rtl/contracts/inv_park.md
+      - open_loop_ramp: rtl/contracts/open_loop_ramp.md
+      - park: rtl/contracts/park.md
+      - pwm_generator: rtl/contracts/pwm_generator.md
+      - sincos: rtl/contracts/sincos.md
+      - speed_iq_pi: rtl/contracts/speed_iq_pi.md
+      - speed_meter: rtl/contracts/speed_meter.md
+      - speed_pi: rtl/contracts/speed_pi.md
+      - spi_drv_master: rtl/contracts/spi_drv_master.md
+      - svpwm: rtl/contracts/svpwm.md
+      - svpwm_seq: rtl/contracts/svpwm_seq.md
+      - uart_regfile: rtl/contracts/uart_regfile.md
+      - uart_rx: rtl/contracts/uart_rx.md
+      - uart_tx: rtl/contracts/uart_tx.md
+      - wb_regfile: rtl/contracts/wb_regfile.md

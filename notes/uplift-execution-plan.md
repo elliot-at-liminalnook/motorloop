@@ -1,5 +1,10 @@
 # Uplift Execution Plan — Ordered Tasks to Retire Every Audit Finding
 
+> **Document status:** Historical · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Durable verdict:** [`training-uplift-results.md`](training-uplift-results.md)
+
+This file is the dated execution record. It intentionally preserves commands,
+status logs, and superseded branches; it is not the current launch runbook.
+
 Date: 2026-07-02. Companion to `training-uplift-audit.md` (the findings) and
 `rl-verification-playbook.md` (the check designs). This is the execution artifact:
 an ordered list of tasks — investigation, code changes, commands, and validation —
@@ -982,3 +987,61 @@ Phase C obs/self-play change → V.7 alongside B.6's analysis → V.8 after B.6 
 - **meshwalk1** (first mesh-robot training run): healthy to ~26M steps; reward
   1.03→5.26 then plateau at lean-and-creep (progress ~0.05 m/s); full 40M will
   complete in-timeout; render gate pending.
+
+### STATUS LOG — LADDER ROUND 2 VERDICTS + meshwalk1 FINAL (2026-07-03 evening)
+- meshwalk1 COMPLETE: 40.5M steps, 75 min, final eval reward 5.30. RENDER GATE:
+  duty_factor 0.994 (feet planted 99.4%), 0.016 m/s vs 0.36 commanded — the
+  lean-and-creep local optimum, coordination-trap diagnosis CONFIRMED (yaw 1.2 N·m
+  cannot slew loaded feet vs ~4 N·m friction; unload-then-yaw never discovered).
+  Run-2 recipe: AIRTIME_TARGET 0.45s/cap 1.0, yaw authority 0.9, clock-bonus
+  bootstrap annealed, warm-start meshwalk1.pkl. Artifacts:
+  sim/build/gpu/out/meshwalk1/ (video, gait json, ckpts, all bench logs).
+- M3 GPU VERDICT: fused 1.22× (lidar) / 0.92× (no lidar) vs ≥2× bar → thin layer
+  KILLED by its own criterion. Salvage: lidar dedup ~22% (wrapper-portable); M1/M2
+  mechanism findings stand. M4 GPU demo blocked by demo-script njmax (moot).
+- #868 GPU VERDICT: reuse +1.9%, rank-1 +3.2% slower at solver_niter 1.9 — honest
+  negative for upstream; CPU −55% kernel win only pays at high iteration counts.
+- Pod terminated (0 remaining), balance $19.70. §10 fully closed: 5/5 contribution
+  targets actioned (3 Google PRs CLA-green, newton issue #3346 + draft PR #3347
+  EasyCLA-green, #868 draft with negative finding), ladder rungs 1-3 validated,
+  thin layer adjudicated.
+
+### STATUS LOG — SERVO-TRUE MODEL + RUNS (2026-07-03/04 night, "get it right and send it")
+- MODEL: goBILDA 2000 servo on all 12 joints (gen_mesh_robot_mjcf: GEARS/WFREE/
+  ARMATURE servo-true; belt ratio 4 DESIGN DECISION; masses +60g×12, total 9.06 kg;
+  worm frictionloss 2→4 resized; knee strike gate recalibrated −25→−15 mm, lift>12
+  still passes). Env: torque-speed derating (drive derates to 0 at WFREE, braking
+  full). 18/18 suites green. mesh_robot.xml regenerated.
+- GATE meshsrv1 (8M, warm from meshval2): PASS — transferred policy knocked to
+  progress 0.020 by real physics (was exploiting impossible speeds), relearned to
+  0.029, reward climbing, stable. → committed long run.
+- LONG meshsrv2 (40M resume): reward 5.13→5.45, align 0.51, progress 0.036 (train,
+  stochastic) BUT deterministic render duty 0.993, 0.008 m/s, diag_sync 0.0 —
+  CREEP, rhythm lost. ROOT CAUSE (owned): CLOCK_HZ=1.1/AIRTIME_TARGET=0.45 derived
+  from the YAW sweep; the PITCH axis that lifts feet is 0.76 rad/s (5× slower) —
+  the requested cadence is physically unfollowable, so the clock income is
+  unreachable and creep wins. NEXT LEVER (derived, not guessed): CLOCK_HZ≈0.35,
+  MESH_AIRTIME_TARGET≈1.2s, episode-length 800 (16s ≈ 5 slow cycles), anneal clock
+  after breakout; consider belt ratio 6 and/or lighter torso to cut the friction
+  threshold. Artifacts: sim/build/gpu/out/meshsrv/.
+- Pods 0, balance $17.05 (day total ≈ $7.9 across 4 pod sessions).
+
+### STATUS LOG — GAIT FEASIBILITY VERDICT (2026-07-04)
+- The 10-upgrade retrain surfaced the real blocker via the gait-feasibility
+  workstream: THE MESH LEG CANNOT WALK AS BUILT. notes/gait-feasibility-verdict.md
+  has the measured proof: (1) level stance only at all-legs pitch -10/knee -50
+  (z=0.448); (2) stability cliff beyond -12 deg pitch; (3) NO single-leg actuation
+  lifts a foot clear (stays 4-11mm, radius 12mm — always contact); (4) 58mm
+  kinematic clearance exists but only at pitch+8 which destabilizes; (5) yaw stride
+  is 23mm mostly LATERAL; (6) COM-shift authority ~1-2cm vs ~3-4cm needed.
+- ROOT CAUSE: leg is a stomp/strike weapon (worm pitch + slider-crank blade),
+  strong DOWN authority, none UP — a fighting leg, not a walking leg. The RL creep
+  result across all runs is the CORRECT gait this hardware affords, not a failure.
+- reference_gait.json marked VALID=false; imitation hook has nothing valid to eat.
+- Software ladder (feasibility->reference->imitation+RSI RL, warp trainer 36/36)
+  is BUILT and waits on a hardware change (add foot-lift DOF / widen stance / accept
+  shuffle). Re-run needs only the leg to change, not the code.
+- Upgrades status: #1 feasibility DONE (verdict). #3 cadence, #5 belt6+diet, #6 SEA
+  option, #4/7/8/9/10 warp trainer with curriculum/filter/entropy/asym-critic/
+  telemetry+tripwire ALL BUILT & validated. #2 imitation built but moot until a
+  valid reference exists (post-hardware).

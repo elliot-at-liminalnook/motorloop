@@ -5,10 +5,10 @@ LIBRARY with our lidar/obs/reward kernels appended to the same launch sequence
 
 Two modes, the exact comparison the >=2x kill criterion is defined over:
 
-  BASELINE (`mode="baseline"`) — the wrapper way, as train_adversarial does it:
+  BASELINE (`mode="baseline"`) — the host-reference comparison path:
     mujoco_warp steps the physics (engine rangefinder sensors ENABLED — the env's
     lidar is 144 <rangefinder> sensors computed inside every physics substep,
-    exactly like the MJX pipeline it mirrors), then per CONTROL step the state
+    once at construction, then per CONTROL step the state
     is pulled device->host (qpos, qvel, xpos, xquat, xmat, geom_xpos,
     sensordata, contact pool), obs/reward are computed in numpy (the same
     reference code the tests use), and obs/reward are pushed host->device for
@@ -56,6 +56,24 @@ from .obsreward import (  # noqa: E402
 )
 
 QVEL_NOISE = 0.05   # same decorrelation as bench_warp_vs_mjx.py:42,68-70
+COMBAT_NCONMAX = 64  # per world; measured stress peak stays below half this
+COMBAT_NJMAX = 192   # per world; randomized PPO reached 116 with the old auto-size 96
+
+
+@wp.kernel
+def _scatter_controls(
+    act_a: wp.array2d(dtype=wp.float32),
+    act_b: wp.array2d(dtype=wp.float32),
+    ids_a: wp.array(dtype=wp.int32),
+    ids_b: wp.array(dtype=wp.int32),
+    ctrl: wp.array2d(dtype=wp.float32),
+):
+    """Scatter both policy buffers into MuJoCo controls without a host copy."""
+    w, i = wp.tid()
+    if i < ids_a.shape[0]:
+        ctrl[w, ids_a[i]] = wp.clamp(act_a[w, i], -1.0, 1.0)
+    if i < ids_b.shape[0]:
+        ctrl[w, ids_b[i]] = wp.clamp(act_b[w, i], -1.0, 1.0)
 
 
 def build_fight_model(lidar: bool = False, lidar_n_rays: int = 128,
@@ -107,7 +125,12 @@ class FightLayer:
         mujoco.mj_resetData(mjm, mjd)
         mujoco.mj_forward(mjm, mjd)
         self.m = mjwp.put_model(mjm)
-        self.d = mjwp.put_data(mjm, mjd, nworld=self.nworld, nconmax=nconmax, njmax=njmax)
+        nconmax = COMBAT_NCONMAX if nconmax is None else int(nconmax)
+        njmax = COMBAT_NJMAX if njmax is None else int(njmax)
+        self.d = mjwp.put_data(
+            mjm, mjd, nworld=self.nworld, nconmax=nconmax, njmax=njmax)
+        self.nconmax = nconmax
+        self.njmax = njmax
         rng = np.random.default_rng(seed)
         self._qvel0 = rng.uniform(-QVEL_NOISE, QVEL_NOISE,
                                   size=(self.nworld, mjm.nv)).astype(np.float32)
@@ -131,13 +154,22 @@ class FightLayer:
         self.design = wp.array(design, dtype=wp.float32)
         self.obs_dim = LOCO_OBS + (nray if lidar else 6)
         self.obs = wp.zeros((self.nworld, self.obs_dim), dtype=wp.float32)
+        self.obs_b = wp.zeros((self.nworld, self.obs_dim), dtype=wp.float32)
         self.reward = wp.zeros(self.nworld, dtype=wp.float32)
+        self.reward_b = wp.zeros(self.nworld, dtype=wp.float32)
         self.done = wp.zeros(self.nworld, dtype=wp.float32)
+        self.done_b = wp.zeros(self.nworld, dtype=wp.float32)
         self.act = wp.zeros((self.nworld, self.idx.nuA), dtype=wp.float32)
+        self.act_b = wp.zeros((self.nworld, self.idx.nuA), dtype=wp.float32)
+        self.design_b = wp.array(design.copy(), dtype=wp.float32)
         self.prev_dist = wp.zeros(self.nworld, dtype=wp.float32)
         self.prev_dealt = wp.zeros(self.nworld, dtype=wp.float32)
         self.vel_ema = wp.zeros(self.nworld, dtype=wp.vec2)
         self.t = wp.zeros(self.nworld, dtype=wp.float32)
+        self.prev_dist_b = wp.zeros(self.nworld, dtype=wp.float32)
+        self.prev_dealt_b = wp.zeros(self.nworld, dtype=wp.float32)
+        self.vel_ema_b = wp.zeros(self.nworld, dtype=wp.vec2)
+        self.t_b = wp.zeros(self.nworld, dtype=wp.float32)
         self.dealt_leg = wp.zeros(self.nworld, dtype=wp.float32)
         self.dealt_rod = wp.zeros(self.nworld, dtype=wp.float32)
         self.taken_leg = wp.zeros(self.nworld, dtype=wp.float32)
@@ -147,11 +179,18 @@ class FightLayer:
         i = self.idx
         self._wAqa = wp.array(i.Aqa, dtype=wp.int32)
         self._wAda = wp.array(i.Ada, dtype=wp.int32)
+        self._wBqa = wp.array(i.Bqa, dtype=wp.int32)
+        self._wBda = wp.array(i.Bda, dtype=wp.int32)
+        self._wactA = wp.array(i.actA, dtype=wp.int32)
+        self._wactB = wp.array(i.actB, dtype=wp.int32)
         self._wAstrike = wp.array(i.Astrike, dtype=wp.int32)
+        self._wBstrike = wp.array(i.Bstrike, dtype=wp.int32)
         self._wArod = wp.array(i.Arod_gids, dtype=wp.int32)
+        self._wBrod = wp.array(i.Brod_gids, dtype=wp.int32)
         self._wsd = wp.array(i.strike_dofs, dtype=wp.int32)
         self._wsdb = wp.array(i.strike_dofs_b, dtype=wp.int32)
         self._wsl = wp.array(i.strike_local, dtype=wp.int32)
+        self._wslb = wp.array(i.strike_local_b, dtype=wp.int32)
         self._wmasks = [wp.array(m, dtype=wp.int32) for m in
                         (i.mask_Aleg, i.mask_Bleg, i.mask_Arod, i.mask_Brod,
                          i.mask_Abody, i.mask_Bbody)]
@@ -187,6 +226,14 @@ class FightLayer:
                           i.At, i.Bt, i.ArD, i.BrD,
                           1 if self.lidar is not None else 0],
                   outputs=[self.obs])
+        # B receives the exact mirrored proprioception/opponent tail. The custom
+        # rangefinder currently originates at A, so self-play uses the six-value
+        # relative-state tail even when A's diagnostic lidar is enabled.
+        wp.launch(obs_kernel, dim=self.nworld,
+                  inputs=[d.qpos, d.qvel, d.xpos, d.xquat,
+                          self._wBqa, self._wBda, self.design_b, self.obs_b,
+                          i.Bt, i.At, i.BrD, i.ArD, 0],
+                  outputs=[self.obs_b])
         if not include_reward:
             return
         wp.launch(reward_kernel, dim=self.nworld,
@@ -197,10 +244,27 @@ class FightLayer:
                           i.At, i.Bt, i.ArD, i.BrD, i.n_hinge, self._params,
                           self.prev_dist, self.prev_dealt, self.vel_ema, self.t],
                   outputs=[self.reward, self.done])
+        wp.launch(reward_kernel, dim=self.nworld,
+                  inputs=[d.qvel, d.xpos, d.xmat, d.geom_xpos,
+                          self.act_b, self.taken_leg, self.taken_rod,
+                          self.dealt_leg, self.dealt_rod, self.pen_peak,
+                          self._wBstrike, self._wBrod, self._wsdb, self._wsd, self._wslb,
+                          i.Bt, i.At, i.BrD, i.ArD, i.n_hinge, self._params,
+                          self.prev_dist_b, self.prev_dealt_b, self.vel_ema_b, self.t_b],
+                  outputs=[self.reward_b, self.done_b])
 
     def _control_step_fused(self):
+        self._scatter_actions()
         self._physics_block()
         self._launch_outputs()
+
+    def _scatter_actions(self):
+        wp.launch(_scatter_controls, dim=(self.nworld, self.idx.nuA),
+                  inputs=[self.act, self.act_b, self._wactA, self._wactB, self.d.ctrl])
+
+    def _control_physics(self):
+        self._scatter_actions()
+        self._physics_block()
 
     def _physics_block(self):
         for _ in range(self.frame_skip):
@@ -217,7 +281,7 @@ class FightLayer:
                     >=2x comparison honest: the measured delta is the seam,
                     not uncaptured physics launch overhead."""
         assert wp.get_device().is_cuda, "graph capture needs a CUDA device"
-        target = self._control_step_fused if self.mode == "fused" else self._physics_block
+        target = self._control_step_fused if self.mode == "fused" else self._control_physics
         target()                                  # load modules before capture
         wp.synchronize()
         with wp.ScopedCapture() as cap:
@@ -252,7 +316,7 @@ class FightLayer:
         if self._graph is not None:               # captured physics block (CUDA)
             wp.capture_launch(self._graph)
         else:
-            self._physics_block()
+            self._control_physics()
         wp.synchronize()
         h = self._host_pull()                      # device -> host
         scan = None
@@ -286,16 +350,15 @@ class FightLayer:
                 scan = normalize_scan(h["sensordata"][:, self._sensor_adr], self.max_range)
             self.obs.assign(obs_reference(h, self.idx, self.design.numpy(), scan).astype(np.float32))
 
-    def set_actions(self, actions: np.ndarray):
+    def set_actions(self, actions: np.ndarray, opponent: np.ndarray | None = None):
         """Write the policy's A-robot actions (nworld, nuA), clipped to [-1,1],
         into d.ctrl (direct-torque action mode, train_adversarial.py:846-848).
         Host->device by design in the demo: the policy lives on host. In
         production the policy writes these buffers via dlpack on-device."""
         a = np.clip(np.asarray(actions, dtype=np.float32), -1.0, 1.0)
         self.act.assign(a)
-        ctrl = np.zeros((self.nworld, self.mjm.nu), dtype=np.float32)
-        ctrl[:, self.idx.actA] = a
-        self.d.ctrl.assign(ctrl)
+        if opponent is not None:
+            self.act_b.assign(np.clip(np.asarray(opponent, dtype=np.float32), -1.0, 1.0))
 
     def reset(self, seed: int | None = None):
         if seed is not None:
@@ -306,8 +369,10 @@ class FightLayer:
         self.d.qvel.assign(self._qvel0)
         self.d.ctrl.zero_()
         self.act.zero_()
+        self.act_b.zero_()
         for b in (self.prev_dist, self.prev_dealt, self.vel_ema, self.t,
-                  self.reward, self.done):
+                  self.prev_dist_b, self.prev_dealt_b, self.vel_ema_b, self.t_b,
+                  self.reward, self.reward_b, self.done, self.done_b):
             b.zero_()
         self._h_prev_dist = np.zeros(self.nworld)
         self._h_prev_dealt = np.zeros(self.nworld)
@@ -317,7 +382,7 @@ class FightLayer:
         self.refresh_outputs()
 
     # zero-copy consumption (M4): on CPU wp.array.numpy() aliases the buffer;
-    # on CUDA hand `self.obs` / `self.reward` to torch.from_dlpack / jax dlpack.
+    # On CUDA, hand `self.obs` and `self.reward` to Torch through DLPack.
     def obs_numpy(self) -> np.ndarray:
         return self.obs.numpy()
 

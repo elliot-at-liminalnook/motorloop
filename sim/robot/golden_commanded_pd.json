@@ -1,6 +1,6 @@
 {
-  "final_z": 0.287962,
-  "qpos_abs_sum": 7.039901,
-  "qpos_sum": -3.811897,
-  "reward_sum": 28.496159
+  "final_z": 0.382542,
+  "qpos_abs_sum": 1.498215,
+  "qpos_sum": 1.498215,
+  "reward_sum": 266.290164
 }

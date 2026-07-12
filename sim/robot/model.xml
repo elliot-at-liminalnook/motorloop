@@ -2,77 +2,77 @@
   <compiler angle="radian" autolimits="true"/>
   <option timestep="0.004" integrator="implicitfast"/>
   <default>
-    <joint damping="0.05" armature="0.00600"/>
+    <joint damping="0.05" armature="0.02430"/>
     <geom friction="2.8 0.28 0.28" contype="1" conaffinity="1"/>
   </default>
   <worldbody>
     <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"/>
-    <body name="torso" pos="0.0 0.0 0.38" quat="1 0 0 0"><freejoint name="root"/><geom name="torso" type="box" size="0.19 0.05 0.05" mass="2.5" rgba="0.3 0.3 0.6 1"/>
+    <body name="torso" pos="0.0 0.0 0.38" quat="1 0 0 0"><freejoint name="root"/><geom name="torso" type="box" size="0.19 0.05 0.05" mass="0.5479633165" rgba="0.3 0.3 0.6 1"/>
       <body name="FL_hip" pos="0.19 0.11 0.0">
         <joint name="FL_abd" axis="1 0 0" range="-0.8 0.8" stiffness="0.5" springref="0.0"/>
-        <geom name="FL_hipg" type="capsule" fromto="0 0 0 0 0.060 0" size="0.02" mass="0.3"/>
+        <geom name="FL_hipg" type="capsule" fromto="0 0 0 0 0.060 0" size="0.02" mass="0.133755598"/>
         <body name="FL_thigh" pos="0 0.060 0">
           <joint name="FL_flex" axis="0 1 0" range="-1.5 1.5" stiffness="0.5" springref="0.15"/>
-          <geom name="FL_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.6"/>
+          <geom name="FL_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.199511196"/>
           <body name="FL_calf" pos="0 0 -0.24">
             <joint name="FL_knee" axis="0 1 0" range="-2.6 -0.4" stiffness="0.5" springref="-1.25"/>
-            <geom name="FL_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.2"/>
-            <geom name="FL_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.05"/>
+            <geom name="FL_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.11183706500000001"/>
+            <geom name="FL_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.010959266"/>
           </body>
         </body>
       </body>
       <body name="FR_hip" pos="0.19 -0.11 0.0">
         <joint name="FR_abd" axis="1 0 0" range="-0.8 0.8" stiffness="0.5" springref="0.0"/>
-        <geom name="FR_hipg" type="capsule" fromto="0 0 0 0 -0.060 0" size="0.02" mass="0.3"/>
+        <geom name="FR_hipg" type="capsule" fromto="0 0 0 0 -0.060 0" size="0.02" mass="0.133755598"/>
         <body name="FR_thigh" pos="0 -0.060 0">
           <joint name="FR_flex" axis="0 1 0" range="-1.5 1.5" stiffness="0.5" springref="0.15"/>
-          <geom name="FR_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.6"/>
+          <geom name="FR_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.199511196"/>
           <body name="FR_calf" pos="0 0 -0.24">
             <joint name="FR_knee" axis="0 1 0" range="-2.6 -0.4" stiffness="0.5" springref="-1.25"/>
-            <geom name="FR_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.2"/>
-            <geom name="FR_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.05"/>
+            <geom name="FR_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.11183706500000001"/>
+            <geom name="FR_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.010959266"/>
           </body>
         </body>
       </body>
       <body name="RL_hip" pos="-0.19 0.11 0.0">
         <joint name="RL_abd" axis="1 0 0" range="-0.8 0.8" stiffness="0.5" springref="0.0"/>
-        <geom name="RL_hipg" type="capsule" fromto="0 0 0 0 0.060 0" size="0.02" mass="0.3"/>
+        <geom name="RL_hipg" type="capsule" fromto="0 0 0 0 0.060 0" size="0.02" mass="0.133755598"/>
         <body name="RL_thigh" pos="0 0.060 0">
           <joint name="RL_flex" axis="0 1 0" range="-1.5 1.5" stiffness="0.5" springref="0.15"/>
-          <geom name="RL_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.6"/>
+          <geom name="RL_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.199511196"/>
           <body name="RL_calf" pos="0 0 -0.24">
             <joint name="RL_knee" axis="0 1 0" range="-2.6 -0.4" stiffness="0.5" springref="-1.25"/>
-            <geom name="RL_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.2"/>
-            <geom name="RL_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.05"/>
+            <geom name="RL_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.11183706500000001"/>
+            <geom name="RL_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.010959266"/>
           </body>
         </body>
       </body>
       <body name="RR_hip" pos="-0.19 -0.11 0.0">
         <joint name="RR_abd" axis="1 0 0" range="-0.8 0.8" stiffness="0.5" springref="0.0"/>
-        <geom name="RR_hipg" type="capsule" fromto="0 0 0 0 -0.060 0" size="0.02" mass="0.3"/>
+        <geom name="RR_hipg" type="capsule" fromto="0 0 0 0 -0.060 0" size="0.02" mass="0.133755598"/>
         <body name="RR_thigh" pos="0 -0.060 0">
           <joint name="RR_flex" axis="0 1 0" range="-1.5 1.5" stiffness="0.5" springref="0.15"/>
-          <geom name="RR_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.6"/>
+          <geom name="RR_thighg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.199511196"/>
           <body name="RR_calf" pos="0 0 -0.24">
             <joint name="RR_knee" axis="0 1 0" range="-2.6 -0.4" stiffness="0.5" springref="-1.25"/>
-            <geom name="RR_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.2"/>
-            <geom name="RR_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.05"/>
+            <geom name="RR_calfg" type="capsule" fromto="0 0 0 0 0 -0.24" size="0.02" mass="0.11183706500000001"/>
+            <geom name="RR_foot" type="sphere" pos="0 0 -0.24" size="0.03" mass="0.010959266"/>
           </body>
         </body>
       </body></body>
   </worldbody>
   <actuator>
-    <motor name="FL_abd_m" joint="FL_abd" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="FL_flex_m" joint="FL_flex" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="FL_knee_m" joint="FL_knee" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="FR_abd_m" joint="FR_abd" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="FR_flex_m" joint="FR_flex" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="FR_knee_m" joint="FR_knee" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RL_abd_m" joint="RL_abd" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RL_flex_m" joint="RL_flex" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RL_knee_m" joint="RL_knee" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RR_abd_m" joint="RR_abd" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RR_flex_m" joint="RR_flex" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
-    <motor name="RR_knee_m" joint="RR_knee" gear="16.212" ctrlrange="-1 1" forcerange="-16.212 16.212"/>
+    <motor name="FL_abd_m" joint="FL_abd" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="FL_flex_m" joint="FL_flex" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="FL_knee_m" joint="FL_knee" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="FR_abd_m" joint="FR_abd" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="FR_flex_m" joint="FR_flex" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="FR_knee_m" joint="FR_knee" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RL_abd_m" joint="RL_abd" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RL_flex_m" joint="RL_flex" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RL_knee_m" joint="RL_knee" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RR_abd_m" joint="RR_abd" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RR_flex_m" joint="RR_flex" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
+    <motor name="RR_knee_m" joint="RR_knee" gear="5.884" ctrlrange="-1 1" forcerange="-5.884 5.884"/>
   </actuator>
 </mujoco>

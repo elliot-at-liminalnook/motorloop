@@ -2,6 +2,12 @@
   "units": "meters_assumed",
   "source": "Test_Mesh_Leg_7-1-2026.gltf",
   "status": "fourth_pass_hip_yaw_CONFIRMED_at_body_mount",
+  "hardware_contract": {
+    "motor_model": "Waveshare ST3215-HS",
+    "motor_mass_kg_each": 0.068,
+    "operating_voltage_v": 12.0,
+    "stall_torque_nm_each": 1.96133
+  },
   "bodies": {
     "base_housing_and_axle": {
       "mass_kg": 0.5,
@@ -328,25 +334,35 @@
     "hip_worm_drive_motor": {
       "type": "torque_motor",
       "drives_joint": "leg_swing",
+      "motor_model": "Waveshare ST3215-HS",
+      "motor_mass_kg": 0.068,
       "command_interface": "commanded_torque_nm",
-      "max_torque_nm": 1.2,
+      "max_torque_nm": 1.96133,
       "gear_ratio": 20.0,
+      "max_joint_torque_nm": 39.2266,
       "status": "worm on motor mount shaft; 20:1 from ~20T sector gear"
     },
     "knee_motor": {
       "type": "torque_motor",
       "drives_joint": "knee_blade_flexion",
+      "motor_model": "Waveshare ST3215-HS",
+      "motor_mass_kg": 0.068,
       "command_interface": "commanded_torque_nm",
-      "max_torque_nm": 3.0,
-      "status": "CORRECTED (user 2026-07-03): the knee motor ACTIVELY drives the blade down as well as retracting it \u2014 deployment is gravity-ASSISTED, not gravity-only (third-pass Drake finding 'restraint and retraction only' understated it). The blade is a POWERED downward strike: slider-crank is a toggle press \u2014 near the stowed pose dh/dphi -> 0 so piston force per motor torque -> very large (clamping/pinning); at full extension dh/dphi = 74.6 mm/rad so 3 N.m -> ~40 N at the tip plus the mechanism's weight. Peak strike force arrives at the START of the stomp, easing as it extends."
+      "max_torque_nm": 1.96133,
+      "gear_ratio": 1.0,
+      "max_joint_torque_nm": 1.96133,
+      "status": "The ST3215-HS ACTIVELY drives the blade down as well as retracting it. The slider-crank is a toggle press: near stowed, dh/dphi -> 0 so piston force per motor torque grows very large; at full extension dh/dphi = 74.6 mm/rad, so the 1.961 N.m stall envelope is about 26 N at the tip."
     },
     "hip_yaw_motor": {
       "type": "series_elastic_belt_drive",
       "drives_joint": "hip_yaw",
+      "motor_model": "Waveshare ST3215-HS",
+      "motor_mass_kg": 0.068,
       "command_interface": "commanded_torque_nm",
-      "max_torque_nm": 1.2,
+      "max_torque_nm": 1.96133,
       "transmission": "belt + LARGE RUBBER PULLEY on the leg side (user 2026-07-03)",
-      "gear_ratio": "TODO: pulley diameter ratio (motor pulley dia / leg pulley dia)",
+      "gear_ratio": 6.0,
+      "max_joint_torque_nm": 11.76798,
       "series_stiffness_nm_per_rad": "TODO: torsional stiffness of belt+rubber \u2014 bench-measurable (lock motor, twist leg, measure torque/deflection)",
       "series_damping": "TODO: rubber hysteresis damping",
       "status": "SERIES-ELASTIC by design: the rubber pulley is the impact absorber for lateral blows \u2014 the deliberate compliant path that the self-locking worm pitch axis lacks. Backdrivable, shock-filtering; costs yaw control bandwidth (steering is springy) \u2014 must be modeled as motor->spring/damper->joint, NOT a rigid gear, or sim-trained policies will assume crisper steering than the hardware has."
@@ -381,6 +397,6 @@
     "The GIF is keyframed kinematics, not a Bullet rigid-body simulation.",
     "FOURTH PASS (2026-07-03, from user): a THIRD motor beside the worm input yaws the whole drive assembly left-right \u2014 3 motors/leg (yaw, worm-pitch, knee). Foot workspace becomes a cone: stride can come from yaw sweep while \u00b125\u00b0 pitch handles clearance. Mesh membership of the true fixed mount vs the yaw rotor, yaw ROM, and yaw gearing are PENDING confirmation; rig_foot_7_1.py and scripts/drake_leg_analysis.py still model the third pass (no yaw) and need the same joint added once confirmed.",
     "YAW DRIVE (user 2026-07-03): belt system with a large rubber pulley as the compliant element \u2014 series-elastic yaw. Pulley ratio + torsional stiffness/damping TODO (both bench-measurable). Sim model: SEA (rotor dof + torsional spring-damper to the yaw joint) or minimum-viable joint stiffness/damping; rigid-gear modeling would overstate steering bandwidth.",
-    "KNEE = ACTIVE WEAPON (user 2026-07-03): powered downward blade strike, gravity-assisted. Toggle-press force profile (huge near stowed, ~40 N + weight at -90 deg). The mesh_blade sim variant should model the knee as a strike actuator, not just a foot deployer \u2014 this mechanism, not the pneumatic rod, may be the real robot's primary attack."
+    "KNEE = ACTIVE WEAPON: ST3215-HS-powered downward blade strike, gravity-assisted. Toggle-press force profile is very large near stowed and about 26 N plus mechanism weight at -90 deg. The mesh_blade sim variant should model the knee as a strike actuator, not just a foot deployer."
   ]
 }

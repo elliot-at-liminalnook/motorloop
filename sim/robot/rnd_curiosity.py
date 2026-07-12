@@ -1,225 +1,107 @@
 # SPDX-License-Identifier: MIT
-"""Random Network Distillation (RND) intrinsic motivation — TRUE RND.
-
-A fixed random TARGET network f(s) maps a feature vector to a random embedding.
-A trained PREDICTOR network g(s) learns to match f(s).  The novelty bonus is the
-prediction error ||f(s) - g(s)||^2: high for unfamiliar states, and it DECREASES
-as the predictor is trained on a state (the defining property of RND).
-
-This module exposes two interfaces over the SAME networks:
-
-1. :class:`RNDPredictor` — a stateful, host-side trainer used by standalone
-   tests and offline batches.  ``update()`` runs a real Adam gradient step on the
-   predictor; repeated updates on a state drive its novelty down.
-
-2. :func:`make_rnd` — a PURE FUNCTIONAL interface for wiring RND into a JAX env
-   step.  The fixed target params live in a closure (shared, constant); the
-   predictor params + optimizer state are returned to the caller to be carried
-   in ``state.info`` (per-env) and threaded through ``novelty``/``update``.  This
-   is how :class:`AdversarialEnv` trains the predictor INSIDE the rollout, so the
-   curiosity bonus genuinely adapts to what the policy has visited.
-
-Both interfaces share :class:`RandomTargetNetwork` / :class:`PredictorNetwork`
-so behaviour is identical.
-"""
+"""Torch-native Random Network Distillation for on-device Warp rollouts."""
 
 from __future__ import annotations
 
-from typing import NamedTuple, Callable
+import copy
+from dataclasses import dataclass
 
-import jax
-import jax.numpy as jnp
-from flax import linen as nn
-import optax
+import torch
+import torch.nn as nn
 
 
 class RandomTargetNetwork(nn.Module):
-    """Fixed random network mapping features to a random target embedding."""
-    hidden_dim: int = 256
-    output_dim: int = 128
+    def __init__(self, feature_dim, hidden_dim=256, output_dim=128):
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(feature_dim, hidden_dim), nn.ReLU(),
+                                 nn.Linear(hidden_dim, output_dim))
 
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Dense(self.hidden_dim)(x)
-        x = nn.relu(x)
-        x = nn.Dense(self.output_dim)(x)
-        return x
+    def forward(self, value):
+        return self.net(value)
 
 
 class PredictorNetwork(nn.Module):
-    """Trained network that learns to predict the random target's output."""
-    hidden_dim: int = 256
-    output_dim: int = 128
+    def __init__(self, feature_dim, hidden_dim=256, output_dim=128):
+        super().__init__()
+        self.net = nn.Sequential(nn.Linear(feature_dim, hidden_dim), nn.ReLU(),
+                                 nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+                                 nn.Linear(hidden_dim, output_dim))
 
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Dense(self.hidden_dim)(x)
-        x = nn.relu(x)
-        x = nn.Dense(self.hidden_dim)(x)
-        x = nn.relu(x)
-        x = nn.Dense(self.output_dim)(x)
-        return x
+    def forward(self, value):
+        return self.net(value)
 
 
-def _as_batch(feat):
-    """(d,) -> (1,d), keep (n,d). Returns (batched, was_single)."""
-    if feat.ndim == 1:
-        return feat[None], True
-    return feat, False
-
-
-class RND(NamedTuple):
-    """Functional RND handle for env integration.
-
-    ``target_params`` is fixed/shared; ``init_predictor_params`` and
-    ``init_opt_state`` seed the per-env carried state.  ``novelty`` and
-    ``update`` are pure functions of (predictor_params[, opt_state], feat).
-    """
+@dataclass
+class RND:
     feature_dim: int
-    target_params: dict
-    init_predictor_params: dict
-    init_opt_state: optax.OptState
-    novelty: Callable
-    update: Callable
+    target: nn.Module
+    predictor: nn.Module
+    optimizer: torch.optim.Optimizer
+
+    @torch.no_grad()
+    def novelty(self, feature):
+        single = feature.ndim == 1
+        feature = feature[None] if single else feature
+        result = ((self.target(feature) - self.predictor(feature)) ** 2).mean(-1)
+        return result[0] if single else result
+
+    def update(self, feature):
+        feature = feature[None] if feature.ndim == 1 else feature
+        with torch.no_grad():
+            target = self.target(feature)
+        loss = ((self.predictor(feature) - target) ** 2).mean()
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        return loss.detach()
 
 
 def make_rnd(feature_dim: int, hidden_dim: int = 128, output_dim: int = 64,
-             lr: float = 1e-3, key=None) -> RND:
-    """Build a functional RND for carrying predictor state in an env's info.
-
-    Returns an :class:`RND` whose ``novelty(predictor_params, feat) -> scalar``
-    and ``update(predictor_params, opt_state, feat) -> (params, opt_state, loss)``
-    are pure (jit/vmap-safe), so an env can store ``init_predictor_params`` /
-    ``init_opt_state`` per env and advance them every step.
-    """
-    if key is None:
-        key = jax.random.PRNGKey(0)
-    target = RandomTargetNetwork(hidden_dim=hidden_dim, output_dim=output_dim)
-    predictor = PredictorNetwork(hidden_dim=hidden_dim, output_dim=output_dim)
-    k1, k2 = jax.random.split(key)
-    dummy = jnp.zeros((1, feature_dim))
-    target_params = target.init(k1, dummy)
-    predictor_params = predictor.init(k2, dummy)
-    optimizer = optax.adam(lr)
-    opt_state = optimizer.init(predictor_params)
-
-    def novelty(predictor_params, feat):
-        f, single = _as_batch(feat)
-        t = target.apply(target_params, f)
-        p = predictor.apply(predictor_params, f)
-        nov = jnp.mean((t - p) ** 2, axis=-1)
-        return nov[0] if single else nov
-
-    def update(predictor_params, opt_state, feat):
-        f, _ = _as_batch(feat)
-        t = jax.lax.stop_gradient(target.apply(target_params, f))
-
-        def loss_fn(pp):
-            p = predictor.apply(pp, f)
-            return jnp.mean((p - t) ** 2)
-
-        loss, grads = jax.value_and_grad(loss_fn)(predictor_params)
-        updates, opt_state = optimizer.update(grads, opt_state, predictor_params)
-        predictor_params = optax.apply_updates(predictor_params, updates)
-        return predictor_params, opt_state, loss
-
-    return RND(feature_dim=feature_dim, target_params=target_params,
-               init_predictor_params=predictor_params, init_opt_state=opt_state,
-               novelty=novelty, update=update)
+             lr: float = 1e-3, key=None, device="cpu") -> RND:
+    seed = int(key) if isinstance(key, int) else 0
+    with torch.random.fork_rng():
+        torch.manual_seed(seed)
+        target = RandomTargetNetwork(feature_dim, hidden_dim, output_dim).to(device)
+        predictor = PredictorNetwork(feature_dim, hidden_dim, output_dim).to(device)
+    for parameter in target.parameters():
+        parameter.requires_grad_(False)
+    return RND(feature_dim, target, predictor, torch.optim.Adam(predictor.parameters(), lr=lr))
 
 
 class RNDPredictor:
-    """Stateful RND trainer (host-side) — used by standalone tests/offline batches.
-
-    The novelty bonus is the MSE between the fixed target and the trained
-    predictor.  ``raw_novelty`` is the unnormalized error (monotone in
-    familiarity — use it for assertions); ``novelty`` divides by a running std
-    for stable reward scaling.
-    """
-
     def __init__(self, obs_dim: int, hidden_dim: int = 256, output_dim: int = 128,
                  lr: float = 1e-3, obs_start: int = 0, obs_end: int | None = None,
-                 seed: int = 0):
-        self.obs_dim = obs_dim
-        self.obs_start = obs_start
-        self.obs_end = obs_end or obs_dim
-        self.feature_dim = self.obs_end - self.obs_start
-
-        self._target = RandomTargetNetwork(hidden_dim=hidden_dim, output_dim=output_dim)
-        self._predictor = PredictorNetwork(hidden_dim=hidden_dim, output_dim=output_dim)
-
-        key = jax.random.PRNGKey(seed)
-        key1, key2 = jax.random.split(key)
-        dummy = jnp.zeros((1, self.feature_dim))
-        self._target_params = self._target.init(key1, dummy)
-        self._predictor_params = self._predictor.init(key2, dummy)
-
-        self._optimizer = optax.adam(lr)
-        self._opt_state = self._optimizer.init(self._predictor_params)
-
-        self._rnd_var = jnp.ones(())
+                 seed: int = 0, device="cpu"):
+        self.obs_start, self.obs_end = obs_start, obs_end or obs_dim
+        self.rnd = make_rnd(self.obs_end - self.obs_start, hidden_dim, output_dim,
+                            lr, seed, device)
+        self._rnd_var = torch.tensor(1.0, device=device)
         self._rnd_count = 1e-4
 
-        # jit the hot paths
-        self._jit_raw = jax.jit(self._raw_novelty_impl)
-        self._jit_update = jax.jit(self._update_impl)
-
-    def _extract_features(self, obs):
+    def _features(self, obs):
         if isinstance(obs, dict):
             obs = obs["state"]
-        if self.obs_end < obs.shape[-1]:
-            return obs[..., self.obs_start:self.obs_end]
-        return obs
-
-    def _raw_novelty_impl(self, target_params, predictor_params, feat):
-        t = self._target.apply(target_params, feat)
-        p = self._predictor.apply(predictor_params, feat)
-        return jnp.mean((t - p) ** 2, axis=-1)
+        return torch.as_tensor(obs)[..., self.obs_start:self.obs_end]
 
     def raw_novelty(self, obs):
-        """Unnormalized prediction error (decreases as the predictor learns)."""
-        feat = self._extract_features(obs)
-        single = feat.ndim == 1
-        if single:
-            feat = feat[None]
-        nov = self._jit_raw(self._target_params, self._predictor_params, feat)
-        return nov[0] if single else nov
+        return self.rnd.novelty(self._features(obs))
 
     def novelty(self, obs):
-        """Std-normalized novelty (for reward scaling)."""
-        raw = self.raw_novelty(obs)
-        return raw / (jnp.sqrt(self._rnd_var) + 1e-8)
-
-    def _update_impl(self, predictor_params, opt_state, target_params, feat):
-        t = jax.lax.stop_gradient(self._target.apply(target_params, feat))
-
-        def loss_fn(pp):
-            p = self._predictor.apply(pp, feat)
-            return jnp.mean((p - t) ** 2)
-
-        loss, grads = jax.value_and_grad(loss_fn)(predictor_params)
-        updates, opt_state = self._optimizer.update(grads, opt_state, predictor_params)
-        predictor_params = optax.apply_updates(predictor_params, updates)
-        return predictor_params, opt_state, loss
+        return self.raw_novelty(obs) / (self._rnd_var.sqrt() + 1e-8)
 
     def update(self, obs_batch):
-        """One Adam step of the predictor toward the target on this batch."""
-        feat = self._extract_features(obs_batch)
-        if feat.ndim == 1:
-            feat = feat[None]
-        # running variance of the raw novelty (for reward normalization)
-        raw = self._jit_raw(self._target_params, self._predictor_params, feat)
-        self._rnd_var = 0.99 * self._rnd_var + 0.01 * jnp.maximum(jnp.var(raw), 1e-6)
-        self._predictor_params, self._opt_state, loss = self._jit_update(
-            self._predictor_params, self._opt_state, self._target_params, feat)
-        return float(loss)
+        features = self._features(obs_batch)
+        raw = self.rnd.novelty(features)
+        self._rnd_var.mul_(0.99).add_(0.01 * raw.var(unbiased=False).clamp(min=1e-6))
+        return float(self.rnd.update(features))
 
     def get_state(self):
-        return {"predictor_params": self._predictor_params, "opt_state": self._opt_state,
-                "rnd_var": self._rnd_var, "rnd_count": self._rnd_count}
+        return {"predictor": copy.deepcopy(self.rnd.predictor.state_dict()),
+                "optimizer": copy.deepcopy(self.rnd.optimizer.state_dict()),
+                "rnd_var": self._rnd_var.clone(), "rnd_count": self._rnd_count}
 
     def set_state(self, state):
-        self._predictor_params = state["predictor_params"]
-        self._opt_state = state["opt_state"]
-        self._rnd_var = state["rnd_var"]
+        self.rnd.predictor.load_state_dict(state["predictor"])
+        self.rnd.optimizer.load_state_dict(state["optimizer"])
+        self._rnd_var.copy_(state["rnd_var"])
         self._rnd_count = state["rnd_count"]

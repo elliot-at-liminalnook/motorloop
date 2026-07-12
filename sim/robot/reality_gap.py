@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tests"))
-from motors import MOTORS  # noqa: E402
+from motors import MOTORS, SERVOS  # noqa: E402
 
 
 # ----- uncertainty specs: (nominal, lo_frac, hi_frac) multiplicative, or (lo,hi) absolute -----
@@ -52,15 +52,27 @@ class SensorControlUncertainty:
     obs_noise_std: tuple; encoder_quant_rad: tuple; action_noise_std: tuple
 
 
-def default_uncertainty(motor: str = "db42s03", gear: float = 6.0) -> dict:
+def default_uncertainty(motor: str = "waveshare_st3215_hs", gear: float = 3.0) -> dict:
     """Calibrated-where-measured ranges centred on the datasheet motor."""
-    m = MOTORS[motor]
-    i_pk = 4.0 * m.rated_current_a
+    if motor in SERVOS:
+        servo = SERVOS[motor]
+        vbus = max(servo.stall_torque_nm)
+        i_pk = servo.stall_current_a[vbus]
+        kt = servo.stall_torque_nm[vbus] / i_pk
+        ke = vbus / servo.no_load_speed_rad_s[vbus]
+        resistance = vbus / i_pk
+        encoder_quant = servo.position_resolution_deg * np.pi / 180.0
+    else:
+        m = MOTORS[motor]
+        vbus = m.rated_voltage_v
+        i_pk = 4.0 * m.rated_current_a
+        kt, ke, resistance = m.kt, m.ke_phase, m.r_phase
+        encoder_quant = 0.0015
     return dict(
         act=ActuatorUncertainty(
-            kt=(m.kt, 0.9, 1.1), r_phase=(m.r_phase, 0.85, 1.2),          # datasheet +-tol
-            ke_phase=(m.ke_phase, 0.9, 1.1),
-            i_limit=(i_pk, 0.8, 1.1), vbus=(m.rated_voltage_v, 0.85, 1.0), # battery droops, never over
+            kt=(kt, 0.9, 1.1), r_phase=(resistance, 0.85, 1.2),          # datasheet/equivalent +-tol
+            ke_phase=(ke, 0.9, 1.1),
+            i_limit=(i_pk, 0.8, 1.1), vbus=(vbus, 0.85, 1.0), # battery droops, never over
             r_internal=(0.05, 0.5, 2.0),                                   # estimated (no cell data)
             gear_eff=(0.88, 0.92, 1.0), latency_s=(0.004, 0.5, 3.0),       # estimated
             thermal_derate=(0.15, 0.0, 1.0)),                             # estimated
@@ -68,11 +80,12 @@ def default_uncertainty(motor: str = "db42s03", gear: float = 6.0) -> dict:
             friction=(0.9, 0.6, 1.4), restitution=(0.1, 0.0, 3.0),
             solref_t=(0.02, 0.5, 2.0), damage_ref_N=(150.0, 0.7, 1.4)),    # unify on Newtons
         body=BodyUncertainty(
-            mass_scale=(1.0, 0.85, 1.15), com_offset_m=(0.0, -0.02, 0.02),
+            mass_scale=(1.0, 0.85, 1.0), com_offset_m=(0.0, -0.02, 0.02),
             inertia_scale=(1.0, 0.85, 1.15), joint_damping=(0.5, 0.5, 2.0),
             joint_stiffness=(0.0, 0.0, 25.0), backlash_rad=(0.0, 0.0, 0.02)),
         sensor=SensorControlUncertainty(
-            obs_noise_std=(0.0, 0.0, 0.02), encoder_quant_rad=(0.0, 0.0, 0.0015),
+            obs_noise_std=(0.0, 0.0, 0.02),
+            encoder_quant_rad=(encoder_quant, 0.8, 1.2),
             action_noise_std=(0.0, 0.0, 0.05)),
         motor=motor, gear=gear)
 
@@ -98,8 +111,7 @@ def sample_domain_params(seed, unc: dict | None = None) -> dict:
 def actuator_scale(joint_vel, dp):
     """Speed-dependent torque-envelope fraction per joint (the real motorloop stack):
     available_torque(omega)/static_limit via back-EMF + current limit + voltage sag +
-    gear efficiency. `joint_vel` and the return are array-like (jnp or np). The env
-    multiplies the (latency-buffered) action by this before the mjx motor applies it."""
+    gear efficiency. ``joint_vel`` may be a NumPy array or Torch tensor."""
     xp = _backend(joint_vel)
     motor_w = xp.abs(joint_vel) * dp["gear"]
     vbus = dp["vbus"]                                          # (sag applied below via i)
@@ -111,24 +123,21 @@ def actuator_scale(joint_vel, dp):
     return (i_avail / dp["i_limit"]) * dp["gear_eff"]         # fraction of static forcerange
 
 
-def apply_to_mjx_model(mx, dp, hinge_mask=None):
-    """Perturb mjx model fields by a sampled domain (mass/COM/inertia/friction/
-    restitution/contact-softness/damping/stiffness). Backend-agnostic via mx.replace."""
-    xp = _backend(mx.body_mass)
-    repl = dict(body_mass=mx.body_mass.at[1:].multiply(dp["mass_scale"]),
-                body_inertia=mx.body_inertia.at[1:].multiply(dp["inertia_scale"] * dp["mass_scale"]),
-                dof_damping=mx.dof_damping * (dp["joint_damping"] / 0.5),
-                geom_friction=mx.geom_friction.at[:, 0].set(dp["friction"]))
+def apply_to_warp_model(model, dp, hinge_mask=None):
+    """Perturb a mutable MuJoCo model before it is uploaded to MuJoCo-Warp."""
+    model.body_mass[1:] *= dp["mass_scale"]
+    model.body_inertia[1:] *= dp["inertia_scale"] * dp["mass_scale"]
+    model.dof_damping[:] *= dp["joint_damping"] / 0.5
+    model.geom_friction[:, 0] = dp["friction"]
     if hinge_mask is not None and dp["joint_stiffness"] > 0:
-        repl["jnt_stiffness"] = xp.where(hinge_mask, dp["joint_stiffness"], mx.jnt_stiffness)
-    # contact softness + restitution via solref (time const, damping ratio)
-    repl["geom_solref"] = mx.geom_solref.at[:, 0].set(dp["solref_t"])
-    return mx.replace(**repl)
+        model.jnt_stiffness[np.asarray(hinge_mask, dtype=bool)] = dp["joint_stiffness"]
+    model.geom_solref[:, 0] = dp["solref_t"]
+    return model
 
 
 def damage_from_force(contact_force_N, dp):
     """Unified damage currency: impact FORCE in Newtons / damage_ref (SPARC severity).
-    Resolves the 150 N (CPU) vs 0.05-penetration (MJX) mismatch -> one calibrated model."""
+    Resolves historical contact-parameter mismatches into one calibrated model."""
     return contact_force_N / dp["damage_ref_N"]
 
 
@@ -159,15 +168,15 @@ def score_trace_mismatch(sim: dict, real: dict) -> dict:
 
 def _backend(x):
     try:
-        import jax.numpy as jnp
-        if isinstance(x, jnp.ndarray):
-            return jnp
-    except Exception:
+        import torch
+        if isinstance(x, torch.Tensor):
+            return torch
+    except ImportError:
         pass
     return np
 
 
-if __name__ == "__main__":          # quick CPU self-check (no jax/GPU)
+if __name__ == "__main__":
     unc = default_uncertainty()
     dp = sample_domain_params(0, unc)
     import numpy as _np

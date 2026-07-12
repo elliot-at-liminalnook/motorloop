@@ -8,6 +8,17 @@
     "status": "fourth_pass_hip_yaw_CONFIRMED_at_body_mount"
   },
   "status": "first_pass_full_quadruped_assembly_placeholder_torso",
+  "hardware_contract": {
+    "max_robot_mass_lb": 6.0,
+    "max_robot_mass_kg": 2.7215542200000002,
+    "motor_model": "Waveshare ST3215-HS",
+    "motor_count": 12,
+    "motor_mass_kg_each": 0.068,
+    "operating_voltage_v": 12.0,
+    "stall_torque_nm_each": 1.96133,
+    "no_load_speed_rad_s_each": 11.100294042683936,
+    "mass_application": "raw CAD masses below remain placeholders; gen_mesh_robot_mjcf.py scales all non-servo masses to the budget remaining after 12x motor mass"
+  },
   "reference_pose": "spawn = all joints 0 (blade vertical), yaw/swing neutral; the ANIMATION starts at blade -35 deg but all transforms below are at the joint-zero reference pose",
   "torso": {
     "type": "box_PLACEHOLDER",
@@ -284,9 +295,12 @@
           "name": "FL_hip_yaw_motor",
           "type": "series_elastic_belt_drive",
           "drives_joint": "FL_hip_yaw",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
-          "gear_ratio": "TODO pulley dia ratio",
+          "gear_ratio": 6.0,
+          "max_joint_torque_nm": 11.76798,
           "series_stiffness_nm_per_rad": "TODO bench-measure",
           "series_damping": "TODO rubber hysteresis",
           "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
@@ -295,16 +309,23 @@
           "name": "FL_worm_pitch_motor",
           "type": "torque_motor",
           "drives_joint": "FL_leg_swing",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "gear_ratio": 20.0,
+          "max_joint_torque_nm": 39.2266,
           "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
         },
         {
           "name": "FL_knee_strike_motor",
           "type": "torque_motor",
           "drives_joint": "FL_knee_blade",
-          "max_torque_nm": 3.0,
-          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
+          "gear_ratio": 1.0,
+          "max_joint_torque_nm": 1.96133,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~26 N tip force at stall)"
         }
       ]
     },
@@ -530,9 +551,12 @@
           "name": "FR_hip_yaw_motor",
           "type": "series_elastic_belt_drive",
           "drives_joint": "FR_hip_yaw",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
-          "gear_ratio": "TODO pulley dia ratio",
+          "gear_ratio": 6.0,
+          "max_joint_torque_nm": 11.76798,
           "series_stiffness_nm_per_rad": "TODO bench-measure",
           "series_damping": "TODO rubber hysteresis",
           "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
@@ -541,16 +565,23 @@
           "name": "FR_worm_pitch_motor",
           "type": "torque_motor",
           "drives_joint": "FR_leg_swing",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "gear_ratio": 20.0,
+          "max_joint_torque_nm": 39.2266,
           "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
         },
         {
           "name": "FR_knee_strike_motor",
           "type": "torque_motor",
           "drives_joint": "FR_knee_blade",
-          "max_torque_nm": 3.0,
-          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
+          "gear_ratio": 1.0,
+          "max_joint_torque_nm": 1.96133,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~26 N tip force at stall)"
         }
       ]
     },
@@ -776,9 +807,12 @@
           "name": "RL_hip_yaw_motor",
           "type": "series_elastic_belt_drive",
           "drives_joint": "RL_hip_yaw",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
-          "gear_ratio": "TODO pulley dia ratio",
+          "gear_ratio": 6.0,
+          "max_joint_torque_nm": 11.76798,
           "series_stiffness_nm_per_rad": "TODO bench-measure",
           "series_damping": "TODO rubber hysteresis",
           "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
@@ -787,16 +821,23 @@
           "name": "RL_worm_pitch_motor",
           "type": "torque_motor",
           "drives_joint": "RL_leg_swing",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "gear_ratio": 20.0,
+          "max_joint_torque_nm": 39.2266,
           "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
         },
         {
           "name": "RL_knee_strike_motor",
           "type": "torque_motor",
           "drives_joint": "RL_knee_blade",
-          "max_torque_nm": 3.0,
-          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
+          "gear_ratio": 1.0,
+          "max_joint_torque_nm": 1.96133,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~26 N tip force at stall)"
         }
       ]
     },
@@ -1022,9 +1063,12 @@
           "name": "RR_hip_yaw_motor",
           "type": "series_elastic_belt_drive",
           "drives_joint": "RR_hip_yaw",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
-          "gear_ratio": "TODO pulley dia ratio",
+          "gear_ratio": 6.0,
+          "max_joint_torque_nm": 11.76798,
           "series_stiffness_nm_per_rad": "TODO bench-measure",
           "series_damping": "TODO rubber hysteresis",
           "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"
@@ -1033,16 +1077,23 @@
           "name": "RR_worm_pitch_motor",
           "type": "torque_motor",
           "drives_joint": "RR_leg_swing",
-          "max_torque_nm": 1.2,
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
           "gear_ratio": 20.0,
+          "max_joint_torque_nm": 39.2266,
           "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"
         },
         {
           "name": "RR_knee_strike_motor",
           "type": "torque_motor",
           "drives_joint": "RR_knee_blade",
-          "max_torque_nm": 3.0,
-          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"
+          "motor_model": "Waveshare ST3215-HS",
+          "motor_mass_kg": 0.068,
+          "max_torque_nm": 1.96133,
+          "gear_ratio": 1.0,
+          "max_joint_torque_nm": 1.96133,
+          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed (huge pinch force), 74.6 mm/rad at full extension (~26 N tip force at stall)"
         }
       ]
     }
@@ -1122,11 +1173,11 @@
       }
     },
     "suggested_defaults": {
-      "armature_note": "reflected rotor inertia = J_rotor * gear^2 (the gen_robot_mjcf _armature convention); J_rotor placeholder 1.5e-05 kg.m2 (sim/tests/motors.py gimbal-class, Q1 estimate)",
+      "armature_note": "reflected servo-output inertia = J_output * external_ratio^2; J_output=0.0027 kg.m2 is an explicit estimate because Waveshare does not publish it",
       "per_axis_armature_kg_m2": {
-        "hip_yaw": "TODO: 1.5e-05 * belt_ratio^2 (belt ratio unmeasured; 3:1 example -> 1.35e-04)",
-        "leg_swing": 0.006,
-        "knee_blade": "TODO: 1.5e-05 * knee_gear^2 (knee gearing unconfirmed; direct-drive example -> 1.50e-05)"
+        "hip_yaw": 0.0972,
+        "leg_swing": 1.08,
+        "knee_blade": 0.0027
       },
       "hip_yaw_series_elasticity": "do NOT model as a rigid gear: either (a) add a rotor body + hinge behind {leg}_hip_yaw joined by a stiffness/damping equality (SEA), or (b) minimum-viable: position actuator whose kp = belt torsional stiffness (TODO bench) so yaw steering stays springy",
       "leg_swing_self_locking": "worm is non-backdrivable: high joint damping or brake-when-idle; holds stance at zero power"

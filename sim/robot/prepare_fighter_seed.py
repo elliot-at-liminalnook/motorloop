@@ -73,7 +73,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    # Keep render-only GL settings from leaking into a non-rendering MJX import.
+    # Keep render-only GL settings from leaking into non-rendering physics.
     if os.environ.get("MUJOCO_GL") == "":
         os.environ.pop("MUJOCO_GL", None)
     main()

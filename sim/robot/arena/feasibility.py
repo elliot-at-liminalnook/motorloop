@@ -66,7 +66,8 @@ def _A_joints(m):
     jq = [m.jnt_qposadr[trn[i]] for i in A]
     jd = [m.jnt_dofadr[trn[i]] for i in A]
     jr = np.array([m.jnt_range[trn[i]] for i in A])
-    tmax = m.actuator_forcerange[A, 1].copy()
+    gear = np.abs(m.actuator_gear[A, 0])
+    tmax = np.where(gear > 0.0, gear, m.actuator_forcerange[A, 1])
     return names, A, jq, jd, jr, tmax
 
 

@@ -9,7 +9,7 @@ recompile; contacts live in ONE flat cross-world pool, compacted with
 
 Bodies in M1 are free capsules over a single ground plane at z=0; the pair
 table is CURATED AND STATIC (§10c(ii)): at this project's geom counts,
-hand-culled enumeration is optimal — MJX's sin was uncurated all-pairs plus
+hand-culled enumeration is optimal; uncurated all-pairs plus
 dense efc rows, not staticness itself.
 """
 from __future__ import annotations

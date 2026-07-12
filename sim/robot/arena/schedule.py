@@ -47,8 +47,9 @@ class Curriculum(Schedule):
     name = "curriculum"
 
     def __init__(self, steps_per_phase=4_000_000, tol=0.05, retries=1, phases=None):  # tol = win-rate scale
-        ph, _ = _curriculum_phases() if phases is None else (phases, None)
+        ph, bench = _curriculum_phases() if phases is None else (phases, None)
         self.phases = ph
+        self.bench = bench
         self.steps = steps_per_phase
         self.tol = tol
         self.retries = retries
@@ -58,7 +59,7 @@ class Curriculum(Schedule):
             return None
         ph = self.phases[state.idx]
         sep_hi = state.extra.get("sep_hi", ph["sep_hi"])      # may be narrowed by a rollback
-        st = Stage.from_curriculum({**ph, "sep_hi": sep_hi}, self.steps)
+        st = Stage.from_curriculum({**ph, "sep_hi": sep_hi}, self.steps, bench=self.bench)
         st.gate_tol = self.tol
         return st
 

@@ -108,7 +108,9 @@ class GaitEval:
         self.qadr = np.array([int(self.model.jnt_qposadr[j]) for j in self.act_joints], dtype=int)
         self.dadr = np.array([int(self.model.jnt_dofadr[j]) for j in self.act_joints], dtype=int)
         self.jrange = np.array([self.model.jnt_range[j] for j in self.act_joints], dtype=float)
-        self.tmax = np.array(self.model.actuator_forcerange[: self.model.nu, 1], dtype=float)
+        gear = np.abs(self.model.actuator_gear[: self.model.nu, 0])
+        self.tmax = np.where(gear > 0.0, gear,
+                             self.model.actuator_forcerange[: self.model.nu, 1])
         self.stand = self.q0[self.qadr].copy()
         self.ctrl_dt = self.frame_skip * float(self.model.opt.timestep)
         self.name_to_action = {}

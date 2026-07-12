@@ -10,20 +10,24 @@ Architecture decision record: `../notes/architecture.md`; build checklist
 ## Quick Start
 
 ```bash
-# 0. toolchain sanity (verilator, cmake, ninja, pybind11, pytest, omc)
-sim/scripts/check_cosim_toolchain.sh
+# Fast local edit/check cycle. A pass is not full verification.
+bash scripts/run_pre_gpu_tests.sh
 
-# 1. build the bench module (generates rtl/gen/rtl_params.vh, cmake, ninja)
-sim/scripts/build_bench.sh
-
-# 2. run the full verification suite (372 tests, ~21 min; the parity,
-#    peripheral, and derivation tiers alone finish in seconds)
-python3 -m pytest sim/tests
+# Complete verification. Run this on a CUDA host.
+bash scripts/run_pre_gpu_tests.sh --require-gpu
 ```
 
-Do not run two pytest sessions concurrently: the conftest rebuilds the
-shared `bldcsim` module, and rebuilding it underneath a running suite
-produces spurious failures.
+The second command is the authoritative entry point before simulation or RL. It
+builds the shared `bldcsim` extension once, distributes independent component
+tests across CPU workers, runs the complete exact CPU oracle tier, and then
+runs the expensive MuJoCo-Warp rollouts and trainer tests on CUDA. Verilator is
+CPU-only; running that stage on the GPU host keeps it in the same complete verdict
+without claiming that RTL simulation is a GPU workload.
+
+For focused component debugging, `make test` remains the serial regression and
+`make test-parallel TEST_WORKERS=8` is the parallel form. Do not start either
+while another process is rebuilding `sim/build/cpp`; the canonical entry point
+owns build ordering.
 
 The suite covers: params-loader convention checks, three-way plant parity
 (C++/Python/Modelica), plant analytics and integrator convergence,

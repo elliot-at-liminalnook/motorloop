@@ -10,7 +10,7 @@ from self-play on those bodies.
 
 Locally `--prove` validates the match mechanics (scene, weapon->body damage
 classification, closing/aggression, SPARC scoring + winner). `selfplay()` is the
-GPU-target PPO self-play skeleton (run on a CUDA/MJX box).
+GPU self-play uses the fused MuJoCo-Warp trainer.
   python match_env.py --prove
 """
 
@@ -179,18 +179,9 @@ def random_ctrl(o, env, s):
 
 
 def selfplay():
-    """GPU self-play (sketch): two PPO policies on the evolved bodies, scored by the
-    SPARC differential, trading off against each other (and the coevolve Hall of
-    Fame as a league). Run on a CUDA/MJX box."""
-    try:
-        import jax  # noqa: F401
-        from mujoco import mjx  # noqa: F401
-    except Exception:
-        print("JAX/MJX absent - this is the GPU-target self-play skeleton.")
-        print("On a CUDA box: vmap MatchEnv over N envs in MJX, train pol_A and pol_B")
-        print("with PPO on sparc_score.step_reward, league vs coevolve.py's Hall of Fame.")
-        return
-    raise SystemExit("MJX present: wire the two-policy PPO self-play loop here.")
+    """Run the supported fused Warp Hall-of-Fame trainer."""
+    from warp_train_cli import selfplay as run_selfplay
+    return run_selfplay()
 
 
 def prove():

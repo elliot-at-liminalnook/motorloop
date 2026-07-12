@@ -1,0 +1,318 @@
+# SPDX-License-Identifier: MIT
+schema_version = 1
+last_reviewed = "2026-07-12"
+
+# Rules are applied in order; later matches refine earlier ones. Exact overrides
+# below win over every rule. The generated catalog makes the resolved metadata
+# visible without adding a large header to every historical source file.
+
+[[rules]]
+glob = "*.md"
+status = "reference"
+kind = "reference"
+audience = "contributors"
+
+[[rules]]
+glob = "notes/*.md"
+status = "historical"
+kind = "project record"
+audience = "maintainers"
+
+[[rules]]
+glob = "notes/*-checklist.md"
+status = "historical"
+kind = "execution record"
+audience = "maintainers"
+
+[[rules]]
+glob = "notes/*-report.md"
+status = "historical"
+kind = "dated result"
+audience = "researchers and maintainers"
+
+[[rules]]
+glob = "notes/archive/*.md"
+status = "reference"
+kind = "archive index"
+audience = "maintainers"
+
+[[rules]]
+glob = "rtl/contracts/*.md"
+status = "reference"
+kind = "RTL contract"
+audience = "FPGA and ASIC developers"
+
+[[rules]]
+glob = "figures/**/gallery.md"
+status = "generated"
+kind = "media index"
+audience = "all readers"
+
+[[rules]]
+glob = "formal/proof_report.md"
+status = "generated"
+kind = "formal evidence"
+audience = "verification engineers"
+
+[[rules]]
+glob = "synth/*report.md"
+status = "generated"
+kind = "implementation evidence"
+audience = "FPGA and ASIC developers"
+
+[[rules]]
+glob = "notes/status-matrix-generated.md"
+status = "generated"
+kind = "status evidence"
+audience = "all readers"
+
+[[overrides]]
+path = "README.md"
+status = "current"
+kind = "project overview"
+audience = "newcomers"
+canonical_for = "repository overview and top-level navigation"
+header_required = true
+
+[[overrides]]
+path = "notes/README.md"
+status = "current"
+kind = "documentation index"
+audience = "all readers"
+canonical_for = "documentation navigation"
+header_required = true
+
+[[overrides]]
+path = "notes/getting-started.md"
+status = "current"
+kind = "newcomer guide"
+audience = "first-time visitors"
+canonical_for = "the first fifteen minutes"
+header_required = true
+
+[[overrides]]
+path = "notes/current-status.md"
+status = "current"
+kind = "status interpretation"
+audience = "all readers"
+canonical_for = "high-level project maturity"
+header_required = true
+
+[[overrides]]
+path = "notes/system-architecture.md"
+status = "current"
+kind = "architecture explanation"
+audience = "newcomers and system contributors"
+canonical_for = "whole-repository architecture"
+header_required = true
+
+[[overrides]]
+path = "notes/reader-paths.md"
+status = "current"
+kind = "navigation guide"
+audience = "newcomers and contributors"
+canonical_for = "goal-oriented reading paths"
+header_required = true
+
+[[overrides]]
+path = "notes/glossary.md"
+status = "current"
+kind = "terminology reference"
+audience = "all readers"
+canonical_for = "project and evidence vocabulary"
+header_required = true
+
+[[overrides]]
+path = "notes/documentation-guide.md"
+status = "current"
+kind = "contributor guide"
+audience = "contributors and maintainers"
+canonical_for = "documentation structure and lifecycle"
+header_required = true
+
+[[overrides]]
+path = "notes/reproduce.md"
+status = "current"
+kind = "runbook"
+audience = "developers and release reviewers"
+canonical_for = "full repository reproduction"
+header_required = true
+
+[[overrides]]
+path = "notes/pre-gpu-test-entrypoint.md"
+status = "current"
+kind = "runbook"
+audience = "robot-learning developers"
+canonical_for = "robot and RL launch authorization"
+header_required = true
+
+[[overrides]]
+path = "notes/robot-hardware-contract.md"
+status = "current"
+kind = "hardware contract"
+audience = "robot and hardware developers"
+canonical_for = "active robot physical envelope"
+header_required = true
+
+[[overrides]]
+path = "notes/architecture.md"
+status = "current"
+kind = "architecture decision record"
+audience = "component-simulation developers"
+canonical_for = "lockstep Verilator bench architecture"
+header_required = true
+
+[[overrides]]
+path = "notes/verification-plan.md"
+status = "reference"
+kind = "verification reference"
+audience = "verification engineers"
+canonical_for = "RTL requirement-to-evidence map"
+
+[[overrides]]
+path = "notes/rl-verification-playbook.md"
+status = "current"
+kind = "verification guide"
+audience = "robot-learning developers"
+canonical_for = "robot model, reward, and checkpoint verification"
+
+[[overrides]]
+path = "notes/locomotion-status.md"
+status = "active"
+kind = "active-work summary"
+audience = "robot-learning contributors"
+canonical_for = "current locomotion and combat promotion state"
+header_required = true
+
+[[overrides]]
+path = "notes/locomotion-bootstrap-teacher-checklist.md"
+status = "active"
+kind = "execution log"
+audience = "robot-learning contributors"
+header_required = true
+
+[[overrides]]
+path = "notes/sparc-learning-log.md"
+status = "active"
+kind = "learning log"
+audience = "robot-learning contributors"
+header_required = true
+
+[[overrides]]
+path = "notes/codesign-win-exchanges-checklist.md"
+status = "active"
+kind = "execution log"
+audience = "robot-learning contributors"
+header_required = true
+
+[[overrides]]
+path = "notes/kinetic-realm-checklist.md"
+status = "active"
+kind = "execution log"
+audience = "robot-simulation contributors"
+
+[[overrides]]
+path = "notes/training-uplift-results.md"
+status = "historical"
+kind = "extracted result"
+audience = "robot-learning contributors"
+canonical_for = "July 2026 training-uplift verdict"
+header_required = true
+
+[[overrides]]
+path = "notes/uplift-execution-plan.md"
+status = "historical"
+kind = "execution log"
+audience = "robot-learning contributors"
+header_required = true
+
+[[overrides]]
+path = "notes/system-tour.md"
+status = "historical"
+kind = "superseded narrative"
+audience = "researchers tracing project history"
+header_required = true
+
+[[overrides]]
+path = "notes/gait-feasibility-verdict.md"
+status = "historical"
+kind = "superseded hardware verdict"
+audience = "robot and mechanism developers"
+header_required = true
+
+[[overrides]]
+path = "notes/codesign-architecture.md"
+status = "historical"
+kind = "superseded architecture note"
+audience = "robot-learning contributors"
+header_required = true
+
+[[overrides]]
+path = "notes/sim-engine-secret-sauce.md"
+status = "historical"
+kind = "dated research survey"
+audience = "simulation researchers"
+header_required = true
+
+[[overrides]]
+path = "notes/warp-ladder-results.md"
+status = "historical"
+kind = "dated migration result"
+audience = "simulation researchers"
+
+[[overrides]]
+path = "notes/gpu-runbook.md"
+status = "retired"
+kind = "retired runbook"
+audience = "historical readers"
+canonical_for = "nothing; use pre-gpu-test-entrypoint.md"
+header_required = true
+
+[[overrides]]
+path = "notes/gpu-pod-setup.md"
+status = "retired"
+kind = "retired setup guide"
+audience = "historical readers"
+canonical_for = "nothing; use pre-gpu-test-entrypoint.md"
+header_required = true
+
+[[overrides]]
+path = "notes/archive/README.md"
+status = "reference"
+kind = "archive index"
+audience = "maintainers and researchers"
+canonical_for = "historical documentation navigation"
+header_required = true
+
+[[overrides]]
+path = "notes/document-catalog.md"
+status = "generated"
+kind = "documentation catalog"
+audience = "all readers"
+canonical_for = "complete Markdown inventory"
+
+[[overrides]]
+path = "sim/README.md"
+status = "current"
+kind = "subsystem guide"
+audience = "component-simulation developers"
+canonical_for = "component simulation workspace"
+
+[[overrides]]
+path = "formal/README.md"
+status = "current"
+kind = "subsystem guide"
+audience = "verification engineers"
+canonical_for = "formal workflow"
+
+[[overrides]]
+path = "soc/README.md"
+status = "reference"
+kind = "integration guide"
+audience = "FPGA and firmware developers"
+
+[[overrides]]
+path = "notes/status-matrix.md"
+status = "historical"
+kind = "superseded hand-authored status"
+audience = "historical readers"

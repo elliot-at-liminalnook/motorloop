@@ -6,11 +6,11 @@ Purpose (per Elliot): prove every link of the loop works *at all* at micro-scale
 evolves. This is a LIVING script — extend it as each checklist phase lands (add a stage,
 add metrics). It is NOT a training run; budgets are tiny (`--tiny` in each sub-script).
 
-The loop it exercises (each a fresh process = realistic isolation + real compile cost):
-  1. walker      codesign_gpu.py --tiny        (universal policy + Phase-2 corr + CEM + Pareto)
-  2. build_pack  codesign_validate.py          (reconstruct the walker policy, build eval pack)
-  3. fighter     train_adversarial.py --tiny   (warm-start the SPARC fighter from the walker)
-  4. score       codesign_validate.py          (reconstruct the fighter, walker-vs-fighter rho)
+The loop it exercises (each a fresh process = realistic isolation + compile cost):
+  1. universal_train  grouped-design MuJoCo-Warp PPO
+  2. universal_eval   deterministic evaluation of its Torch checkpoint
+  3. combat_train     fused two-robot MuJoCo-Warp PPO
+  4. combat_eval      deterministic combat evaluation
 
 Per stage it records: wall_s, return code, every METRIC line the sub-script emits
 (compile_s, train_s, throughput, rewards, rho, ...), and peak GPU mem/util (sampled
@@ -20,8 +20,7 @@ every 0.5 s). Writes:
 and prints a stage-by-stage timing table (the bottleneck view).
 
   CODESIGN_OUT=/root/proj/out python3 e2e.py            # full tiny loop
-  python3 e2e.py --only walker,fighter                  # subset
-  python3 e2e.py --skip walker --reuse-ckpt             # reuse existing universal_ckpt.pkl
+  python3 e2e.py --only universal_train,combat_train     # subset
 """
 
 from __future__ import annotations
@@ -97,24 +96,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="", help="comma list of stages to run")
     ap.add_argument("--skip", default="", help="comma list of stages to skip")
-    ap.add_argument("--reuse-ckpt", action="store_true",
-                    help="don't require the walker stage; use an existing universal_ckpt.pkl")
     ap.add_argument("--stop-on-fail", action="store_true",
                     help="abort at first failing stage (default: keep going, record all)")
     args = ap.parse_args()
 
-    # Profile showed XLA compile is ~86% of wall time at micro-scale; a shared persistent
-    # cache lets unchanged graphs skip recompilation across runs (watch the Δprev column).
-    env = dict(os.environ, CODESIGN_OUT=str(OUT),
-               JAX_COMPILATION_CACHE_DIR=str(OUT / ".jax_cache"),
-               JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES="-1",
-               JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS="0")
-    ck = str(OUT / "universal_ckpt.pkl")
+    env = dict(os.environ, CODESIGN_OUT=str(OUT))
+    universal = str(OUT / "e2e_universal")
+    combat = str(OUT / "e2e_combat")
     all_stages = [
-        ("walker",     [PY, "-u", "codesign_gpu.py", "--tiny"]),
-        ("build_pack", [PY, "-u", "codesign_validate.py", "--build-pack", "--tiny"]),
-        ("fighter",    [PY, "-u", "train_adversarial.py", "--tiny", "--resume", ck]),
-        ("score",      [PY, "-u", "codesign_validate.py", "--score-fighter", "--tiny"]),
+        ("universal_train", [PY, "-u", "codesign_gpu.py", "--tiny", "--tag", universal]),
+        ("universal_eval", [PY, "-u", "warp_eval.py", "eval", "--geometry", "universal",
+                            "--checkpoint", universal + ".pt", "--episodes", "1",
+                            "--steps", "16", "--envs", "4"]),
+        ("combat_train", [PY, "-u", "train_adversarial.py", "--tiny", "--tag", combat]),
+        ("combat_eval", [PY, "-u", "warp_eval.py", "eval", "--geometry", "combat",
+                         "--checkpoint", combat + ".pt", "--episodes", "1",
+                         "--steps", "16", "--envs", "4"]),
     ]
     only = {s for s in args.only.split(",") if s}
     skip = {s for s in args.skip.split(",") if s}
@@ -158,16 +155,16 @@ def main():
         m = r["metrics"]
         # pull the most informative per-stage number(s)
         key = ""
-        if r["name"] == "walker":
+        if r["name"] == "universal_train":
             key = (f"reward={m.get('walker_train',{}).get('final_reward','?')} "
                    f"rho={m.get('phase2_corr',{}).get('rho','?')} "
                    f"cem={m.get('cem',{}).get('best','?')}")
-        elif r["name"] == "build_pack":
+        elif r["name"] == "universal_eval":
             key = f"bodies={m.get('build_pack',{}).get('n_bodies','?')}"
-        elif r["name"] == "fighter":
+        elif r["name"] == "combat_train":
             ft = m.get("fighter_train", {})
             key = f"sparc={ft.get('final_sparc','?')} warm={ft.get('warm','?')}"
-        elif r["name"] == "score":
+        elif r["name"] == "combat_eval":
             sf = m.get("score_fighter", {})
             key = f"rho={sf.get('rho','?')} wb_rank={sf.get('walker_best_rank','?')}"
         # compile_s lives under different sub-stage keys; grab the largest reported

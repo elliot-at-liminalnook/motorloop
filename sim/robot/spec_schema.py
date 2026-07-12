@@ -56,9 +56,11 @@ class LegDefaultsSpec(_SpecModel):
     calf_len: PosFloat
     link_radius: PosFloat
     hip_offset: NonNegFloat
+    hip_mass: PosFloat = 0.3
     thigh_mass: PosFloat
     calf_mass: PosFloat
     foot_radius: PosFloat
+    foot_mass: PosFloat = 0.05
     # stand_* defaults mirror gen_robot_mjcf._leg_xml's .get() fallbacks.
     stand_abd: float = 0.0
     stand_flex: float = -0.4
@@ -103,6 +105,7 @@ class ActuatorSpec(_SpecModel):
     motor: str = Field(min_length=1)
     peak_factor: PosFloat
     gear: PosFloat
+    voltage: Optional[PosFloat] = None
 
 
 class ContactSpec(_SpecModel):

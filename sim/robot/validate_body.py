@@ -106,7 +106,8 @@ def _max_effort_ratio(m, spec):
     mujoco.mj_forward(m, d); qacc0 = d.qacc[jd[knee]]
     d.ctrl[A[knee]] = 1.0
     mujoco.mj_forward(m, d); dq = d.qacc[jd[knee]] - qacc0
-    M = np.zeros((m.nv, m.nv)); mujoco.mj_fullM(m, M, d.qM)
+    M = np.zeros((m.nv, m.nv))
+    mujoco.mj_fullM(m, d, M)
     tau_vec = np.zeros(m.nv); tau_vec[jd[knee]] = tau_spec        # prediction uses SPEC torque:
     pred = np.linalg.solve(M, tau_vec)[jd[knee]]                  # measured/spec must NOT self-normalize
     return float(abs(dq) / abs(pred))
@@ -163,6 +164,9 @@ def validate(spec, verbose=True, xml_transform=None):
     # peak bar spawn+0.25: above a soft-contact rebound, far below a catapult (~1 m rise).
     settles = drop["stable"] and drop["z"] > 0.95 * best["z"] and drop["up"] > 0.80 \
         and drop["peak_z"] < spawn + 0.25
+    # The selected ST3215-HS is 106 RPM (11.10 rad/s) before the generic body's
+    # configured 3:1 transmission, so 3.0 rad/s is a conservative contract floor.
+    leg_speed_min = 3.0
     checks = [
         ("stands", stands,
          f"CANONICAL stance (flex={stand_flex:.2f} knee={stand_knee:.2f}) torso-z={best['z']:.3f} "
@@ -179,9 +183,12 @@ def validate(spec, verbose=True, xml_transform=None):
          settles),
         ("spawn_launch", no_launch, f"spawn_pen={spawn_pen:.3f} peak_z={pk:.2f} vs spawn {spawn:.2f} (no catapult)", no_launch),
         ("max_effort", 0.3 < effort < 3.0,
-         f"knee Δqacc/(M⁻¹τ_spec)={effort:.2f} (want 0.3–3; ~{1/12.97:.2f} = gear-bug signature)",
+         f"knee Δqacc/(M⁻¹τ_spec)={effort:.2f} (want 0.3–3; "
+         f"~{1/tau:.2f} = missing-gear signature)",
          0.3 < effort < 3.0),
-        ("leg_speed", leg_speed > 8.0, f"no-load joint speed={leg_speed:.1f} rad/s (want >8)", leg_speed > 8.0),
+        ("leg_speed", leg_speed > leg_speed_min,
+         f"no-load joint speed={leg_speed:.1f} rad/s (want >{leg_speed_min:.0f})",
+         leg_speed > leg_speed_min),
         ("striker_aim", aim > 0.0, f"rod forward/down ratio={aim:.2f} (>0 = points forward not floor)", aim > 0.0),
     ]
     hard = ("stands", "upright", "torque_margin", "drop_settle", "spawn_launch", "max_effort")

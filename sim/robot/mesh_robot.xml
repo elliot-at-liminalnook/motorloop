@@ -14,37 +14,38 @@
     <geom name="floor" type="plane" size="0 0 0.1" pos="0 0 0" rgba="0.4 0.5 0.4 1"/>
     <body name="torso" pos="0.0 0.0 0.4602">
       <freejoint name="root"/>
-      <!-- torso: PLACEHOLDER box (structure not designed); mass placeholder 3.0 kg -->
+      <!-- torso structure preserves the assembly's placeholder mass distribution;
+           four yaw servos are lumped here unless represented by SEA rotor bodies -->
       <geom name="torso" type="box" size="0.14965 0.08065 0.05000"
-            mass="3.0" rgba="0.3 0.3 0.6 1"/>
+            mass="0.7912245831062671" rgba="0.3 0.3 0.6 1"/>
       <!-- striker: COSMETIC placeholder, non-colliding, no actuator -->
       <geom name="striker_ph" type="cylinder" pos="0.23965 0 0"
             quat="0.707107 0 0.707107 0" size="0.012 0.09000"
-            mass="0.1" contype="0" conaffinity="0" rgba="0.8 0.8 0.85 1"/>
+            mass="0.025961229155313355" contype="0" conaffinity="0" rgba="0.8 0.8 0.85 1"/>
 
     <body name="FL_base_housing" pos="0.099634 0.080669 -0.138029"
           quat="0.707107 0.707107 0.000000 0.000000">
       <joint name="FL_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
-             armature="0.000135" damping="0.08"/>
+             armature="0.09720000000000001" damping="0.08"/>
       <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
       <geom name="FL_housing" type="box" pos="-0.19084 0 0"
-            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+            size="0.04816 0.035 0.030" mass="0.2133828832697548" contype="0" conaffinity="0"/>
       <body name="FL_swing_link" pos="-0.162690 0 0">
         <joint name="FL_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
-               armature="0.006" frictionloss="2.0"/>
+               armature="1.08" frictionloss="4.0"/>
         <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
         <geom name="FL_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
-              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.015" mass="0.07139338017711173" contype="0" conaffinity="0"/>
         <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
         <geom name="FL_shin" type="capsule"
               fromto="0.16269 0 0 0.16269 -0.2405 0"
-              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.012" mass="0.13939338017711173" contype="0" conaffinity="0"/>
         <body name="FL_blade_upper" pos="0.162690 0 0">
           <joint name="FL_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
-                 armature="1.5e-05"/>
+                 armature="0.0027"/>
           <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
           <geom name="FL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
-                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+                size="0.008" mass="0.012980614577656677" contype="0" conaffinity="0"/>
           <body name="FL_blade_lower" pos="0 0.075 0">
             <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
                  loop coupling is stiff; bearing-scale armature+damping keep the loop
@@ -60,7 +61,7 @@
             <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
                  COLLIDES: it is the strike face -->
             <geom name="FL_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
-                  size="0.010" mass="0.07"/>
+                  size="0.010" mass="0.01817286040871935"/>
           </body>
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
@@ -72,35 +73,35 @@
           <joint name="FL_pushrod_slide" type="slide" axis="0 1 0"
                  range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
           <geom name="FL_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
-                size="0.008" mass="0.064"/>
+                size="0.008" mass="0.016615186659400545"/>
           <geom name="FL_foot" type="sphere" pos="0 -0.24600 0"
-                size="0.012" mass="0.016"/>
+                size="0.012" mass="0.004153796664850136"/>
         </body>
       </body>
     </body>
     <body name="FR_base_housing" pos="0.099634 -0.080669 -0.138029"
           quat="0.707107 0.707107 0.000000 0.000000">
       <joint name="FR_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
-             armature="0.000135" damping="0.08"/>
+             armature="0.09720000000000001" damping="0.08"/>
       <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
       <geom name="FR_housing" type="box" pos="-0.19084 0 0"
-            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+            size="0.04816 0.035 0.030" mass="0.2133828832697548" contype="0" conaffinity="0"/>
       <body name="FR_swing_link" pos="-0.162690 0 0">
         <joint name="FR_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
-               armature="0.006" frictionloss="2.0"/>
+               armature="1.08" frictionloss="4.0"/>
         <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
         <geom name="FR_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
-              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.015" mass="0.07139338017711173" contype="0" conaffinity="0"/>
         <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
         <geom name="FR_shin" type="capsule"
               fromto="0.16269 0 0 0.16269 -0.2405 0"
-              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.012" mass="0.13939338017711173" contype="0" conaffinity="0"/>
         <body name="FR_blade_upper" pos="0.162690 0 0">
           <joint name="FR_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
-                 armature="1.5e-05"/>
+                 armature="0.0027"/>
           <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
           <geom name="FR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
-                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+                size="0.008" mass="0.012980614577656677" contype="0" conaffinity="0"/>
           <body name="FR_blade_lower" pos="0 0.075 0">
             <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
                  loop coupling is stiff; bearing-scale armature+damping keep the loop
@@ -116,7 +117,7 @@
             <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
                  COLLIDES: it is the strike face -->
             <geom name="FR_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
-                  size="0.010" mass="0.07"/>
+                  size="0.010" mass="0.01817286040871935"/>
           </body>
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
@@ -128,35 +129,35 @@
           <joint name="FR_pushrod_slide" type="slide" axis="0 1 0"
                  range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
           <geom name="FR_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
-                size="0.008" mass="0.064"/>
+                size="0.008" mass="0.016615186659400545"/>
           <geom name="FR_foot" type="sphere" pos="0 -0.24600 0"
-                size="0.012" mass="0.016"/>
+                size="0.012" mass="0.004153796664850136"/>
         </body>
       </body>
     </body>
     <body name="RL_base_housing" pos="-0.099634 0.080669 -0.138029"
           quat="0.000000 0.000000 0.707107 0.707107">
       <joint name="RL_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
-             armature="0.000135" damping="0.08"/>
+             armature="0.09720000000000001" damping="0.08"/>
       <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
       <geom name="RL_housing" type="box" pos="-0.19084 0 0"
-            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+            size="0.04816 0.035 0.030" mass="0.2133828832697548" contype="0" conaffinity="0"/>
       <body name="RL_swing_link" pos="-0.162690 0 0">
         <joint name="RL_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
-               armature="0.006" frictionloss="2.0"/>
+               armature="1.08" frictionloss="4.0"/>
         <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
         <geom name="RL_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
-              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.015" mass="0.07139338017711173" contype="0" conaffinity="0"/>
         <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
         <geom name="RL_shin" type="capsule"
               fromto="0.16269 0 0 0.16269 -0.2405 0"
-              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.012" mass="0.13939338017711173" contype="0" conaffinity="0"/>
         <body name="RL_blade_upper" pos="0.162690 0 0">
           <joint name="RL_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
-                 armature="1.5e-05"/>
+                 armature="0.0027"/>
           <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
           <geom name="RL_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
-                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+                size="0.008" mass="0.012980614577656677" contype="0" conaffinity="0"/>
           <body name="RL_blade_lower" pos="0 0.075 0">
             <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
                  loop coupling is stiff; bearing-scale armature+damping keep the loop
@@ -172,7 +173,7 @@
             <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
                  COLLIDES: it is the strike face -->
             <geom name="RL_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
-                  size="0.010" mass="0.07"/>
+                  size="0.010" mass="0.01817286040871935"/>
           </body>
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
@@ -184,35 +185,35 @@
           <joint name="RL_pushrod_slide" type="slide" axis="0 1 0"
                  range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
           <geom name="RL_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
-                size="0.008" mass="0.064"/>
+                size="0.008" mass="0.016615186659400545"/>
           <geom name="RL_foot" type="sphere" pos="0 -0.24600 0"
-                size="0.012" mass="0.016"/>
+                size="0.012" mass="0.004153796664850136"/>
         </body>
       </body>
     </body>
     <body name="RR_base_housing" pos="-0.099634 -0.080669 -0.138029"
           quat="0.000000 0.000000 0.707107 0.707107">
       <joint name="RR_hip_yaw" axis="0 1 0" range="-0.7853982 0.7853982"
-             armature="0.000135" damping="0.08"/>
+             armature="0.09720000000000001" damping="0.08"/>
       <!-- housing+worm+pulley: box spanning yaw pivot to swing pivot (drive_housing bounds) -->
       <geom name="RR_housing" type="box" pos="-0.19084 0 0"
-            size="0.04816 0.035 0.030" mass="0.56" contype="0" conaffinity="0"/>
+            size="0.04816 0.035 0.030" mass="0.2133828832697548" contype="0" conaffinity="0"/>
       <body name="RR_swing_link" pos="-0.162690 0 0">
         <joint name="RR_leg_swing" axis="0 0 1" range="-0.4363323 0.4363323"
-               armature="0.006" frictionloss="2.0"/>
+               armature="1.08" frictionloss="4.0"/>
         <!-- swing link: arm capsule pivot->knee (guide rails + drive frame) -->
         <geom name="RR_arm" type="capsule" fromto="0 0 0 0.16269 0 0"
-              size="0.015" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.015" mass="0.07139338017711173" contype="0" conaffinity="0"/>
         <!-- shin rail: knee station down to the bushing (leg-local -Y) -->
         <geom name="RR_shin" type="capsule"
               fromto="0.16269 0 0 0.16269 -0.2405 0"
-              size="0.012" mass="0.275" contype="0" conaffinity="0"/>
+              size="0.012" mass="0.13939338017711173" contype="0" conaffinity="0"/>
         <body name="RR_blade_upper" pos="0.162690 0 0">
           <joint name="RR_knee_blade" axis="0 0 1" range="-1.5707963 0.1745329"
-                 armature="1.5e-05"/>
+                 armature="0.0027"/>
           <!-- blade upper = knee crank, knee pin -> toe hinge (straight strip) -->
           <geom name="RR_bladeU" type="capsule" fromto="0 0 0 0 0.075 0"
-                size="0.008" mass="0.05" contype="0" conaffinity="0"/>
+                size="0.008" mass="0.012980614577656677" contype="0" conaffinity="0"/>
           <body name="RR_blade_lower" pos="0 0.075 0">
             <!-- passive-loop conditioning: the blade/pushrod bodies are ~50-80 g and the
                  loop coupling is stiff; bearing-scale armature+damping keep the loop
@@ -228,7 +229,7 @@
             <!-- blade lower = conrod, toe hinge -> heel ear (curved plates -> capsule);
                  COLLIDES: it is the strike face -->
             <geom name="RR_bladeL" type="capsule" fromto="0 0 0 0 -0.1 0"
-                  size="0.010" mass="0.07"/>
+                  size="0.010" mass="0.01817286040871935"/>
           </body>
         </body>
         <!-- pushrod: prismatic on the shin (bushing); body origin = heel point at s=0 -->
@@ -240,9 +241,9 @@
           <joint name="RR_pushrod_slide" type="slide" axis="0 1 0"
                  range="-0.04314 0.005" damping="0.3" armature="2e-4"/>
           <geom name="RR_rod" type="capsule" fromto="0 0 0 0 -0.24600 0"
-                size="0.008" mass="0.064"/>
+                size="0.008" mass="0.016615186659400545"/>
           <geom name="RR_foot" type="sphere" pos="0 -0.24600 0"
-                size="0.012" mass="0.016"/>
+                size="0.012" mass="0.004153796664850136"/>
         </body>
       </body>
     </body>
@@ -261,53 +262,53 @@
   <equality>
     <joint name="FL_loop_slide" joint1="FL_pushrod_slide" joint2="FL_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+           polycoef="-3.6190971468416207e-07 5.9667135081980903e-05 -0.0093727627312819219 -0.00089767508597355826 -0.0035344926044686312"/>
     <joint name="FL_loop_toe" joint1="FL_toe_hinge" joint2="FL_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+           polycoef="-4.03533236248937e-05 -0.24996724245461091 0.010899111310994329 -0.017418171651122527 0.038797380584494862"/>
     <joint name="FR_loop_slide" joint1="FR_pushrod_slide" joint2="FR_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+           polycoef="-3.6190971468416207e-07 5.9667135081980903e-05 -0.0093727627312819219 -0.00089767508597355826 -0.0035344926044686312"/>
     <joint name="FR_loop_toe" joint1="FR_toe_hinge" joint2="FR_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+           polycoef="-4.03533236248937e-05 -0.24996724245461091 0.010899111310994329 -0.017418171651122527 0.038797380584494862"/>
     <joint name="RL_loop_slide" joint1="RL_pushrod_slide" joint2="RL_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+           polycoef="-3.6190971468416207e-07 5.9667135081980903e-05 -0.0093727627312819219 -0.00089767508597355826 -0.0035344926044686312"/>
     <joint name="RL_loop_toe" joint1="RL_toe_hinge" joint2="RL_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+           polycoef="-4.03533236248937e-05 -0.24996724245461091 0.010899111310994329 -0.017418171651122527 0.038797380584494862"/>
     <joint name="RR_loop_slide" joint1="RR_pushrod_slide" joint2="RR_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-3.6190971464137632e-07 5.966713507599488e-05 -0.0093727627313030318 -0.00089767508599565983 -0.0035344926044758025"/>
+           polycoef="-3.6190971468416207e-07 5.9667135081980903e-05 -0.0093727627312819219 -0.00089767508597355826 -0.0035344926044686312"/>
     <joint name="RR_loop_toe" joint1="RR_toe_hinge" joint2="RR_knee_blade"
            solref="0.008 1" solimp="0.95 0.9999 0.001"
-           polycoef="-4.0353323627187438e-05 -0.24996724245459415 0.010899111311229793 -0.017418171650760109 0.038797380584638913"/>
+           polycoef="-4.03533236248937e-05 -0.24996724245461091 0.010899111310994329 -0.017418171651122527 0.038797380584494862"/>
   </equality>
   <actuator>
-    <motor name="FL_yaw_m" joint="FL_hip_yaw" gear="1.2" ctrlrange="-1 1"
-           forcerange="-1.2 1.2"/>
-    <motor name="FL_swing_m" joint="FL_leg_swing" gear="24.0" ctrlrange="-1 1"
-           forcerange="-24 24"/>
-    <motor name="FL_knee_m" joint="FL_knee_blade" gear="3.0" ctrlrange="-1 1"
-           forcerange="-3 3"/>
-    <motor name="FR_yaw_m" joint="FR_hip_yaw" gear="1.2" ctrlrange="-1 1"
-           forcerange="-1.2 1.2"/>
-    <motor name="FR_swing_m" joint="FR_leg_swing" gear="24.0" ctrlrange="-1 1"
-           forcerange="-24 24"/>
-    <motor name="FR_knee_m" joint="FR_knee_blade" gear="3.0" ctrlrange="-1 1"
-           forcerange="-3 3"/>
-    <motor name="RL_yaw_m" joint="RL_hip_yaw" gear="1.2" ctrlrange="-1 1"
-           forcerange="-1.2 1.2"/>
-    <motor name="RL_swing_m" joint="RL_leg_swing" gear="24.0" ctrlrange="-1 1"
-           forcerange="-24 24"/>
-    <motor name="RL_knee_m" joint="RL_knee_blade" gear="3.0" ctrlrange="-1 1"
-           forcerange="-3 3"/>
-    <motor name="RR_yaw_m" joint="RR_hip_yaw" gear="1.2" ctrlrange="-1 1"
-           forcerange="-1.2 1.2"/>
-    <motor name="RR_swing_m" joint="RR_leg_swing" gear="24.0" ctrlrange="-1 1"
-           forcerange="-24 24"/>
-    <motor name="RR_knee_m" joint="RR_knee_blade" gear="3.0" ctrlrange="-1 1"
-           forcerange="-3 3"/>
+    <motor name="FL_yaw_m" joint="FL_hip_yaw" gear="11.77" ctrlrange="-1 1"
+           forcerange="-11.77 11.77"/>
+    <motor name="FL_swing_m" joint="FL_leg_swing" gear="39.23" ctrlrange="-1 1"
+           forcerange="-39.23 39.23"/>
+    <motor name="FL_knee_m" joint="FL_knee_blade" gear="1.961" ctrlrange="-1 1"
+           forcerange="-1.961 1.961"/>
+    <motor name="FR_yaw_m" joint="FR_hip_yaw" gear="11.77" ctrlrange="-1 1"
+           forcerange="-11.77 11.77"/>
+    <motor name="FR_swing_m" joint="FR_leg_swing" gear="39.23" ctrlrange="-1 1"
+           forcerange="-39.23 39.23"/>
+    <motor name="FR_knee_m" joint="FR_knee_blade" gear="1.961" ctrlrange="-1 1"
+           forcerange="-1.961 1.961"/>
+    <motor name="RL_yaw_m" joint="RL_hip_yaw" gear="11.77" ctrlrange="-1 1"
+           forcerange="-11.77 11.77"/>
+    <motor name="RL_swing_m" joint="RL_leg_swing" gear="39.23" ctrlrange="-1 1"
+           forcerange="-39.23 39.23"/>
+    <motor name="RL_knee_m" joint="RL_knee_blade" gear="1.961" ctrlrange="-1 1"
+           forcerange="-1.961 1.961"/>
+    <motor name="RR_yaw_m" joint="RR_hip_yaw" gear="11.77" ctrlrange="-1 1"
+           forcerange="-11.77 11.77"/>
+    <motor name="RR_swing_m" joint="RR_leg_swing" gear="39.23" ctrlrange="-1 1"
+           forcerange="-39.23 39.23"/>
+    <motor name="RR_knee_m" joint="RR_knee_blade" gear="1.961" ctrlrange="-1 1"
+           forcerange="-1.961 1.961"/>
   </actuator>
 </mujoco>

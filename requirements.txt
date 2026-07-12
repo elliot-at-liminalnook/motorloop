@@ -4,5 +4,6 @@
 # HDL toolchain (OSS CAD Suite / Verilator / Verible / Bender), which is NOT pip.
 pybind11==3.0.1
 pytest==9.0.2
+pytest-xdist==3.8.0
 numpy==2.3.5
 reuse==6.2.0

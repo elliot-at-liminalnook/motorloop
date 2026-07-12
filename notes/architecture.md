@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Architecture Decision Record: Lockstep Verilator Bench
 
+> **Document status:** Current · **Audience:** Component-simulation developers · **Last reviewed:** 2026-07-12 · **Canonical for:** Lockstep Verilator bench architecture (not the whole repository)
+
 Date: 2026-06-12. Status: adopted and **implemented** (same date) —
 see [simulation-checklist](simulation-checklist.md) for the completed build
 and its findings. Supersedes the original FMI/OMSimulator co-simulation plan.

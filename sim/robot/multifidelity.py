@@ -3,7 +3,7 @@
 
 Three explicit tiers, cheapest first, with a gate between them so the EXPENSIVE model
 never runs in the inner loop (the checklist's hard rule):
-  (a) fast MJX ensemble   — millions of rollouts; the inner RL/search loop.
+  (a) MuJoCo-Warp ensemble — millions of rollouts; the inner RL/search loop.
   (b) CPU MuJoCo oracle    — richer contact logging + parity; re-ranks promoted candidates.
   (c) hardware snippets    — actuator/leg/drop/ram; validates finalists, updates the ensemble.
 

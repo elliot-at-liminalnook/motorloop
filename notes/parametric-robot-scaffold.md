@@ -43,7 +43,8 @@ exploding); action dim decides warm-start vs retrain:
   (the passive dodge-assist spring actually appears in the model, and that variant
   settles higher).
 - **Provenance tie-in:** the actuator force limit is derived from the profiled motor
-  envelope (`sim/tests/motors.py`) × gear — e.g. db42s03 × 6 → 1.49 N·m/joint — so
+  envelope (`sim/tests/motors.py`) × gear — the current ST3215-HS model uses
+  1.961 N·m at the servo output and a 3:1 abstract reduction — so
   the body is linked to the *measured* motors, same as `derive_params.py` links the
   RTL to the plant.
 

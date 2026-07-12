@@ -1,8 +1,10 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Reproduce from scratch
 
-The audit artifact: a clean clone → the pinned toolchain → every gate green with
-the expected numbers. Versions are pinned in `toolchain.lock`.
+> **Document status:** Current · **Audience:** Developers and release reviewers · **Last reviewed:** 2026-07-12 · **Canonical for:** Full repository setup and reproduction
+
+The audit artifact: a clean clone → the pinned toolchain → every required gate
+green with generated evidence. Versions are pinned in `toolchain.lock`.
 
 ## 0. One command (recommended)
 
@@ -23,6 +25,29 @@ make help          # list every target
 
 `make` is the single entry point; the targets below are what it orchestrates.
 
+### Robot simulation and RL
+
+The robot/RL stack has one stricter entry point. The local form is only a fast
+precheck:
+
+```sh
+bash scripts/run_pre_gpu_tests.sh
+```
+
+Full verification must run in a CUDA environment:
+
+```sh
+bash sim/robot/setup_warp_pod.sh
+source out/warp_env.sh
+bash scripts/run_pre_gpu_tests.sh --require-gpu
+```
+
+That full command includes the complete CPU-only Verilator/component regression,
+parallelized across CPU workers on the GPU host, followed by exact CPU robot
+oracles and the CUDA rollout, PPO, and repeatability tiers. A local precheck exit
+of zero is not authorization to start a long simulation or RL run. See
+[`pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md).
+
 ## 1. Toolchain (one pinned tarball covers the HDL stack)
 
 ```sh
@@ -40,15 +65,15 @@ pip install -r requirements.txt          # build/test/lint (pybind11, pytest, nu
 
 ```sh
 make bench     # cmake + Verilator + pybind11 co-sim (idempotent)
-make test      # full pytest regression  -> 400 passed, 2 skipped
-make cocotb    # per-block cocotb suite   -> 11 blocks pass
+make test      # full component pytest regression
+make cocotb    # per-block cocotb suite
 make lint      # Verible (enforced) + Verilator advisory
 make reuse     # REUSE/SPDX               -> compliant
 make coverage  # every core proven-or-sim-only
-make contracts # every block has a finished datasheet (30/30)
-make formal    # SymbiYosys               -> 12 PROVEN + 1 DOCUMENTED
-make synth     # ECP5 PnR + report        -> fits -85F; Fmax ~64 MHz (meets 25 MHz)
-make asic      # yosys ASIC-readiness      -> 14/14 clean (no latches/loops/multidriver)
+make contracts # every packaged block has a finished contract
+make formal    # SymbiYosys + generated proof report
+make synth     # ECP5 PnR + generated fit/timing report
+make asic      # yosys ASIC-readiness (no latches/loops/multidriver)
 make docs      # assemble + build the docs site (mkdocs --strict)
 ```
 
@@ -67,18 +92,17 @@ bender script flist                                    # the same source map, Be
 make soc-sim    # (where LiteX is installed) RISC-V boots + drives the controller
 ```
 
-## Expected numbers (current snapshot)
+## Expected outcomes and authoritative evidence
 
-| Gate | Expected |
-| --- | --- |
-| Sim (`make test`) | 400 passed, 2 skipped |
-| cocotb (`make cocotb`) | 11 blocks pass |
-| Formal (`make formal`) | 12 PROVEN + 1 DOCUMENTED, 0 unexpected |
-| Synth (`make synth`) | fits -85F; **Fmax ≈ 64 MHz** (meets the 25 MHz target) |
-| ASIC (`make asic`) | 14/14 blocks gate-clean |
-| Contracts (`make contracts`) | 30/30 finished datasheets |
+| Gate | Passing outcome | Authoritative evidence |
+| --- | --- | --- |
+| Sim (`make test`) | All required collected tests pass; optional-tool skips are explicit | Current pytest output |
+| cocotb (`make cocotb`) | Every collected block test passes | Current pytest output |
+| Formal (`make formal`) | Every manifest expectation is met and no proof is unexpectedly incomplete | `formal/proof_report.md` |
+| Synth (`make synth`) | The ECP5 design fits and meets the configured target clock | `synth/synth_report.md` |
+| ASIC (`make asic`) | Every selected block is gate-clean under the smoke criteria | `synth/asic_smoke_report.md` |
+| Contracts (`make contracts`) | Every packaged block has a complete contract | Checker output and `rtl/contracts/` |
 
-If any differs, the change is not behavior-preserving — investigate before
-merging. (The FOC datapath was pipelined to ~64 MHz with every step verified
-bit-exact / latency-only against this baseline; see
-`notes/foc-fmax-optimization-checklist.md`.)
+Volatile counts and timing values belong in generated reports, not this runbook.
+If the current command disagrees with its generated evidence, investigate before
+merging or promoting the artifact.

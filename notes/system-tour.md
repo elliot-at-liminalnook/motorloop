@@ -1,5 +1,11 @@
 # A Tour of the System — From Motor Windings to Robot Deathmatch
 
+> **Document status:** Historical · **Audience:** Readers tracing the July 1 project state · **Last reviewed:** 2026-07-12 · **Replacement:** [`getting-started.md`](getting-started.md)
+
+This narrative is preserved because it explains the project’s debugging history,
+but its MJX backend and “no robot has walked” status are dated. Use the replacement
+and [`current-status.md`](current-status.md) for the current system.
+
 Date: 2026-07-01. This is the "curious visitor" document: what this project is, how
 it works, and why the algorithms in it are interesting — written to be read for
 pleasure, not as a reference. (For the sober engineering docs, see

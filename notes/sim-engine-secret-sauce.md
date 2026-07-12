@@ -1,5 +1,9 @@
 # Sim-Engine Secret Sauce: MuJoCo, MJX, Warp, mujoco_warp, Newton, PhysX 5, Genesis
 
+> **Document status:** Historical · **Audience:** Simulation researchers · **Last reviewed:** 2026-07-12 · **Current backend guide:** [`pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md)
+
+This is a dated engine survey and migration record, not an active runbook.
+
 Date: 2026-07-03. Method: 7 parallel code-reading threads over freshly cloned repos in
 `~/Projects/` (line refs verified with `grep -n` against the checkouts), plus web checks for
 governance/controversy. Commit pins: mujoco `14c0b0c9` (2026-07-02, MJX included), mujoco_warp
@@ -526,7 +530,7 @@ one-time signature — Google's CLA leaves your copyright with you.
 
 ## 10. Verdict
 
-> ✅ **Ladder executed (2026-07-03):** (1) warp backend validated — **11.8×** on the fight scene, flat scaling 1k→16k envs (train at 1–4k); (2) quartic couplings landed — fleet dt=0.004 back, mechanism stronger than under the connect; (3) contribution targets 1–3 live as PRs #1487/#1488/#3378, CUDA-validated (cuSolverDx NaNs on indefinite input — question answered on the PR); thin layer **fully built M1–M4** (26/26 tests: lidar kernel at ~1e-6 m rangefinder parity, line-cited obs/reward kernels, bit-identical step, zero-copy M4 demo; CPU proxy 1.70× with lidar) — the ≥2× GPU kill criterion is the one measurement still in flight. Contribution targets 4 and 5 landed too: #868's rank-1 cholUpdate drafted with an honest mixed finding (factor REUSE −55% on 64% of events is the mergeable core; the rank-1 update itself is SLOWER than warp's cooperative refactorization on CPU), and the Newton lidar published as issue #3346 + draft PR #3347. Full numbers: `notes/warp-ladder-results.md`.
+> ✅ **Ladder executed (2026-07-03):** (1) warp backend validated — **11.8×** on the fight scene, flat scaling 1k→16k envs (train at 1–4k); (2) quartic couplings landed — fleet dt=0.004 back, mechanism stronger than under the connect; (3) contribution targets 1–3 live as PRs #1487/#1488/#3378, CUDA-validated (cuSolverDx NaNs on indefinite input — question answered on the PR); thin layer **fully built M1–M4 (26/26 tests) and then KILLED by its own ≥2× criterion on the A100: fused-vs-baseline measured 1.22× with lidar / 0.92× without** — the device↔host seam costs ~nothing once physics is graph-captured; the honest salvage is lidar dedup (~22%, portable to the wrapper) and M1/M2's mechanism findings. Contribution targets 4 and 5 landed too: #868's rank-1 cholUpdate drafted with an honest mixed finding (factor REUSE −55% on 64% of events is the mergeable core; the rank-1 update itself is SLOWER than warp's cooperative refactorization on CPU), and the Newton lidar published as issue #3346 + draft PR #3347. #868's GPU verdict confirmed the negative: reuse +1.9%/rank-1 +3.2% slower at solver_niter≈2. Full numbers: `notes/warp-ladder-results.md`. §10 is now CLOSED — every claim measured or published.
 
 **(a) Cost of a truly bespoke typed-language→GPU sim.** The language half is a solved,
 reusable problem: Warp *is* the strictly-typed Python-subset→NVRTC/LLVM compiler, ~20-30

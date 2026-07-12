@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: MIT
 # Publish the docs site to GitHub Pages (release-and-portability-checklist §3.2),
-# so the contracts catalog + status matrix + WaveDrom timing are browsable online.
+# so the newcomer guides, evidence, workflows, and contracts are browsable online.
 # Enable Pages (Settings -> Pages -> source: GitHub Actions) once.
 name: docs
 
 on:
   push:
     branches: ["main"]
-    paths: ["rtl/contracts/**", "notes/**", "scripts/gen_docs.py", "mkdocs.yml",
+    paths: ["README.md", "rtl/contracts/**", "notes/**", "formal/*.md",
+            "synth/*.md", "sim/README.md", "docs-lifecycle.toml",
+            "scripts/check_docs.py", "scripts/gen_docs.py", "mkdocs.yml",
             ".github/workflows/docs.yml"]
   workflow_dispatch:
 
@@ -29,6 +31,7 @@ jobs:
       - run: pip install -r requirements-docs.txt
       - name: Build the site
         run: |
+          python3 scripts/check_docs.py
           python3 scripts/gen_docs.py
           mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3

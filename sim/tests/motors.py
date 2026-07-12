@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
 """Motor profiles for the motor-selection study (notes/motor-selection-checklist.md).
 
-Three concrete, available motors as provenance-tagged profiles. Each stores the
+Discrete BLDC motors and integrated servos as provenance-tagged profiles. A
+`Motor` stores the
 datasheet MEASURABLES (line-to-line R/L, peak line-to-line Ke, pole_count, rotor
 inertia) + the bench-only extras (B, trapezoid_blend, align_offset). The
 measurable -> per-phase conversions reuse the same relations the global
@@ -12,7 +13,8 @@ Provenance is honest per field: `datasheet` where the part publishes it,
 `assumed`/`estimate` where it must be measured on the bench (the gimbal's L/J,
 all align offsets) - these stay blocked on Q1 until a motor-ID session.
 
-The plant pole_pairs and the RTL `POLE_PAIRS` (gen_rtl_params) must match, so a
+The plant pole_pairs and the RTL `POLE_PAIRS` (gen_rtl_params) must match for a
+discrete motor, so a
 motor with a different pole count needs a regen + re-Verilate (build_motor.sh).
 The DB42 (4 pp) matches the current build; the GM2804 (7) and EC 45 (8) do not.
 """
@@ -20,7 +22,7 @@ The DB42 (4 pp) matches the current build; the GM2804 (7) and EC 45 (8) do not.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -179,6 +181,87 @@ MOTORS: dict[str, Motor] = {
         rated_current_a=3.2, rated_voltage_v=12.0, price_usd=200.0,
         provenance="EC45-flat-50W-12V datasheet-typical values; confirm exact "
                    "against maxon 251601; full datasheet available"),
+}
+
+@dataclass(frozen=True)
+class Servo:
+    """Integrated servo with its own controller and position sensor.
+
+    Deliberately NOT a Motor: no meaningful R/L/Ke at the user interface —
+    the honest datasheet surface is stall torque + no-load speed per voltage.
+    Sim mapping: P-only position actuator, torque clipped to stall_torque and
+    derated linearly to zero at no_load_speed (torque-speed line)."""
+    name: str
+    label: str
+    stall_torque_nm: dict         # vbus -> N*m
+    no_load_speed_rad_s: dict     # vbus -> rad/s
+    stall_current_a: dict         # vbus -> A
+    no_load_current_a: dict       # vbus -> A
+    travel_deg: float
+    position_resolution_deg: float
+    control_interface: str
+    operating_voltage_v: tuple[float, float]
+    baudrate_bps: tuple[int, int] | None
+    output_inertia_kg_m2_est: float  # not published; simulation placeholder
+    mass_kg: float
+    price_usd: float
+    source_urls: tuple[str, ...]
+    provenance: str
+
+    def joint(self, vbus: float, ratio: float) -> tuple[float, float]:
+        """(stall torque, no-load speed) at a joint behind an external ratio."""
+        return (self.stall_torque_nm[vbus] * ratio,
+                self.no_load_speed_rad_s[vbus] / ratio)
+
+
+SERVOS: dict[str, Servo] = {
+    # Historical 2026-07-03 baseline, retained for comparison only.
+    "gobilda_2000_5t": Servo(
+        name="gobilda_2000_5t",
+        label="ServoCity/goBILDA 2000 Series 5-Turn Dual-Mode (25-3, Speed)",
+        stall_torque_nm={4.8: 0.775, 6.0: 0.912, 7.4: 1.059},   # 7.9/9.3/10.8 kg*cm
+        no_load_speed_rad_s={4.8: 9.42, 6.0: 12.04, 7.4: 15.18},  # 90/115/145 RPM
+        stall_current_a={4.8: 2.0, 6.0: 2.5, 7.4: 3.0},
+        no_load_current_a={},            # not published
+        travel_deg=1800.0,            # 5-turn default mode, pot feedback
+        position_resolution_deg=3.6,  # 4 us deadband x 0.90 deg/us
+        control_interface="PWM",
+        operating_voltage_v=(4.8, 7.4), baudrate_bps=None,
+        output_inertia_kg_m2_est=2.73375e-3,
+        mass_kg=0.060, price_usd=49.99,
+        source_urls=(),
+        provenance="servocity.com product page 2026-07-03 (datasheet table): "
+                   "torque/speed/current at 4.8/6.0/7.4 V, 135:1 steel gears, "
+                   "H25T spline, dual ball bearing, 500-2500 us PWM at 0.90 "
+                   "deg/us. Duty cycle / continuous torque NOT published - "
+                   "derate stall for sustained load (assume <=50% conservatively)."),
+    # DECIDED 2026-07-09: all 12 robot joints use this exact bus servo.
+    "waveshare_st3215_hs": Servo(
+        name="waveshare_st3215_hs",
+        label="Waveshare ST3215-HS 20kg.cm High-Speed Bus Servo",
+        stall_torque_nm={12.0: 20.0 * 0.0980665},       # 20 kgf.cm @ 12 V
+        no_load_speed_rad_s={12.0: 106.0 * 2.0 * math.pi / 60.0},
+        stall_current_a={12.0: 2.4},
+        no_load_current_a={12.0: 0.240},
+        travel_deg=360.0,
+        position_resolution_deg=360.0 / 4096.0,
+        control_interface="TTL UART serial bus",
+        operating_voltage_v=(6.0, 12.6),
+        baudrate_bps=(38_400, 1_000_000),
+        # Waveshare does not publish output inertia. Keep the previous integrated-
+        # servo estimate explicit until a coast-down/pendulum identification exists.
+        output_inertia_kg_m2_est=2.7e-3,
+        mass_kg=0.068, price_usd=27.81,
+        source_urls=(
+            "https://www.waveshare.com/st3215-hs-servo-motor.htm",
+            "https://www.waveshare.com/wiki/ST3215-HS_Servo_Motor",
+            "https://www.robotshop.com/products/waveshare-20kgcm-bus-servo-motor-106rpm-high-speed-large-torque-w-360-deg-high-precision-magnetic-encoder",
+        ),
+        provenance="Waveshare ST3215-HS product page/wiki and RobotShop RB-Wav-1556, "
+                   "accessed 2026-07-09: 20 kg.cm @ 12 V, 106 RPM, 6-12.6 V, "
+                   "240 mA no-load, 2.4 A locked rotor, 12-bit 360-degree magnetic "
+                   "encoder, 68 g. Continuous-duty torque and output inertia are "
+                   "not published and must be bench-characterized."),
 }
 
 TIERS = ["gm2804", "db42s03", "maxon_ec45"]   # budget -> premium

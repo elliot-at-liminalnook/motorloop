@@ -91,6 +91,13 @@ ANKLE_MAX_DEG = 10.0
 SWING_DEG = 25.0           # worm-driven leg-swing hard limit
 YAW_DEG = 45.0             # hip yaw placeholder limit (json)
 WORM_GEAR_RATIO = 20.0
+YAW_BELT_RATIO = 6.0
+# Hardware contract (2026-07-09): one ST3215-HS at every active joint.
+SERVO_MODEL = "Waveshare ST3215-HS"
+SERVO_STALL_TORQUE_NM = 20.0 * 0.0980665   # 20 kgf.cm @ 12 V
+SERVO_FREE_SPEED_RAD_S = 106.0 * 2.0 * math.pi / 60.0
+SERVO_MASS_KG = 0.068
+SERVO_OUTPUT_INERTIA_EST = 2.7e-3          # not published; bench-measure
 
 # Gait amplitudes (task spec): yaw sweep +/-25 within the +/-45 limit,
 # pitch swing +/-15 within +/-25, blade partial extension -60..-10 deg.
@@ -353,7 +360,8 @@ def build_leg(spec: dict, mount_pos: Vector) -> dict:
     knee_motor.data.materials.append(get_material("physics_knee_motor_gold", (1.0, 0.62, 0.0)))
     knee_motor["physics_role"] = "torque_motor_placeholder"
     knee_motor["drives_joint"] = f"{name}_knee_blade"
-    knee_motor["max_torque_nm"] = 3.0
+    knee_motor["motor_model"] = SERVO_MODEL
+    knee_motor["max_torque_nm"] = SERVO_STALL_TORQUE_NM
     parent_local(knee_motor, j_swing, KNEE_PIVOT - GEAR_PIVOT + Vector((0.0, 0.0, 0.030)))
     knee_motor.rotation_euler = (0.0, 0.0, 0.0)
 
@@ -926,18 +934,25 @@ def leg_entry(leg: dict, dims: dict) -> dict:
     ]
     actuators = [
         {"name": f"{n}_hip_yaw_motor", "type": "series_elastic_belt_drive",
-         "drives_joint": f"{n}_hip_yaw", "max_torque_nm": 1.2,
+         "drives_joint": f"{n}_hip_yaw", "motor_model": SERVO_MODEL,
+         "motor_mass_kg": SERVO_MASS_KG, "max_torque_nm": SERVO_STALL_TORQUE_NM,
          "transmission": "belt + LARGE RUBBER PULLEY on the leg side (the compliant element)",
-         "gear_ratio": "TODO pulley dia ratio", "series_stiffness_nm_per_rad": "TODO bench-measure",
+         "gear_ratio": YAW_BELT_RATIO, "max_joint_torque_nm": SERVO_STALL_TORQUE_NM * YAW_BELT_RATIO,
+         "series_stiffness_nm_per_rad": "TODO bench-measure",
          "series_damping": "TODO rubber hysteresis",
          "note": "model motor->spring/damper->joint, NOT a rigid gear (leg json 2026-07-03)"},
         {"name": f"{n}_worm_pitch_motor", "type": "torque_motor",
-         "drives_joint": f"{n}_leg_swing", "max_torque_nm": 1.2, "gear_ratio": WORM_GEAR_RATIO,
+         "drives_joint": f"{n}_leg_swing", "motor_model": SERVO_MODEL,
+         "motor_mass_kg": SERVO_MASS_KG, "max_torque_nm": SERVO_STALL_TORQUE_NM,
+         "gear_ratio": WORM_GEAR_RATIO,
+         "max_joint_torque_nm": SERVO_STALL_TORQUE_NM * WORM_GEAR_RATIO,
          "note": "worm on ~20T sector gear; self-locking: holds stance unpowered"},
         {"name": f"{n}_knee_strike_motor", "type": "torque_motor",
-         "drives_joint": f"{n}_knee_blade", "max_torque_nm": 3.0,
+         "drives_joint": f"{n}_knee_blade", "motor_model": SERVO_MODEL,
+         "motor_mass_kg": SERVO_MASS_KG, "max_torque_nm": SERVO_STALL_TORQUE_NM,
+         "gear_ratio": 1.0, "max_joint_torque_nm": SERVO_STALL_TORQUE_NM,
          "note": "POWERED strike, gravity-assisted; toggle-press: dh/dphi -> 0 near stowed "
-                 "(huge pinch force), 74.6 mm/rad at full extension (~40 N tip force at 3 N.m)"},
+                 "(huge pinch force), 74.6 mm/rad at full extension (~26 N tip force at stall)"},
     ]
     return {
         "mirrored": spec["mirrored"],
@@ -966,7 +981,7 @@ def leg_entry(leg: dict, dims: dict) -> dict:
 
 def physics_json(legs: list[dict], dims: dict) -> dict:
     meas = dims["meas"]
-    motor_j = 1.5e-5  # sim/tests/motors.py gimbal-class rotor inertia estimate (Q1)
+    motor_j = SERVO_OUTPUT_INERTIA_EST
     return {
         "units": "meters_kilograms",
         "generated_by": "scripts/assemble_robot_7_3.py",
@@ -974,6 +989,19 @@ def physics_json(legs: list[dict], dims: dict) -> dict:
         "source_leg": {"mesh": SRC.name, "physics": LEG_JSON.name,
                        "status": "fourth_pass_hip_yaw_CONFIRMED_at_body_mount"},
         "status": "first_pass_full_quadruped_assembly_placeholder_torso",
+        "hardware_contract": {
+            "max_robot_mass_lb": 6.0,
+            "max_robot_mass_kg": 6.0 * 0.45359237,
+            "motor_model": SERVO_MODEL,
+            "motor_count": 12,
+            "motor_mass_kg_each": SERVO_MASS_KG,
+            "operating_voltage_v": 12.0,
+            "stall_torque_nm_each": SERVO_STALL_TORQUE_NM,
+            "no_load_speed_rad_s_each": SERVO_FREE_SPEED_RAD_S,
+            "mass_application": "raw CAD masses below remain placeholders; "
+                                "gen_mesh_robot_mjcf.py scales all non-servo masses "
+                                "to the budget remaining after 12x motor mass",
+        },
         "reference_pose": "spawn = all joints 0 (blade vertical), yaw/swing neutral; the "
                           "ANIMATION starts at blade -35 deg but all transforms below are "
                           "at the joint-zero reference pose",
@@ -1068,16 +1096,13 @@ def physics_json(legs: list[dict], dims: dict) -> dict:
                 },
             },
             "suggested_defaults": {
-                "armature_note": "reflected rotor inertia = J_rotor * gear^2 (the "
-                                 "gen_robot_mjcf _armature convention); J_rotor placeholder "
-                                 f"{motor_j} kg.m2 (sim/tests/motors.py gimbal-class, Q1 "
-                                 "estimate)",
+                "armature_note": "reflected servo-output inertia = J_output * external_ratio^2; "
+                                 f"J_output={motor_j} kg.m2 is an explicit estimate because "
+                                 "Waveshare does not publish it",
                 "per_axis_armature_kg_m2": {
-                    "hip_yaw": f"TODO: {motor_j} * belt_ratio^2 (belt ratio unmeasured; "
-                               f"3:1 example -> {motor_j * 9:.2e})",
+                    "hip_yaw": round(motor_j * YAW_BELT_RATIO ** 2, 6),
                     "leg_swing": round(motor_j * WORM_GEAR_RATIO ** 2, 6),
-                    "knee_blade": f"TODO: {motor_j} * knee_gear^2 (knee gearing unconfirmed; "
-                                  f"direct-drive example -> {motor_j:.2e})",
+                    "knee_blade": motor_j,
                 },
                 "hip_yaw_series_elasticity": "do NOT model as a rigid gear: either (a) add a "
                                              "rotor body + hinge behind {leg}_hip_yaw joined by "

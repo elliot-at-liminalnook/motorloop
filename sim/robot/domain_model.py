@@ -32,7 +32,7 @@ from reality_gap import default_uncertainty  # noqa: E402
 # ranking-relevant world axes and their REAL ranges (lo, hi); normalized coord in [0,1].
 WORLD_AXES = {
     "friction":      (0.6, 1.4),
-    "mass_scale":    (0.85, 1.15),
+    "mass_scale":    (0.85, 1.0),
     "joint_damping": (0.25, 1.0),
     "restitution":   (0.0, 0.3),
     "latency_s":     (0.002, 0.012),
@@ -104,7 +104,7 @@ def _norm_coords(world: dict) -> np.ndarray:
 
 def _plant_trace(world: dict, seed=0) -> np.ndarray:
     """A cheap, deterministic forward model: world params -> a feature trace. Stands in
-    for 'run the sim, log the channels' so RS1's inference is testable without MJX. Each
+    for 'run the sim, log the channels' so RS1's inference is testable offline. Each
     world axis drives a DISTINCT (orthogonal) Fourier mode of the trace, so the world is
     identifiable from the trace — the recovery test then isolates the *inference*
     machinery, not the well-posedness of this stand-in plant. Real traces won't be this

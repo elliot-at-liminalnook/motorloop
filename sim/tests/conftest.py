@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -51,13 +52,19 @@ def params() -> sim_params.SimParams:
 
 @pytest.fixture(scope="session")
 def bldcsim():
-    subprocess.run(
-        ["bash", str(SCRIPTS_DIR / "build_bench.sh")],
-        check=True,
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-    )
+    if os.environ.get("BLDCSIM_BENCH_PREBUILT") != "1":
+        subprocess.run(
+            ["bash", str(SCRIPTS_DIR / "build_bench.sh")],
+            check=True,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+        )
+    elif not any(BUILD_DIR.glob("bldcsim*.so")):
+        pytest.fail(
+            "BLDCSIM_BENCH_PREBUILT=1 but the bldcsim extension is missing; "
+            "run `make bench` before starting parallel workers"
+        )
     if str(BUILD_DIR) not in sys.path:
         sys.path.insert(0, str(BUILD_DIR))
     import bldcsim as module

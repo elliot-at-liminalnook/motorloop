@@ -3,7 +3,9 @@
 # Rich live-pod snapshot of a running training run: combat decomposition + system + economics.
 # Reads the pod id from /tmp/runpod_podid and ssh from /tmp/runpod_ssh (set during bringup).
 set -u
-KEY=$(tr -d '\n' < ~/RUNPOD_API_KEY); PY="$HOME/mjx-venv/bin/python"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+KEY=$(tr -d '\n' < ~/RUNPOD_API_KEY)
+PY="${WARP_PY:-$ROOT/.venv-warp/bin/python}"
 POD=$(cat /tmp/runpod_podid 2>/dev/null)
 [ -z "$POD" ] && { echo "no /tmp/runpod_podid — is a pod up?"; exit 1; }
 echo "===== LIVE RUN STATUS $(date +%H:%M:%S) ====="

@@ -1,6 +1,11 @@
 <!-- SPDX-License-Identifier: MIT -->
 # System understanding bundle — morphology/policy co-design
 
+> **Document status:** Historical · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Replacement:** [`system-architecture.md`](system-architecture.md)
+
+This note describes the earlier MJX-centered co-design architecture. Preserve it
+for design history; use the replacement for active backend and system boundaries.
+
 A compact map of how the codebase implements **co-design** (evolve the *body* and the
 *controller* together) so it can be reasoned about outside the code. All co-design
 lives in **`sim/robot/`**; it stands on the motor-provenance bench (`sim/tests/motors.py`)

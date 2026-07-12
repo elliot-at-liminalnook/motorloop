@@ -12,6 +12,12 @@ on:
       - 'sim/**'
       - 'synth/**'
       - 'cores/**'
+      - 'notes/**'
+      - 'README.md'
+      - 'docs-lifecycle.toml'
+      - 'scripts/check_docs.py'
+      - 'scripts/gen_docs.py'
+      - 'mkdocs.yml'
       - '.github/workflows/ci.yml'
   pull_request:
   workflow_dispatch:
@@ -104,6 +110,7 @@ jobs:
       - name: Docs build (mkdocs + WaveDrom timing)
         run: |
           pip install mkdocs mkdocs-material pymdown-extensions
+          python3 scripts/check_docs.py
           python3 scripts/gen_docs.py
           mkdocs build --strict
 

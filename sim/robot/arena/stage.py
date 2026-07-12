@@ -68,10 +68,11 @@ class Stage:
 
     # --- constructors that consume the existing drivers' configs (faithful round-trip) ----------
     @classmethod
-    def from_curriculum(cls, ph: dict, steps: int) -> "Stage":
+    def from_curriculum(cls, ph: dict, steps: int, bench: dict | None = None) -> "Stage":
         return cls(tag=ph["name"], sep_lo=ph["sep_lo"], sep_hi=ph["sep_hi"], approach=ph["approach"],
                    azimuth=ph["azimuth"], shaping=ph["shaping"], clean=ph["clean"], trade=ph["trade"],
-                   disengage=ph["disengage"], fire=ph.get("fire", 0.0), steps=steps)
+                   disengage=ph["disengage"], fire=ph.get("fire", 0.0), steps=steps,
+                   bench=dict(DEFAULT_BENCH if bench is None else bench))
 
     @classmethod
     def from_league(cls, rd: int, opp: str, bench_opp: str, steps: int, rw: dict) -> "Stage":
@@ -103,7 +104,7 @@ def _selftest():
     import selfplay_drive as sd
     # (1) a curriculum phase -> Stage -> flags round-trips the driver's phase config + BENCH
     ph = cd.PHASES[2]                                            # "c1"
-    st = Stage.from_curriculum(ph, steps=10_000_000)
+    st = Stage.from_curriculum(ph, steps=10_000_000, bench=cd.BENCH)
     d = flags_to_dict(st.flags(warm="cval_best.pkl", cum_base=20_000_000, envs=8192, lean=True))
     assert d["--tag"] == ph["name"] and d["--steps"] == "10000000" and d["--cum-base"] == "20000000"
     assert d["--sep-lo"] == str(ph["sep_lo"]) and d["--sep-hi"] == str(ph["sep_hi"])

@@ -21,7 +21,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 os.environ.setdefault("MUJOCO_GL", "")
-os.environ.setdefault("JAX_PLATFORMS", "cpu")
 os.environ.setdefault("CODESIGN_OUT", "/tmp/v67out")
 
 GOLDEN = HERE / "golden_commanded_pd.json"

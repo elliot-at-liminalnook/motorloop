@@ -94,8 +94,12 @@ def check_semantics(pkl_path, *, expected_semantics: str, expected_model_hash: s
             f"'{meta.get('action_semantics')}' but this env drives actions as "
             f"'{expected_semantics}'. Shapes would match; behavior would be garbage. "
             f"Retrain or retire this artifact.")
-    if expected_model_hash and meta.get("model_hash") not in (None, expected_model_hash):
-        print(f"  [ckpt-meta] WARN: {role} '{Path(pkl_path).name}' trained on model "
-              f"{meta.get('model_hash')} != current {expected_model_hash} (body changed "
-              f"since training — expect degraded behavior).", flush=True)
+    if expected_model_hash and meta.get("model_hash") != expected_model_hash:
+        msg = (f"{role} '{Path(pkl_path).name}' trained on model "
+               f"{meta.get('model_hash')} != current {expected_model_hash}; body physics "
+               "changed, so identical tensor shapes do not make it reusable")
+        if allow_legacy:
+            print(f"  [ckpt-meta] OVERRIDE: {msg}", flush=True)
+        else:
+            raise ValueError(msg)
     return meta

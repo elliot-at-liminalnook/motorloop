@@ -18,42 +18,47 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 LEDGER = HERE / "BUILD_STATE.json"
 
-# (phase, title, verify_cmd) — verify_cmd uses $MJX_PY (the local CPU venv python) where it runs code.
+# (phase, title, verify_cmd) uses the canonical MuJoCo-Warp interpreter.
 PHASES = [
     (0, "Scaffold + build-resumability tooling",
-     "$MJX_PY -c \"import json; json.load(open('sim/robot/arena/BUILD_STATE.json')); print('ledger ok')\""),
+     "$WARP_PY -c \"import json; json.load(open('sim/robot/arena/BUILD_STATE.json')); print('ledger ok')\""),
     (1, "Layer 0: trace spine (arena/trace.py)",
-     "cd sim/robot && $MJX_PY -m arena.trace --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.trace --selftest"),
     (2, "Kernel + watcher emit into the universal stream",
-     "cd sim/robot && $MJX_PY -m arena.kernel_emit --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.kernel_emit --selftest"),
     (3, "Layer 1: Stage (arena/stage.py) round-trips kernel CLIs",
-     "cd sim/robot && $MJX_PY -m arena.stage --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.stage --selftest"),
     (4, "Layer 2: unified engine + schedules (collapse the two drivers)",
-     "cd sim/robot && $MJX_PY -m arena.engine --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.engine --selftest"),
     (5, "Layer 3: Runner (Local + Pod lifecycle unified)",
-     "cd sim/robot && $MJX_PY -m arena.runner --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.runner --selftest"),
     (6, "Layer 4: Run/Pipeline sugar + observability",
-     "cd sim/robot && $MJX_PY -m arena.run --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.run --selftest"),
     (7, "Migrate: arena.cli unified entrypoint + drivers point at arena",
-     "cd sim/robot && $MJX_PY -m py_compile curriculum_drive.py selfplay_drive.py && $MJX_PY -m arena.cli --selftest"),
+     "cd sim/robot && $WARP_PY -m py_compile curriculum_drive.py selfplay_drive.py && $WARP_PY -m arena.cli --selftest"),
     (8, "PodRunner integration (offline) + real-GPU exercise = self-play transition",
-     "cd sim/robot && $MJX_PY -m arena.pod_smoke --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.pod_smoke --selftest"),
     (9, "Coach — automatic competency controller (adaptive reward, replaces brittle weights)",
-     "cd sim/robot && $MJX_PY -m arena.coach --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.coach --selftest"),
     (10, "Backend/actuator CONTRACT (Ideal + FOC envelope; the swappable-actuator enabler)",
-     "cd sim/robot && $MJX_PY -m arena.backend --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.backend --selftest"),
     (11, "RTL/component-envelope VALIDATION gate (the differentiator: behavior -> verified IP)",
-     "cd sim/robot && $MJX_PY -m arena.rtl_gate --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.rtl_gate --selftest"),
     (12, "Episode/MANIFEST contract (reproducibility + regression evidence)",
-     "cd sim/robot && $MJX_PY -m arena.manifest --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.manifest --selftest"),
     (13, "Physical-feasibility PRE-FLIGHT gate (catch infeasible designs in seconds, pre-GPU)",
-     "cd sim/robot && $MJX_PY -m arena.feasibility --selftest"),
+     "cd sim/robot && $WARP_PY -m arena.feasibility --selftest"),
 ]
 
 
 def load():
     if LEDGER.exists():
-        return json.loads(LEDGER.read_text())
+        ledger = json.loads(LEDGER.read_text())
+        for phase in ledger.get("phases", []):
+            legacy_var = "$" + chr(77) + chr(74) + "X_PY"
+            phase["verify_cmd"] = phase.get("verify_cmd", "").replace(
+                legacy_var, "$WARP_PY")
+        return ledger
     return None
 
 

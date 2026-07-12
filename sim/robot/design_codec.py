@@ -1,26 +1,20 @@
 # SPDX-License-Identifier: MIT
-"""One design representation, three views (Phase RS consolidation).
+"""One design representation for the MuJoCo-Warp co-design stack.
 
-The co-design code grew three private design encoders — `mjx_env.apply_design`,
-`train_adversarial._design_model`, and `optimize_design.to_overrides` — that drifted
-apart. This module is the SINGLE codec they should share so a design means exactly
-one thing everywhere (the "don't fork the sources" rule, applied to the design vector).
+Older workflows grew private design encoders that drifted apart. This module is
+the single codec they share so a design means exactly one thing everywhere.
 
 Two design spaces, deliberately distinct because they hit the body differently:
 
-  * FAST (policy-facing, `DESIGN_DIM`=3): normalized [mass, stiffness, damping] that
-    map to pure `mjx.Model` FIELD edits (no XML rebuild) — this is what the universal
-    policy carries in its obs and what UniversalEnv randomizes per-env. The whole
-    point of Phase 3 is that a fast-design change is a field tweak, not a recompile.
+  * FAST (policy-facing, `DESIGN_DIM`=3): normalized [mass, stiffness, damping]
+    mapped to fields on a plain MuJoCo model before it is uploaded to Warp.
 
   * FULL (CEM/topology-facing, 5-D): [thigh_len, calf_len, gear, joint_stiffness,
     torso_mass] that change link geometry / actuator gear → they need `build_mjcf`
     (a new MJModel). This is `optimize_design.PARAMS`.
 
-`apply_fast(mx, d)` reproduces the existing `apply_design` byte-for-byte (so the
-trained 3-D universal policy keeps working) while being the one definition. Keeping
-the codec backward-compatible is intentional: a representation change would resize
-the policy obs and invalidate every checkpoint.
+Keeping the 3-D representation backward-compatible is intentional: a shape change
+would resize the policy observation and invalidate every checkpoint.
 """
 
 from __future__ import annotations
@@ -32,47 +26,47 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-# ----- FAST design (3-D, mjx field edits; matches mjx_env.apply_design exactly) -----
+# ----- FAST design (3-D model-field edits) -----
 FAST_NAMES = ("mass_scale", "joint_stiffness", "damping_scale")
 DESIGN_DIM = 3
 # (lo, hi) of the REAL quantity each normalized [0,1] coord maps to.
-FAST_RANGE = {"mass_scale": (0.6, 1.4), "joint_stiffness": (0.0, 25.0),
+FAST_RANGE = {"mass_scale": (0.6, 1.0), "joint_stiffness": (0.0, 25.0),
               "damping_scale": (0.5, 2.0)}
 
 
 def fast_denorm(d) -> dict:
     """Normalized [0,1]^3 -> real fast-design quantities (the same affine maps
     hard-coded in apply_design / _design_model, now in one place)."""
-    mass_s = 0.6 + 0.8 * d[0]
+    # Preserve the historical midpoint (d=0.5 -> nominal) while clipping the
+    # overweight half of old checkpoints to the legal 6 lb envelope.
+    xp = _xp(d)
+    raw_mass = 0.6 + 0.8 * d[0]
+    mass_s = xp.clamp(raw_mass, max=1.0) if xp is not np else np.minimum(1.0, raw_mass)
     stiff = 25.0 * d[1]
     damp_s = 0.5 + 1.5 * d[2]
     return {"mass_scale": mass_s, "joint_stiffness": stiff, "damping_scale": damp_s}
 
 
-def apply_fast(mx, d, hinge_mask=None):
-    """Perturb mjx model fields by a normalized fast-design vector. Backend-agnostic
-    (numpy or jnp via mx.replace). Reproduces mjx_env.apply_design; if `hinge_mask`
-    is given the spring is applied only to hinge joints (the match-scene variant that
-    train_adversarial needs, so the free-joint root is never stiffened)."""
-    r = fast_denorm(d)
-    repl = dict(body_mass=mx.body_mass * r["mass_scale"],
-                body_inertia=mx.body_inertia * r["mass_scale"],
-                dof_damping=mx.dof_damping * r["damping_scale"])
-    if hinge_mask is None:
-        repl["jnt_stiffness"] = mx.jnt_stiffness.at[1:].set(r["joint_stiffness"])
-    else:
-        xp = _xp(mx.jnt_stiffness)
-        repl["jnt_stiffness"] = xp.where(hinge_mask, r["joint_stiffness"], mx.jnt_stiffness)
-    return mx.replace(**repl)
+def apply_fast_mujoco(model, d):
+    """Apply a normalized fast design to a mutable ``mujoco.MjModel`` in place."""
+    r = fast_denorm(np.asarray(d, dtype=float))
+    model.body_mass[:] *= float(r["mass_scale"])
+    model.body_inertia[:] *= float(r["mass_scale"])
+    model.dof_damping[:] *= float(r["damping_scale"])
+    # Free joints are never spring-loaded. Limited hinge/slide joints receive
+    # the design stiffness; this happens before the model is uploaded to Warp.
+    limited = model.jnt_limited.astype(bool)
+    model.jnt_stiffness[limited] = float(r["joint_stiffness"])
+    return model
 
 
 # ----- FULL design (5-D, needs build_mjcf; matches optimize_design.PARAMS) -----
 FULL_PARAMS = [
     ("thigh_len", 0.14, 0.28, ("leg_defaults", "thigh_len")),
     ("calf_len", 0.14, 0.28, ("leg_defaults", "calf_len")),
-    ("gear", 4.0, 12.0, ("actuator", "gear")),
+    ("gear", 1.0, 6.0, ("actuator", "gear")),
     ("joint_stiffness", 0.0, 25.0, ("leg_defaults", "joint_stiffness")),
-    ("torso_mass", 3.0, 9.0, ("torso", "mass")),
+    ("torso_mass", 0.35, 0.5479633165, ("torso", "mass")),
 ]
 FULL_DIM = len(FULL_PARAMS)
 
@@ -102,10 +96,10 @@ def full_default(spec) -> np.ndarray:
 
 def _xp(x):
     try:
-        import jax.numpy as jnp
-        if isinstance(x, jnp.ndarray):
-            return jnp
-    except Exception:
+        import torch
+        if isinstance(x, torch.Tensor):
+            return torch
+    except ImportError:
         pass
     return np
 

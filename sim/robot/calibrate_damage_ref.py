@@ -6,7 +6,7 @@ Newton value = "one unit of damage". That reference must come from the force dis
 the bodies actually produce, or the damage term saturates (always 1) or vanishes. This
 histograms weapon→body and body→body contact forces from real MuJoCo match rollouts and
 sets each reference to a percentile (default 75th) — so a typical solid hit ≈ 1 unit and a
-hard hit > 1, neither pinned. Run on CPU (rl-venv); MJX reads the same contact forces.
+hard hit > 1, neither pinned. Plain MuJoCo and Warp use the same contact model.
 
   python calibrate_damage_ref.py [--rollouts 8 --steps 200 --pct 75]
 """

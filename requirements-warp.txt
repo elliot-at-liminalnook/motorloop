@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: MIT
+# Canonical robot simulation and RL stack. Torch is supplied by the CUDA image
+# on GPU hosts; setup_warp_pod.sh exposes it through --system-site-packages.
+mujoco==3.10.0
+mujoco-warp==3.10.0.1
+warp-lang==1.14.0
+numpy==2.5.0
+scipy==1.18.0
+pybind11==3.0.1
+pytest==9.1.1
+pytest-xdist==3.8.0
+pydantic==2.13.4

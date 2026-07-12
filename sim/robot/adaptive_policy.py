@@ -17,7 +17,7 @@ This module proves the RMA MECHANISM sim-to-sim on CPU: a controllable 2nd-order
 with a hidden dynamics parameter z. The teacher is the z-optimal controller (privileged);
 the student infers z from a short interaction history (the encoder = the compact RFF net)
 and applies the same control law on z_hat. We measure (a) z-recovery and (b) the
-adaptation gap vs the privileged teacher and vs a z-blind baseline. The full MJX
+adaptation gap vs the privileged teacher and vs a z-blind baseline. The full Warp
 teacher/student PPO is the GPU artifact (hooks noted); the mechanism is validated here.
 """
 
@@ -111,5 +111,5 @@ if __name__ == "__main__":
     ok = z_err < 0.5 and gap < 0.4 * gap_blind + 1e-9
     print(f"PROVEN: RS4 RMA mechanism — a history encoder infers the hidden dynamics online "
           f"and the student nearly matches the privileged teacher, far beating z-blind: {ok}. "
-          f"Full MJX teacher/student PPO is the GPU artifact (this validates the mechanism).")
+          f"Full Warp teacher/student PPO is the GPU artifact (this validates the mechanism).")
     sys.exit(0 if ok else 1)

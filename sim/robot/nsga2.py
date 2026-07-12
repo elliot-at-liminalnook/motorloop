@@ -17,6 +17,7 @@ policy rollout return as the first objective (see codesign_gpu --phase5-nsga2).
 from __future__ import annotations
 
 import sys
+import math
 from pathlib import Path
 import numpy as np
 
@@ -130,13 +131,23 @@ def design_objectives(x_norm):
     return-proxy = retract clearance (dodge headroom) is the stand-in for SPARC return;
     on GPU swap in the trained-policy return."""
     from design_codec import full_norm_to_real
-    from gen_robot_mjcf import load_spec, joint_torque_limit
+    from gen_robot_mjcf import actuator_unit_mass, load_spec, joint_torque_limit
+    from gen_mesh_robot_mjcf import MAX_ROBOT_MASS_KG
     spec = load_spec(HERE / "robot.toml")
     thigh, calf, gear, stiff, torso = full_norm_to_real(x_norm)
     n_legs = len(spec["leg"]); d = spec["leg_defaults"]
     # leg mass scales with link length (longer legs weigh more) -> clearance trades vs mass
-    leg_mass = (0.3 + d["thigh_mass"] * (thigh / 0.21) + d["calf_mass"] * (calf / 0.21) + 0.05)
+    leg_mass = (float(d.get("hip_mass", 0.3))
+                + d["thigh_mass"] * (thigh / spec["leg_defaults"]["thigh_len"])
+                + d["calf_mass"] * (calf / spec["leg_defaults"]["calf_len"])
+                + float(d.get("foot_mass", 0.05)) + 3 * actuator_unit_mass(spec))
     mass = torso + n_legs * leg_mass
+    if spec.get("striker", {}).get("enabled", False):
+        st = spec["striker"]
+        r, ln = float(st["rod_radius"]), float(st["rod_len"])
+        rod = float(st["rod_density"]) * (math.pi * r * r * ln
+                                             + 4 / 3 * math.pi * r ** 3)
+        mass += sum(leg["pos"][0] > 0 for leg in spec["leg"]) * rod
     # static stand: each support leg holds ~mass/n_legs at the crouch's small horizontal
     # moment arm (~15% of the link length, legs near-vertical) -> hip-flexor torque
     moment = (thigh + calf) * 0.15
@@ -144,7 +155,7 @@ def design_objectives(x_norm):
     s = dict(spec); s["actuator"] = dict(spec["actuator"], gear=float(gear))
     tau_avail = joint_torque_limit(s)
     viol = max(0.0, tau_need - tau_avail)                        # motor-envelope constraint
-    viol += max(0.0, mass - 12.0)                                # SPARC weight-class limit
+    viol += max(0.0, mass - MAX_ROBOT_MASS_KG)                   # 6 lb hard limit
     clearance = thigh + calf                                     # longer legs retract higher
     cost = gear * 0.4 + mass * 0.6 + stiff * 0.02                # $-proxy: gearbox + mass + spring
     return (np.array([-clearance, mass, cost]), viol)
@@ -154,7 +165,7 @@ def main():
     from gen_robot_mjcf import load_spec, joint_torque_limit
     X, O, V, pareto = nsga2(design_objectives, dim=5, pop=48, gens=40, seed=0)
     if not pareto:
-        print(f"[Phase 5] NO feasible design in the front — the db42s03 gimbal motor "
+        print(f"[Phase 5] NO feasible design in the front — the selected ST3215-HS "
               f"({joint_torque_limit(load_spec(HERE/'robot.toml')):.2f} N·m @ default gear) is "
               f"undersized for a Go2-scale body; raise gear / lower mass. (real, honest result)")
         sys.exit(1)
@@ -169,7 +180,9 @@ def main():
     # single-objective: maximize return alone -> should sit at/near the front's return extreme
     ret_best = pareto[int(np.argmax(disp[:, 0]))]
     so_is_on_front = ret_best in pareto
-    spread = len(pareto) >= 3 and np.ptp(disp[:, 1]) > 0.5       # a real front, not one point
+    # The entire legal robot is only 2.72 kg; a 0.2 kg span is already >7% of
+    # the weight class and demonstrates a material trade-off.
+    spread = len(pareto) >= 3 and np.ptp(disp[:, 1]) > 0.2
     print(f"[Phase 5] single-objective (max return) design is ON the Pareto front: {so_is_on_front}; "
           f"front spans a real mass/cost trade-off: {spread}")
     ok = so_is_on_front and spread

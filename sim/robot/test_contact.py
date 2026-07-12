@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MIT
 """R3 — validate the unified damage/contact currency: impact FORCE in Newtons.
 
-The checklist's R3 resolves the CPU (150 N) vs MJX (0.05 m penetration) damage mismatch
+The checklist's R3 resolves a historical contact/damage calibration mismatch
 onto ONE currency: real contact force read from the solver -> `reality_gap.damage_from_force`.
 This test validates the ORDERING that currency must preserve on the CPU MuJoCo model
-(MJX reads the same `contact` force arrays):
+(the Warp runtime uses the same compiled contact parameters):
   1. harder hit  > glancing      (drop fast vs slow -> bigger impact N -> more severity)
   2. stable shove > bounce-off   (low restitution sustains contact force; high bounces away)
   3. repeated impacts ACCUMULATE (severity sums over a multi-bounce episode)
@@ -98,7 +98,7 @@ def main():
 
     ok = harder and stable_wins and accumulate
     print(f"\nPROVEN: R3 unified Newton damage currency preserves the orderings (harder>glancing, "
-          f"stable>bounce, impacts accumulate) on the real contact solver: {ok}. MJX reads the "
+          f"stable>bounce, impacts accumulate) on the real contact solver: {ok}. Warp reads the "
           f"same contact force arrays -> one damage model CPU and GPU.")
     sys.exit(0 if ok else 1)
 

@@ -39,16 +39,22 @@ def actuator_envelope_gate(joint_vel, action, actuator: Actuator, tol: float = 0
 
 def rollout_trace(env, infer, steps=200, seed=0):
     """Run a policy through an AdversarialEnv and extract A's (hinge joint speed, hinge action) per
-    step — the trajectory the envelope gate validates. (Real-use path; heavy, needs jax/the env.)"""
-    import jax, jax.numpy as jnp
-    st = env.reset(jax.random.PRNGKey(seed)); k = jax.random.PRNGKey(seed + 1)
-    nh = env._n_hinge
+    step — the trajectory the envelope gate validates."""
+    import torch
+    if hasattr(env, "_gen"):
+        env._gen.manual_seed(seed)
+    obs = env.reset()
+    indices = (env.layer.idx.Ada if hasattr(env, "layer") else env._da)
+    nh = len(indices)
     vels, acts = [], []
     for _ in range(steps):
-        k, sk = jax.random.split(k); a, _ = infer(st.obs, sk)
-        vels.append(np.asarray(st.pipeline_state.qvel[env._Ada]))   # hinge joint speeds
-        acts.append(np.asarray(jnp.clip(a, -1, 1)[:nh]))
-        st = env.step(st, a)
+        action = infer(obs)
+        if isinstance(action, tuple):
+            action = action[0]
+        action = torch.as_tensor(action, device=env.device).reshape(env.nworld, -1)
+        vels.append(env.qvel[:, indices].detach().cpu().numpy())
+        acts.append(action[:, :nh].clamp(-1, 1).detach().cpu().numpy())
+        obs = env.step(action)[0]
     return np.asarray(vels), np.asarray(acts)
 
 

@@ -52,9 +52,10 @@ Releases are cut by tagging (`git tag v<x.y.z>`) and attaching the status matrix
 - The 401-test sim suite, the 12-PROVEN + 1-DOCUMENTED formal suite, and the
   ECP5 synth fit are byte-identical: every parameter defaults to its prior value.
 
-### Known gaps (tracked for stages 4–5)
-- **Timing:** the FOC datapath is unpipelined — Fmax ≈ 3.3 MHz < 25 MHz. A real
-  high-speed board build needs `foc_core`/`circle_limit` pipelined.
+### Known gaps (tracked beyond this release)
+- **Timing portability:** the pipelined open ECP5 implementation meets its target;
+  authoritative vendor-tool timing remains board/tool specific. See the generated
+  synthesis reports rather than copying a release-time number forward.
 - **Validation:** verification only; no silicon-correlation tier yet.
 
 ## History (pre-library)

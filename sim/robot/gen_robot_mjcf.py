@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-"""Parametric quadruped generator: robot.toml -> MJCF (MJX-native).
+"""Parametric quadruped generator: robot.toml -> MuJoCo-Warp-ready MJCF.
 
 Single provenance-tracked source -> a valid MuJoCo model, so "change a part" is a
 config edit + regenerate. The actuator force limit is derived from the profiled
@@ -24,7 +24,7 @@ except ModuleNotFoundError:              # py3.10: pip install tomli
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "sim" / "tests"))
-from motors import MOTORS  # noqa: E402
+from motors import MOTORS, SERVOS  # noqa: E402
 
 # Typed spec validation (plan V.2): a malformed robot.toml dies HERE at model build,
 # not mid-training. spec_schema is a sibling module (sim/robot on sys.path for every
@@ -58,6 +58,14 @@ def _deep_merge(base: dict, over: dict) -> dict:
 def joint_torque_limit(spec: dict) -> float:
     """Peak joint torque from the motor envelope x gear (the provenance tie-in)."""
     a = spec["actuator"]
+    if a["motor"] in SERVOS:
+        servo = SERVOS[a["motor"]]
+        voltage = float(a.get("voltage", max(servo.stall_torque_nm)))
+        if voltage not in servo.stall_torque_nm:
+            raise ValueError(
+                f"{a['motor']} has no torque data at {voltage:g} V; "
+                f"available points: {sorted(servo.stall_torque_nm)}")
+        return servo.stall_torque_nm[voltage] * float(a["gear"])
     m = MOTORS[a["motor"]]
     peak_motor = m.kt * a["peak_factor"] * m.rated_current_a    # N·m at the motor
     return peak_motor * a["gear"]
@@ -70,7 +78,15 @@ def _armature(spec: dict) -> float:
     gear 12 (6e-5 x 144 = 0.0086) — the same hidden-actuator-property class as
     the gear bug; the model contract asserts dof_armature against this."""
     a = spec["actuator"]
+    if a["motor"] in SERVOS:
+        return SERVOS[a["motor"]].output_inertia_kg_m2_est * float(a["gear"]) ** 2
     return MOTORS[a["motor"]].inertia_kg_m2 * float(a["gear"]) ** 2
+
+
+def actuator_unit_mass(spec: dict) -> float:
+    """Physical mass of one integrated actuator; discrete BLDC studies predate it."""
+    return SERVOS[spec["actuator"]["motor"]].mass_kg \
+        if spec["actuator"]["motor"] in SERVOS else 0.0
 
 def striker_force(s: dict) -> float:
     """Pneumatic cylinder force F = pressure × piston area = P·π(bore/2)² (the strike push)."""
@@ -80,7 +96,8 @@ def striker_force(s: dict) -> float:
 
 def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
              cc_upper: str | None = None, cc_calf: str | None = None,
-             striker: dict | None = None) -> tuple[str, list[str], list[str]]:
+             striker: dict | None = None,
+             motor_mass: float = 0.0) -> tuple[str, list[str], list[str]]:
     """One 3-DOF mammalian leg chain; returns (body_xml, [hinge_joint_names], [strike_joint_names]).
     `cc` = ` contype/conaffinity` string for the STRIKING geoms (calf/foot/spear/rod); `cc_upper`
     overrides it for the upper geoms (hip/thigh) — pass ` contype="0" conaffinity="0"` to make
@@ -98,6 +115,7 @@ def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
     sy = 1.0 if py >= 0 else -1.0                  # abduction stand-off direction
     r, tl, cl = d["link_radius"], d["thigh_len"], d["calf_len"]
     ho, fr = d["hip_offset"], d["foot_radius"]
+    hip_mass, foot_mass = float(d.get("hip_mass", 0.3)), float(d.get("foot_mass", 0.05))
     stiff = d["joint_stiffness"]
     stand_abd = float(d.get("stand_abd", 0.0))
     stand_flex = float(d.get("stand_flex", -0.4))
@@ -113,14 +131,14 @@ def _leg_xml(leg: dict, d: dict, tau: float, prefix: str = "", cc: str = "",
     xml = f'''
       <body name="{n}_hip" pos="{px} {py} {pz}">
         <joint name="{jn[0]}" axis="1 0 0" range="{d['abd_range'][0]} {d['abd_range'][1]}"{sp_abd}/>
-        <geom name="{n}_hipg" type="capsule" fromto="0 0 0 0 {sy*ho:.3f} 0" size="{r}" mass="0.3"{cc_upper}/>
+        <geom name="{n}_hipg" type="capsule" fromto="0 0 0 0 {sy*ho:.3f} 0" size="{r}" mass="{hip_mass + motor_mass}"{cc_upper}/>
         <body name="{n}_thigh" pos="0 {sy*ho:.3f} 0">
           <joint name="{jn[1]}" axis="0 1 0" range="{d['flex_range'][0]} {d['flex_range'][1]}"{sp_flex}/>
-          <geom name="{n}_thighg" type="capsule" fromto="0 0 0 0 0 {-tl}" size="{r}" mass="{d['thigh_mass']}"{cc_upper}/>
+          <geom name="{n}_thighg" type="capsule" fromto="0 0 0 0 0 {-tl}" size="{r}" mass="{d['thigh_mass'] + motor_mass}"{cc_upper}/>
           <body name="{n}_calf" pos="0 0 {-tl}">
             <joint name="{jn[2]}" axis="0 1 0" range="{d['knee_range'][0]} {d['knee_range'][1]}"{sp_knee}/>
-            <geom name="{n}_calfg" type="capsule" fromto="0 0 0 0 0 {-cl}" size="{r}" mass="{d['calf_mass']}"{cc_calf}/>
-            <geom name="{n}_foot" type="sphere" pos="0 0 {-cl}" size="{fr}" mass="0.05"{cc}/>'''
+            <geom name="{n}_calfg" type="capsule" fromto="0 0 0 0 0 {-cl}" size="{r}" mass="{d['calf_mass'] + motor_mass}"{cc_calf}/>
+            <geom name="{n}_foot" type="sphere" pos="0 0 {-cl}" size="{fr}" mass="{foot_mass}"{cc}/>'''
     if striker:
         # PNEUMATIC striker: a carriage on a slide DOF carrying a steel rod, shot out fast by a
         # constant-force cylinder. `_rod` is a striking geom (legs-as-weapons damage credits it).
@@ -169,10 +187,12 @@ def _robot_xml(spec, prefix="", pos=(0.0, 0.0, None), quat=(1, 0, 0, 0), rgba=No
     rgba = rgba or "0.3 0.3 0.6 1"
     use_striker = _striker_enabled(spec, striker)
     sspec = spec.get("striker", {}) if use_striker else {}
+    motor_mass = actuator_unit_mass(spec)
     legs_xml, joints, strike_joints = [], [], []
     for leg in spec["leg"]:
         on = sspec if (use_striker and leg["pos"][0] > 0) else None      # front legs get the rod
-        lx, jn, sj = _leg_xml(leg, d, tau, prefix, cc, cc_upper, cc_calf, striker=on)
+        lx, jn, sj = _leg_xml(leg, d, tau, prefix, cc, cc_upper, cc_calf,
+                              striker=on, motor_mass=motor_mass)
         legs_xml.append(lx); joints += jn; strike_joints += sj
     body = (f'<body name="{prefix}torso" pos="{pos[0]} {pos[1]} {z}" '
             f'quat="{quat[0]} {quat[1]} {quat[2]} {quat[3]}">'
@@ -239,8 +259,8 @@ def _wrap(spec, bodies, acts, floor_cc="", contact_pairs: list[str] | None = Non
         contact_attrs += ' solref="' + " ".join(str(float(x)) for x in contact["solref"]) + '"'
     if contact.get("solimp") is not None:
         contact_attrs += ' solimp="' + " ".join(str(float(x)) for x in contact["solimp"]) + '"'
-    # Lidar requires a material on all geoms for MJX rangefinder ray casting
-    # (mat_rgba indexing bug in mujoco-mjx 3.9). Add the asset + default material.
+    # Keep one explicit material on lidar-enabled geoms so the uploaded Warp ray
+    # scene has a complete material table.
     asset_xml = ""
     material_attr = ""
     if lidar:
@@ -306,8 +326,7 @@ def _lidar_sites_xml(prefix: str, n_rays: int, max_range: float = 2.0,
   along the site's -z axis. Horizontal rays sweep 360 degrees; optional
   vertical rays fan forward at different pitch angles.
 
-  A material is required on all geoms for MJX rangefinder ray casting
-  (mat_rgba indexing bug in mujoco-mjx 3.9); callers must add
+  A material is required on all geoms for the uploaded Warp ray scene; callers add
   ``<material name="mat0" .../>`` to <asset> and ``material="mat0"`` to the
   default <geom> when lidar is enabled.
   """
@@ -369,7 +388,7 @@ def build_match(spec_a: dict, spec_b: dict, sep: float = 2.4, self_collision: bo
     """Two robots facing each other for a self-play match (A = ours, B = attacker).
     `self_collision=False` (F-SPEED) disables intra-robot self-collision via contype/conaffinity
     — keeps A↔B and X↔floor (the fight + support contacts) but drops the ~O(geoms²) self-pairs,
-    the #1 throughput lever for the two-robot scene. Parity-safe (CPU+MJX share the model).
+    the #1 throughput lever for the scene. Plain MuJoCo and Warp share the model.
     `striker` (None=spec default) arms A with the pneumatic striker; `striker_b` arms B too —
     needed for a SYMMETRIC self-play match (an A snapshot drives B → identical 14-action bodies)
     or a scripted armed attacker. Default `striker_b=False` keeps B passive (skill-curriculum)."""

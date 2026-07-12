@@ -4,7 +4,7 @@
 Obs + reward kernels that mirror train_adversarial.AdversarialEnv and are
 launched in the SAME sequence as mujoco_warp's step (graph-capturable on
 CUDA), eliminating the per-control-step device->host->device round-trip that
-bounds the brax-wrapper latency.
+bounds runtime observation latency.
 
 OBS (obs_kernel) mirrors AdversarialEnv._obs / _lidar_obs exactly for the
 base config (history_len=0, her off, engage/contact obs off, frame_stack=1,
@@ -52,7 +52,7 @@ import numpy as np
 import warp as wp
 
 # train_adversarial.py:40-41 — module constants there; that module imports
-# jax/brax so it cannot be imported from this venv. Values asserted in tests.
+# Keep these local to the Warp kernel module. Values are asserted in tests.
 DAMAGE_REF = 0.05
 STRIKE_KINETIC = 0.1
 
@@ -72,11 +72,17 @@ class FightIndices:
     Aqa: np.ndarray            # (n_hinge,) qpos addresses of A's hinge joints
     Ada: np.ndarray            # (n_hinge,) dof addresses
     actA: np.ndarray           # (nuA,) actuator ids of A (ctrl scatter)
+    Bqa: np.ndarray            # mirrored B addresses for self-play
+    Bda: np.ndarray
+    actB: np.ndarray
     strike_local: np.ndarray   # strike slots within the A action vector
+    strike_local_b: np.ndarray
     strike_dofs: np.ndarray    # A slide (rod) dof addresses
     strike_dofs_b: np.ndarray  # B slide dof addresses
     Astrike: np.ndarray        # A calf/foot body ids (limb-proximity shaping)
+    Bstrike: np.ndarray
     Arod_gids: np.ndarray      # A rod geom ids (fire aim shaping)
+    Brod_gids: np.ndarray
     mask_Aleg: np.ndarray      # (ngeom,) int32 0/1 weapon/target masks
     mask_Bleg: np.ndarray
     mask_Arod: np.ndarray
@@ -103,12 +109,16 @@ def fight_indices(mjm) -> FightIndices:
     A_hinge = [a for a in A_acts if not an(a).endswith("_strike_m")]
     A_strike = [a for a in A_acts if an(a).endswith("_strike_m")]
     B_acts = [a for a in range(mjm.nu) if an(a).startswith("B_")]
+    B_hinge = [a for a in B_acts if not an(a).endswith("_strike_m")]
     B_strike = [a for a in B_acts if an(a).endswith("_strike_m")]
     Aj = [int(mjm.actuator_trnid[a, 0]) for a in A_hinge]
+    Bj = [int(mjm.actuator_trnid[a, 0]) for a in B_hinge]
     jid = lambda name: mujoco.mj_name2id(mjm, mujoco.mjtObj.mjOBJ_JOINT, name)
     bid = lambda name: mujoco.mj_name2id(mjm, mujoco.mjtObj.mjOBJ_BODY, name)
     _strike_bodies = [b for b in range(mjm.nbody) if bn(b).startswith("A_")
                       and (bn(b).endswith("_calf") or bn(b).endswith("_foot"))]
+    _strike_bodies_b = [b for b in range(mjm.nbody) if bn(b).startswith("B_")
+                        and (bn(b).endswith("_calf") or bn(b).endswith("_foot"))]
     At = bid("A_torso")
     return FightIndices(
         n_hinge=len(A_hinge), nuA=len(A_acts), At=At, Bt=bid("B_torso"),
@@ -116,12 +126,19 @@ def fight_indices(mjm) -> FightIndices:
         Aqa=np.array([int(mjm.jnt_qposadr[j]) for j in Aj], dtype=np.int32),
         Ada=np.array([int(mjm.jnt_dofadr[j]) for j in Aj], dtype=np.int32),
         actA=np.array(A_acts, dtype=np.int32),
+        Bqa=np.array([int(mjm.jnt_qposadr[j]) for j in Bj], dtype=np.int32),
+        Bda=np.array([int(mjm.jnt_dofadr[j]) for j in Bj], dtype=np.int32),
+        actB=np.array(B_acts, dtype=np.int32),
         strike_local=np.array([A_acts.index(a) for a in A_strike], dtype=np.int32),
+        strike_local_b=np.array([B_acts.index(a) for a in B_strike], dtype=np.int32),
         strike_dofs=np.array([int(mjm.jnt_dofadr[mjm.actuator_trnid[a, 0]]) for a in A_strike], dtype=np.int32),
         strike_dofs_b=np.array([int(mjm.jnt_dofadr[mjm.actuator_trnid[a, 0]]) for a in B_strike], dtype=np.int32),
         Astrike=np.array(_strike_bodies if _strike_bodies else [At], dtype=np.int32),
+        Bstrike=np.array(_strike_bodies_b if _strike_bodies_b else [bid("B_torso")], dtype=np.int32),
         Arod_gids=np.array([g for g in range(mjm.ngeom)
                             if gn(g).startswith("A_") and gn(g).endswith("_rod")], dtype=np.int32),
+        Brod_gids=np.array([g for g in range(mjm.ngeom)
+                            if gn(g).startswith("B_") and gn(g).endswith("_rod")], dtype=np.int32),
         mask_Aleg=mk(lambda n: leg_weapon(n, "A")), mask_Bleg=mk(lambda n: leg_weapon(n, "B")),
         mask_Arod=mk(lambda n: n.startswith("A_") and n.endswith("_rod")),
         mask_Brod=mk(lambda n: n.startswith("B_") and n.endswith("_rod")),

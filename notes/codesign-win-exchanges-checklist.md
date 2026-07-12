@@ -1,6 +1,8 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Win-exchanges milestone — from "engages and attacks" to "wins exchanges"
 
+> **Document status:** Active · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Canonical summary:** [`locomotion-status.md`](locomotion-status.md)
+
 The contact-forcing curriculum (`notes/codesign-fighter-*`) flipped the fighter from
 `dealt=0` (can't learn) to reliable **engagement**: `dealt` 0.000→0.20 at close range,
 `closing` 0→1.53, SPARC −44→−26. But `dealt≈taken` — it **trades hits**, it doesn't yet

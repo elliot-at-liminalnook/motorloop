@@ -232,8 +232,7 @@ def _asarray(x, xp):
 
 def transition_controls_array(controls=None, xp=None):
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     if controls is None:
         return xp.asarray([
             CPG_PHASE_RESET_AMOUNT,
@@ -248,8 +247,7 @@ def transition_controls_array(controls=None, xp=None):
 def transition_strength(command, prev_command, vmax: float, xp=None):
     """Return 0..1 command-switch strength for transition-only CPG controls."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     if prev_command is None:
         return xp.asarray(0.0, dtype=xp.float32)
     cmd = xp.asarray(command)
@@ -260,8 +258,7 @@ def transition_strength(command, prev_command, vmax: float, xp=None):
 def transition_turn_signal(command, prev_command, xp=None):
     """Signed left/right turn signal from previous command to current command."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     if prev_command is None:
         return xp.asarray(0.0, dtype=xp.float32)
     cmd = xp.asarray(command)
@@ -273,8 +270,7 @@ def transition_turn_signal(command, prev_command, xp=None):
 
 def linear_map_features(command, prev_command, vmax: float, xp=None):
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     cmd = xp.asarray(command)
     prev = xp.zeros_like(cmd) if prev_command is None else xp.asarray(prev_command)
     cmd_n = cmd / max(float(vmax), 1e-6)
@@ -310,8 +306,7 @@ def _linear_map_weight_vector(command, vmax: float, xp, prev_command=None):
 def transition_phase_for_action(phase, strength, controls=None, xp=None):
     """Apply the transition phase-reset control without mutating caller state."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     ctrl = transition_controls_array(controls, xp=xp)
     reset = xp.clip(ctrl[0], 0.0, 1.0)
     return phase * (1.0 - reset * xp.clip(strength, 0.0, 1.0))
@@ -320,8 +315,7 @@ def transition_phase_for_action(phase, strength, controls=None, xp=None):
 def transition_phase_delta(base_freq, dt: float, strength, controls=None, xp=None):
     """Phase increment with optional transition speed boost."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     ctrl = transition_controls_array(controls, xp=xp)
     boost = 1.0 + ctrl[1] * xp.clip(strength, 0.0, 1.0)
     boost = xp.maximum(boost, 0.05)
@@ -331,8 +325,7 @@ def transition_phase_delta(base_freq, dt: float, strength, controls=None, xp=Non
 def apply_transition_controls(params: CPGParams, command, prev_command, strength, controls=None, xp=None) -> CPGParams:
     """Return params with transition-only height/turn/cross-axis controls applied."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     ctrl = transition_controls_array(controls, xp=xp)
     s = xp.clip(strength, 0.0, 1.0)
     turn = transition_turn_signal(command, prev_command, xp=xp)
@@ -429,8 +422,7 @@ def _blend_angles(directional: DirectionalCPGParams, name: str, weights, xp):
 
 def blend_directional_params(directional: DirectionalCPGParams, weights, xp=None) -> CPGParams:
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     return CPGParams(
         freq=_blend_linear(directional, "freq", weights, xp),
         phase_offsets=_blend_angles(directional, "phase_offsets", weights, xp),
@@ -452,8 +444,7 @@ def blend_directional_params(directional: DirectionalCPGParams, weights, xp=None
 def cpg_action(phase, params: CPGParams, cpg_idx, nu: int, xp=None):
     """Return a motor-action prior in [-unclipped, unclipped] joint-action order."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     phases = _asarray(params.phase_offsets, xp)
     flex_p = _asarray(params.flex, xp)
     knee_p = _asarray(params.knee, xp)
@@ -496,8 +487,7 @@ def blend_directional_priors(
 ):
     """Blend cardinal CPG priors by the command direction."""
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     directional = directional or make_directional_params_from_env()
     base_freq = directional.backward.freq
     amount = (
@@ -561,8 +551,7 @@ def cpg_pd_step_target(
     PD control, action-rate penalties, and dataset labels.
     """
     if xp is None:
-        import jax.numpy as jnp
-        xp = jnp
+        xp = np
     prior = blend_directional_priors(
         phase, command, cpg_idx, nu, vmax,
         directional=directional,

@@ -8,7 +8,9 @@ lockout/dead-state tests that bound how far the counters can run.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import math
+import os
 
 import pytest
 from bench_factory import bench_config, expected_init_time, freq_word, realism
@@ -602,10 +604,15 @@ def test_e24_flipped_magnet_full_circle_calibration(params, bldcsim,
                 if t > b.time_s - 0.25]
         return sum(tail) / len(tail), b
 
+    candidates = [(align_offset + step * 341) & 0xFFF for step in range(12)]
+    # Each candidate owns a separate Bench/VerilatedContext. run_for releases
+    # the GIL, so the deterministic full-circle sweep can use the host CPUs.
+    workers = min(len(candidates), os.cpu_count() or 1)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        scores = list(pool.map(lambda cand: run_candidate(cand)[0], candidates))
+
     results = {}
-    for step in range(12):  # full circle, half-sector steps
-        cand = (align_offset + step * 341) & 0xFFF
-        score, _ = run_candidate(cand)
+    for cand, score in zip(candidates, scores):
         if score is not None:
             results[cand] = score
     assert results, "no working offset found in the full-circle sweep"

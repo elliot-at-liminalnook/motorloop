@@ -74,6 +74,9 @@ ANKLE_MIN_DEG = -90.0   # CW: toe swept fully out front (blade horizontal, toe f
 ANKLE_MAX_DEG = 10.0    # CCW: slight back-reach past vertical for a natural return
 SWING_DEG = 25.0        # worm-driven leg-swing about the gear axle pin: +/-25 deg
 WORM_GEAR_RATIO = 20.0  # single-start worm on a ~20T sector gear -> 20 worm revs per gear rev
+SERVO_MODEL = "Waveshare ST3215-HS"
+SERVO_STALL_TORQUE_NM = 20.0 * 0.0980665  # 20 kgf.cm @ 12 V
+SERVO_MASS_KG = 0.068
 
 # Rigid-body grouping: imported object names are stable (unnamed gltf nodes -> Mesh_0..Mesh_47).
 # The sector gear grips the red drive frame through its C-opening, the frame's bearing boss rides
@@ -356,7 +359,8 @@ def build_rig(objs: dict[str, bpy.types.Object]) -> dict:
     knee_motor["physics_role"] = "torque_motor_placeholder"
     knee_motor["drives_joint"] = "knee_blade_flexion"
     knee_motor["command_interface"] = "commanded_torque_nm"
-    knee_motor["max_torque_nm"] = 3.0
+    knee_motor["motor_model"] = SERVO_MODEL
+    knee_motor["max_torque_nm"] = SERVO_STALL_TORQUE_NM
     mw = knee_motor.matrix_world.copy()
     knee_motor.parent = j_swing
     knee_motor.matrix_parent_inverse = j_swing.matrix_world.inverted()
@@ -687,6 +691,12 @@ def physics_json() -> dict:
         "units": "meters_assumed",
         "source": SRC.name,
         "status": "third_pass_swing_link_and_knee_motor_per_design_intent",
+        "hardware_contract": {
+            "motor_model": SERVO_MODEL,
+            "motor_mass_kg_each": SERVO_MASS_KG,
+            "operating_voltage_v": 12.0,
+            "stall_torque_nm_each": SERVO_STALL_TORQUE_NM,
+        },
         "bodies": {
             "base_housing_and_axle": {
                 "mass_kg": 0.5, "friction": 0.65, "status": "fixed_base",
@@ -752,11 +762,17 @@ def physics_json() -> dict:
         },
         "actuators": {
             "hip_worm_drive_motor": {"type": "torque_motor", "drives_joint": "leg_swing",
-                                     "command_interface": "commanded_torque_nm", "max_torque_nm": 1.2,
+                                     "motor_model": SERVO_MODEL, "motor_mass_kg": SERVO_MASS_KG,
+                                     "command_interface": "commanded_torque_nm",
+                                     "max_torque_nm": SERVO_STALL_TORQUE_NM,
                                      "gear_ratio": WORM_GEAR_RATIO,
+                                     "max_joint_torque_nm": SERVO_STALL_TORQUE_NM * WORM_GEAR_RATIO,
                                      "status": "worm on motor mount shaft; 20:1 from ~20T sector gear"},
             "knee_motor": {"type": "torque_motor", "drives_joint": "knee_blade_flexion",
-                           "command_interface": "commanded_torque_nm", "max_torque_nm": 3.0,
+                           "motor_model": SERVO_MODEL, "motor_mass_kg": SERVO_MASS_KG,
+                           "command_interface": "commanded_torque_nm",
+                           "max_torque_nm": SERVO_STALL_TORQUE_NM, "gear_ratio": 1.0,
+                           "max_joint_torque_nm": SERVO_STALL_TORQUE_NM,
                            "status": "separate motor in the KNEE rotates the upper blade length "
                                      "(crank); lower length + piston follow via the slider-crank; "
                                      "gold-ring placeholder at the knee pin"},

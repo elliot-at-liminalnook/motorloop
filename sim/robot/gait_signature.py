@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 """V.7b gait signature: reduce a (T, 4) boolean foot-contact history to three
-gait-describing numbers. Pure numpy (no jax) so it can run on logged rollouts
+gait-describing numbers. Pure NumPy so it can run on logged rollouts
 anywhere.
 
   stride_hz   dominant frequency of the mean-removed per-foot contact signal

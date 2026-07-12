@@ -45,15 +45,18 @@ def machine_profile() -> dict:
     prof = {"python": platform.python_version(), "platform": platform.platform(),
             "cpu_count": os.cpu_count()}
     try:
-        import jax
-        prof["jax"] = jax.__version__
-        prof["devices"] = [str(d) for d in jax.devices()]
+        import torch
+        import warp
+        prof["torch"] = torch.__version__
+        prof["warp"] = warp.__version__
+        prof["devices"] = ([torch.cuda.get_device_name(i)
+                            for i in range(torch.cuda.device_count())] or ["cpu"])
     except Exception:
         pass
     return prof
 
 
-def write_manifest(path, run_id, seed, config: dict, checkpoint=None, backend="mjx",
+def write_manifest(path, run_id, seed, config: dict, checkpoint=None, backend="mujoco_warp",
                    robot_toml=None, ts=None) -> dict:
     """Pin a run's full provenance to `path` (manifest.json)."""
     robot_toml = robot_toml or (HERE.parent.parent / "robot.toml")
@@ -115,7 +118,8 @@ def _selftest():
     d = Path(tempfile.mkdtemp())
     # (1) manifest round-trips + pins real provenance
     m = write_manifest(d / "manifest.json", run_id="t0", seed=7,
-                       config={"steps": 1000, "opponent": "frozen"}, checkpoint=None, backend="mjx")
+                       config={"steps": 1000, "opponent": "frozen"}, checkpoint=None,
+                       backend="mujoco_warp")
     m2 = read_manifest(d / "manifest.json")
     assert m2 == m and m2["seed"] == 7 and m2["run_id"] == "t0"
     assert ("git" in m["code"]) or ("src_hash" in m["code"])      # code version pinned either way

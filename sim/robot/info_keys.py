@@ -9,7 +9,7 @@
                (the audit's bank-swap caveat: per-env RND predictor + Adam).
 
 reset_bank.BankedAutoResetWrapper swaps only pipeline_state/obs (mirroring
-stock brax), so persistent keys survive by construction; this registry makes
+the old wrapper stack), so persistent keys survive by construction; this registry makes
 that contract CHECKABLE: test_info_keys.py fails on any unregistered key, so a
 new mechanism can't add per-env state without declaring who owns its lifetime.
 """
@@ -44,9 +44,9 @@ FIGHTER_INFO_KEYS = {
     "dealt_cum": EPISODIC,          # C.1 KO gate accumulator
     # wrapper-owned (not created by the env):
     "bank_idx": PERSISTENT,         # reset_bank cursor — orbits the bank across episodes
-    "steps": EPISODIC,              # brax EpisodeWrapper
-    "truncation": EPISODIC,         # brax EpisodeWrapper
-    "first_pipeline_state": PERSISTENT,  # stock brax AutoReset cache (unused w/ bank)
+    "steps": EPISODIC,
+    "truncation": EPISODIC,
+    "first_pipeline_state": PERSISTENT,  # legacy autoreset cache (unused with bank)
     "first_obs": PERSISTENT,
 }
 

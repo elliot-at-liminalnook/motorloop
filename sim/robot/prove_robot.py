@@ -30,8 +30,9 @@ VARIANTS = {
     "default": {},
     "spring-assist": {"leg_defaults": {"joint_stiffness": 12.0}},   # parallel-elastic
     "long-legs": {"leg_defaults": {"thigh_len": 0.26, "calf_len": 0.26}},
-    "heavy+strong": {"torso": {"mass": 9.0}, "actuator": {"gear": 9.0}},
-    "5-leg weapon": {"leg": [                                        # TOPOLOGY change
+    # Unarmed walker may use the two-rod reserve as torso ballast and remain 6 lb.
+    "max-unarmed-weight": {"torso": {"mass": 0.8973017176}},
+    "5-leg weapon": {"leg": [                         # topology regression, not the 12-servo BOM
         {"name": "FL", "pos": [0.19, 0.11, 0.0]},
         {"name": "FR", "pos": [0.19, -0.11, 0.0]},
         {"name": "RL", "pos": [-0.19, 0.11, 0.0]},

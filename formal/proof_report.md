@@ -16,7 +16,7 @@ unreachable (the proof may be vacuous).
 
 | Status | Count |
 | --- | --- |
-| ✅ PROVEN | 12 |
+| ✅ PROVEN | 15 |
 | 📄 DOCUMENTED (not machine-proven) | 1 |
 
 ## Proven properties
@@ -74,11 +74,11 @@ _DOCUMENTED, not machine-proven: the property requires reasoning through an inte
 
 ### `current_pi` — current_pi
 
-**✅ PROVEN** · safety · prove (smtbmc boolector, depth 6) · scope: motorloop config
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 6) · scope: parameter envelope: any V_RAW_MAX (the bound is the module's own parameter, passed through the bind)
  · non-vacuity covers: ✅ reachable
 
 Proves:
-- Current-PI output stays within its clamp [-V_RAW_MAX, V_RAW_MAX] for any error/integrator state
+- Current-PI output stays within its clamp [-V_RAW_MAX, V_RAW_MAX] for any error/integrator state AND any V_RAW_MAX parameter (parameter-generic)
 
 Under assumptions:
 - synchronous reset (sby init)
@@ -86,15 +86,15 @@ Under assumptions:
 Non-vacuity (the interesting states are reachable):
 - the clamp is reachable (PI can demand max and min drive)
 
-_The output sat() clamps praw regardless of the (possibly overflowed) integrator term; this bounds the input the circle limiter assumes._
+_The output sat() clamps praw to the module's V_RAW_MAX regardless of the (possibly overflowed) integrator term; the checker asserts the SAME parameter (passed through the bind), so the bound is generic over V_RAW_MAX. Bounds the input the circle limiter assumes._
 
 ### `speed_iq_pi` — speed_iq_pi
 
-**✅ PROVEN** · safety · prove (smtbmc boolector, depth 6) · scope: motorloop config
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 6) · scope: parameter envelope: any IQ_MAX (the bound is the module's own parameter, passed through the bind)
  · non-vacuity covers: ✅ reachable
 
 Proves:
-- FOC torque command iq_target stays within [-IQ_MAX, IQ_MAX] for any speed error/integrator state
+- FOC torque command iq_target stays within [-IQ_MAX, IQ_MAX] for any speed error/integrator state AND any IQ_MAX parameter (parameter-generic)
 
 Under assumptions:
 - synchronous reset (sby init)
@@ -102,7 +102,7 @@ Under assumptions:
 Non-vacuity (the interesting states are reachable):
 - the clamp is reachable (loop can demand max/min torque current)
 
-_The output clamp bounds iq_target by construction; bounds the inner current loop's command._
+_The output clamp bounds iq_target to the module's IQ_MAX by construction; the checker asserts the SAME parameter (passed through the bind), so the bound is generic over IQ_MAX._
 
 ### `pwm_deadtime` — pwm_generator
 
@@ -168,7 +168,7 @@ _The pwm_generator shoot-through guarantee holds for any leg_mode/duty3, so the 
 
 ### `lib_no_shoot_through` — pwm_generator
 
-**✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: parameter envelope: ?
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: parameter-generic
  · non-vacuity covers: ✅ reachable
 
 Proves:
@@ -218,6 +218,58 @@ Non-vacuity (the interesting states are reachable):
 
 _1-/k-inductive: every case arm assigns a defined next state (reset at S_IDLE), and foc_valid defaults to 0 and is set for at most one cycle. The full CONVST->READY->16-bit read is sim-tier coverage; the shallow covers prove the FSM is live._
 
+### `axil_regfile` — axil_regfile
+
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: motorloop config
+ · non-vacuity covers: ✅ reachable
+
+Proves:
+- AXI4-Lite: B/R valid holds until its ready (no withdrawn response)
+- Read data/resp stable while RVALID && !RREADY
+- Write/read responses are always OKAY
+
+Under assumptions:
+- synchronous reset (sby init)
+
+Non-vacuity (the interesting states are reachable):
+- a read response actually completes (RVALID && RREADY)
+
+_1-inductive via $past on the AXI handshake regs; the slave only asserts a response after a fired transaction and clears it on ready, so the master-facing contract cannot be violated._
+
+### `wb_regfile` — wb_regfile
+
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: motorloop config
+ · non-vacuity covers: ✅ reachable
+
+Proves:
+- Wishbone B4: ACK only follows an accepted strobe (no spurious ACK)
+- ACK is a single-cycle pulse (classic registered ack)
+
+Under assumptions:
+- synchronous reset (sby init)
+
+Non-vacuity (the interesting states are reachable):
+- a Wishbone access is actually acknowledged
+
+_1-inductive: ack is registered from cyc&stb&!ack and defaults to 0, so it pulses exactly once per access._
+
+### `axis_sampler` — axis_sampler
+
+**✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: motorloop config
+ · non-vacuity covers: ✅ reachable
+
+Proves:
+- AXI4-Stream: TVALID holds until TREADY (no withdrawn beat)
+- TDATA stable while TVALID && !TREADY (backpressure-safe drop)
+
+Under assumptions:
+- synchronous reset (sby init)
+
+Non-vacuity (the interesting states are reachable):
+- a stream beat is actually accepted
+
+_1-inductive: the drop logic only overwrites TDATA when the beat is free or being accepted this cycle, so a held beat is never disturbed._
+
 ### `adc_sequencer` — adc_sequencer
 
 **✅ PROVEN** · safety · prove (smtbmc boolector, depth 8) · scope: motorloop config
@@ -241,6 +293,8 @@ _1-inductive: each strobe defaults to 0 every cycle and is set for at most one c
 - `adc_sequencer`: adc_sequencer
 - `ads9224r_master`: ads9224r_master
 - `as5047p_spi_master`: as5047p_spi_master
+- `axil_regfile`: axil_regfile
+- `axis_sampler`: axis_sampler
 - `circle_limit`: circle_limit
 - `controller_top`: controller_top_composition
 - `current_pi`: current_pi
@@ -248,6 +302,7 @@ _1-inductive: each strobe defaults to 0 every cycle and is set for at most one c
 - `pwm_generator`: pwm_generator, pwm_deadtime, pwm_reset, lib_no_shoot_through
 - `speed_iq_pi`: speed_iq_pi
 - `svpwm`: svpwm
+- `wb_regfile`: wb_regfile
 
 **Coverage of reachability / non-vacuity** — which safety proofs have passing covers (the "are these proofs vacuous?" guard):
 
@@ -262,4 +317,7 @@ _1-inductive: each strobe defaults to 0 every cycle and is set for at most one c
 - ✅ `lib_no_shoot_through`: REACHED
 - ✅ `as5047p_spi_master`: REACHED
 - ✅ `ads9224r_master`: REACHED
+- ✅ `axil_regfile`: REACHED
+- ✅ `wb_regfile`: REACHED
+- ✅ `axis_sampler`: REACHED
 - ✅ `adc_sequencer`: REACHED

@@ -34,7 +34,7 @@ def main():
     checks = tomllib.loads(MANIFEST.read_text())["check"]
     results = {r["id"]: r for r in json.loads(RESULTS.read_text())}
 
-    lines = []
+    lines = ["<!-- SPDX-License-Identifier: MIT -->"]
     a = lines.append
     a("# Formal Proof Report")
     a("")
@@ -76,8 +76,14 @@ def main():
             a("")
             continue
         scope = c.get("param_scope", "config")
-        scope_txt = ("motorloop config" if scope == "config"
-                     else f"parameter envelope: {c.get('envelope', '?')}")
+        if scope == "config":
+            scope_txt = "motorloop config"
+        elif scope == "envelope":
+            scope_txt = f"parameter envelope: {c.get('envelope', '?')}"
+        elif scope == "generic":
+            scope_txt = "parameter-generic"
+        else:
+            scope_txt = scope
         a(f"### `{c['id']}` — {c['module']}")
         a("")
         a(f"**{status_label(r['status'])}** · {c['category']} · "

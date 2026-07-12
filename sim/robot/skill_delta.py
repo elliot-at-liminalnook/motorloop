@@ -11,8 +11,22 @@ from __future__ import annotations
 import argparse, json, pickle
 from pathlib import Path
 
-import jax
 import numpy as np
+import torch
+
+
+def _tree_leaves(value):
+    if isinstance(value, dict):
+        leaves = []
+        for key in sorted(value):
+            leaves.extend(_tree_leaves(value[key]))
+        return leaves
+    if isinstance(value, (tuple, list)):
+        leaves = []
+        for item in value:
+            leaves.extend(_tree_leaves(item))
+        return leaves
+    return [value]
 
 
 def _select(params, part: str):
@@ -24,12 +38,13 @@ def _select(params, part: str):
 
 
 def _flat_delta(before, after, part: str) -> np.ndarray:
-    b_leaves = jax.tree_util.tree_leaves(_select(before, part))
-    a_leaves = jax.tree_util.tree_leaves(_select(after, part))
+    b_leaves = _tree_leaves(_select(before, part))
+    a_leaves = _tree_leaves(_select(after, part))
     chunks = []
     skipped = 0
     for b, a in zip(b_leaves, a_leaves):
-        b = np.asarray(b); a = np.asarray(a)
+        b = b.detach().cpu().numpy() if torch.is_tensor(b) else np.asarray(b)
+        a = a.detach().cpu().numpy() if torch.is_tensor(a) else np.asarray(a)
         if b.shape != a.shape or not np.issubdtype(b.dtype, np.number):
             skipped += 1
             continue
@@ -43,8 +58,8 @@ def _flat_delta(before, after, part: str) -> np.ndarray:
 
 def _flat_params(params, part: str) -> np.ndarray:
     chunks = []
-    for x in jax.tree_util.tree_leaves(_select(params, part)):
-        x = np.asarray(x)
+    for x in _tree_leaves(_select(params, part)):
+        x = x.detach().cpu().numpy() if torch.is_tensor(x) else np.asarray(x)
         if np.issubdtype(x.dtype, np.number):
             chunks.append(x.astype(np.float64).ravel())
     return np.concatenate(chunks)

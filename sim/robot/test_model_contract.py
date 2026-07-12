@@ -6,7 +6,7 @@ Every check exercises OUTCOMES through the same causal path training uses
 (write ctrl -> forward -> measure joint-space force), never a metadata field.
 This is the test that makes the gear-bug class impossible: the pre-2026-07
 generator emitted <motor forcerange="±tau"/> with no gear attribute, so every
-hinge silently maxed at gear-default 1 N·m (~8% of design torque) while the
+hinge silently maxed at gear-default 1 N·m while the
 forcerange attribute documented an intent no actuator could deliver. Every
 check here would have been green under that model EXCEPT the outcome checks —
 test_contract_fires_on_gear_stripped_model proves they fire on exactly that bug.
@@ -34,8 +34,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from gen_robot_mjcf import (build_match, build_mjcf, joint_torque_limit,  # noqa: E402
-                            load_spec)
+from gen_robot_mjcf import (actuator_unit_mass, build_match, build_mjcf,  # noqa: E402
+                            joint_torque_limit, load_spec)
+from gen_mesh_robot_mjcf import MAX_ROBOT_MASS_KG  # noqa: E402
 
 SPEC = load_spec(HERE / "robot.toml")
 TAU = joint_torque_limit(SPEC)
@@ -101,7 +102,10 @@ def _expected_mass(spec: dict, striker: bool) -> float:
     d = spec["leg_defaults"]
     legs = spec["leg"]
     total = float(spec["torso"]["mass"])
-    total += len(legs) * (0.3 + float(d["thigh_mass"]) + float(d["calf_mass"]) + 0.05)
+    total += len(legs) * (float(d.get("hip_mass", 0.3))
+                          + float(d["thigh_mass"]) + float(d["calf_mass"])
+                          + float(d.get("foot_mass", 0.05))
+                          + 3 * actuator_unit_mass(spec))
     if striker:
         s = spec["striker"]
         r, ln = float(s["rod_radius"]), float(s["rod_len"])
@@ -118,6 +122,19 @@ def test_total_mass_matches_spec():
         got = float(m.body_mass.sum())
         assert abs(got - want) <= 0.05 * want, (
             f"striker={striker}: model mass {got:.3f} kg vs spec {want:.3f} kg")
+        assert got <= MAX_ROBOT_MASS_KG + 1e-9, (
+            f"striker={striker}: {got / 0.45359237:.3f} lb exceeds the 6 lb limit")
+        if striker:
+            assert math.isclose(got, MAX_ROBOT_MASS_KG, abs_tol=1e-8), (
+                "armed model should exercise the conservative maximum-mass envelope")
+
+
+def test_all_twelve_hinges_are_selected_bus_servos():
+    assert SPEC["actuator"]["motor"] == "waveshare_st3215_hs"
+    assert SPEC["actuator"]["voltage"] == 12.0
+    m = _model(build_mjcf(SPEC))
+    assert len(_hinges(m)) == 12
+    assert math.isclose(12 * actuator_unit_mass(SPEC), 0.816, abs_tol=1e-12)
 
 
 # ------------------------------------------------------------------- 4. ranges
@@ -169,7 +186,9 @@ def test_contract_fires_on_gear_stripped_model():
     # On the bugged model the outcome check MUST fail loudly: torque collapses
     # to the gear-default 1 N·m, nowhere near tau. If this assert ever trips,
     # the contract has gone blind to the very bug it exists to catch.
-    assert np.all(np.abs(tq - TAU) > 0.5 * TAU), (
+    # It only needs to exceed test #2's 5% acceptance band. With the selected
+    # 1.96 N.m servo, MuJoCo's default 1 N.m is about half the requested torque.
+    assert np.all(np.abs(tq - TAU) > 0.05 * TAU), (
         f"gear-stripped model still delivers {np.unique(np.round(tq, 3))} N·m — "
         "the outcome check no longer discriminates; fix the test")
     assert np.allclose(tq, 1.0, atol=0.01), "historical signature is 1 N·m exactly"
@@ -185,10 +204,13 @@ def test_armature_is_derived_not_hardcoded():
     """dof armature == J_rotor x gear^2 from the motor entry (the hidden-actuator-
     property class the gear bug belonged to; 0.01-for-everything was luck)."""
     import sys as _s; _s.path.insert(0, str(HERE.parents[1]))
-    from sim.tests.motors import MOTORS
+    from sim.tests.motors import MOTORS, SERVOS
     m = _model(build_mjcf(SPEC))
     a = SPEC["actuator"]
-    want = MOTORS[a["motor"]].inertia_kg_m2 * float(a["gear"]) ** 2
+    if a["motor"] in SERVOS:
+        want = SERVOS[a["motor"]].output_inertia_kg_m2_est * float(a["gear"]) ** 2
+    else:
+        want = MOTORS[a["motor"]].inertia_kg_m2 * float(a["gear"]) ** 2
     hinges = [m.jnt_dofadr[m.actuator_trnid[i, 0]] for i in _hinges(m)]
     got = m.dof_armature[hinges]
     assert np.allclose(got, want, rtol=0.01), (got[:3], want)

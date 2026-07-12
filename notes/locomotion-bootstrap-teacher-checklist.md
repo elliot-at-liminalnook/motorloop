@@ -1,5 +1,7 @@
 # Locomotion Bootstrap Teacher Checklist
 
+> **Document status:** Active · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Canonical summary:** [`locomotion-status.md`](locomotion-status.md)
+
 This checklist describes the path from the current CPG/PD scaffold to a less
 hand-authored locomotion system:
 

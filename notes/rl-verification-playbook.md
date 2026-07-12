@@ -7,6 +7,13 @@ untested control mode). This file is about *why our existing verification missed
 them* and the layered checks that would have caught each one within minutes instead
 of weeks of GPU time.
 
+The executable policy for this playbook is centralized. Use
+`bash scripts/run_pre_gpu_tests.sh` for a fast local precheck, and run
+`bash scripts/run_pre_gpu_tests.sh --require-gpu` in a CUDA environment for the
+only complete verification verdict. The full form includes the CPU-only RTL and
+component suite; it then runs the expensive batched physics and trainer tests on
+CUDA. See [pre-gpu-test-entrypoint.md](pre-gpu-test-entrypoint.md).
+
 ## Part 1 — Why the checks we already had didn't fire
 
 We were not short on verification tools: `validate_body.py`, `prove_robot.py`,

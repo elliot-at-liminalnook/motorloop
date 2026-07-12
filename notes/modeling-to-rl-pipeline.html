@@ -1,0 +1,795 @@
+<!-- SPDX-License-Identifier: MIT -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motorloop — From Motor to Gait</title>
+<style>
+:root{
+  --bg:#0F1620; --panel:#18212E; --panel-2:#1E2A39; --panel-3:#141D28;
+  --border:#2A3746; --border-soft:#222E3C;
+  --ink:#E7EDF4; --ink-soft:#A6B4C2; --ink-faint:#68788A;
+  --warm:#E8944A; --warm-ink:#F0A968; --warm-soft:rgba(232,148,74,.13); --warm-line:rgba(232,148,74,.38);
+  --cool:#46C2CE; --cool-ink:#5FD2DD; --cool-soft:rgba(70,194,206,.11); --cool-line:rgba(70,194,206,.34);
+  --pass:#5FBE86; --fail:#E06A6A; --warn:#E8C05A;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.28);
+  --serif:Georgia,"Liberation Serif","Times New Roman",serif;
+  --grot:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code","Liberation Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#ECEFF4; --panel:#FFFFFF; --panel-2:#F4F6FA; --panel-3:#FBFCFE;
+    --border:#D7DEE8; --border-soft:#E3E9F0;
+    --ink:#182029; --ink-soft:#47545F; --ink-faint:#8090A0;
+    --warm:#B96219; --warm-ink:#A8560F; --warm-soft:rgba(185,98,25,.09); --warm-line:rgba(185,98,25,.30);
+    --cool:#1A828F; --cool-ink:#146873; --cool-soft:rgba(26,130,143,.08); --cool-line:rgba(26,130,143,.26);
+    --pass:#2E8B57; --fail:#BB3F3B; --warn:#9A7A17;
+    --shadow:0 1px 2px rgba(30,50,70,.06),0 10px 30px rgba(30,50,70,.08);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1620; --panel:#18212E; --panel-2:#1E2A39; --panel-3:#141D28;
+  --border:#2A3746; --border-soft:#222E3C;
+  --ink:#E7EDF4; --ink-soft:#A6B4C2; --ink-faint:#68788A;
+  --warm:#E8944A; --warm-ink:#F0A968; --warm-soft:rgba(232,148,74,.13); --warm-line:rgba(232,148,74,.38);
+  --cool:#46C2CE; --cool-ink:#5FD2DD; --cool-soft:rgba(70,194,206,.11); --cool-line:rgba(70,194,206,.34);
+  --pass:#5FBE86; --fail:#E06A6A; --warn:#E8C05A;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 30px rgba(0,0,0,.28);
+}
+:root[data-theme="light"]{
+  --bg:#ECEFF4; --panel:#FFFFFF; --panel-2:#F4F6FA; --panel-3:#FBFCFE;
+  --border:#D7DEE8; --border-soft:#E3E9F0;
+  --ink:#182029; --ink-soft:#47545F; --ink-faint:#8090A0;
+  --warm:#B96219; --warm-ink:#A8560F; --warm-soft:rgba(185,98,25,.09); --warm-line:rgba(185,98,25,.30);
+  --cool:#1A828F; --cool-ink:#146873; --cool-soft:rgba(26,130,143,.08); --cool-line:rgba(26,130,143,.26);
+  --pass:#2E8B57; --fail:#BB3F3B; --warn:#9A7A17;
+  --shadow:0 1px 2px rgba(30,50,70,.06),0 10px 30px rgba(30,50,70,.08);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--serif);line-height:1.72;
+  font-size:17px;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;margin:0;
+  scroll-padding-top:20px;}
+img{max-width:100%}
+a{color:var(--cool-ink);text-decoration:none}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--warm);outline-offset:2px;border-radius:2px}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1220px;margin:0 auto;padding:0 24px}
+.layout{display:grid;grid-template-columns:236px minmax(0,1fr);gap:52px;align-items:start}
+.prose{max-width:70ch}
+.prose p{margin:0 0 1.05em}
+.grot{font-family:var(--grot)}
+.mono{font-family:var(--mono)}
+
+/* ---------- nav rail ---------- */
+.rail{position:sticky;top:0;align-self:start;padding:28px 0 40px;max-height:100vh;overflow-y:auto}
+.rail-brand{font-family:var(--grot);font-weight:800;letter-spacing:-.02em;font-size:1.02rem;
+  display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.rail-brand .dot{width:10px;height:10px;border-radius:2px;background:var(--warm);
+  box-shadow:0 0 0 3px var(--warm-soft)}
+.rail-sub{font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-faint);margin-bottom:22px}
+.rail nav{display:flex;flex-direction:column;gap:1px;border-left:1px solid var(--border)}
+.rail nav a{font-family:var(--grot);font-size:.83rem;color:var(--ink-soft);padding:7px 0 7px 15px;
+  margin-left:-1px;border-left:2px solid transparent;line-height:1.3;transition:color .15s,border-color .15s}
+.rail nav a .n{font-family:var(--mono);font-size:.7rem;color:var(--ink-faint);margin-right:8px}
+.rail nav a:hover{color:var(--ink);text-decoration:none}
+.rail nav a.active{color:var(--warm-ink);border-left-color:var(--warm);font-weight:600}
+.rail nav a.active .n{color:var(--warm)}
+.theme-btn{margin-top:24px;font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink-soft);background:var(--panel-2);border:1px solid var(--border);
+  border-radius:5px;padding:7px 12px;cursor:pointer;display:inline-flex;gap:7px;align-items:center}
+.theme-btn:hover{border-color:var(--warm-line);color:var(--ink)}
+
+/* ---------- hero ---------- */
+header.hero{padding:64px 0 26px}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--warm-ink);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--warm-line)}
+h1{font-family:var(--grot);font-weight:800;letter-spacing:-.028em;line-height:1.02;
+  font-size:clamp(2.5rem,6.4vw,4.4rem);margin:0 0 22px;text-wrap:balance}
+h1 em{font-style:normal;color:var(--warm-ink)}
+.standfirst{font-size:clamp(1.1rem,2.1vw,1.32rem);color:var(--ink-soft);max-width:60ch;line-height:1.6;margin:0}
+.standfirst b{color:var(--ink);font-weight:600}
+.gaitwrap{margin:38px 0 30px;border:1px solid var(--border);border-radius:8px;background:var(--panel-3);
+  overflow:hidden;position:relative}
+.gaitwrap .cap{position:absolute;top:10px;left:14px;font-family:var(--mono);font-size:.64rem;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);z-index:2}
+canvas#gait{display:block;width:100%;height:120px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:26px 0 8px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:15px 16px}
+.stat .v{font-family:var(--grot);font-weight:800;font-size:1.55rem;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;line-height:1}
+.stat .v.warm{color:var(--warm-ink)} .stat .v.cool{color:var(--cool-ink)}
+.stat .l{font-family:var(--mono);font-size:.66rem;letter-spacing:.06em;color:var(--ink-faint);
+  margin-top:8px;text-transform:uppercase;line-height:1.35}
+
+/* pipeline map chips */
+.pipemap{margin:40px 0 8px}
+.pipemap h4{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;margin:0 0 14px}
+.track{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.track .chip{flex:1 1 150px;background:var(--panel);border:1px solid var(--border);border-radius:7px;
+  padding:11px 13px;position:relative;min-width:0}
+.track .chip .cn{font-family:var(--mono);font-size:.64rem;color:var(--warm);letter-spacing:.05em}
+.track .chip .ct{font-family:var(--grot);font-weight:650;font-size:.9rem;margin-top:4px;line-height:1.25}
+.track .chip .cd{font-size:.78rem;color:var(--ink-soft);margin-top:5px;line-height:1.4;font-family:var(--serif)}
+
+/* ---------- sections ---------- */
+section{padding:52px 0;border-top:1px solid var(--border-soft);scroll-margin-top:16px}
+.sec-num{font-family:var(--mono);font-size:.74rem;letter-spacing:.16em;color:var(--warm);text-transform:uppercase}
+h2{font-family:var(--grot);font-weight:780;letter-spacing:-.022em;line-height:1.08;
+  font-size:clamp(1.75rem,3.6vw,2.5rem);margin:12px 0 8px;text-wrap:balance}
+.lede{font-size:1.14rem;color:var(--ink-soft);max-width:64ch;margin:0 0 4px;line-height:1.55}
+h3{font-family:var(--grot);font-weight:700;font-size:1.16rem;letter-spacing:-.01em;margin:34px 0 6px}
+h3 .tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--cool-ink);border:1px solid var(--cool-line);border-radius:20px;padding:2px 9px;
+  margin-left:10px;vertical-align:middle;font-weight:500}
+.prose strong{color:var(--ink);font-weight:700}
+.prose em{color:var(--warm-ink);font-style:italic}
+.k{font-family:var(--mono);font-size:.88em;background:var(--panel-2);border:1px solid var(--border-soft);
+  padding:.05em .4em;border-radius:4px;color:var(--ink);white-space:nowrap}
+
+/* decision point */
+.dp{background:var(--warm-soft);border:1px solid var(--warm-line);border-radius:8px;
+  padding:18px 20px;margin:26px 0;max-width:74ch}
+.dp-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+.dp-tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--warm-ink);font-weight:700;display:inline-flex;align-items:center;gap:7px}
+.dp-tag::before{content:"◆";font-size:.7em}
+.dp-title{font-family:var(--grot);font-weight:700;font-size:1.05rem;color:var(--ink);line-height:1.25}
+.fork{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin-bottom:13px}
+.opt{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:11px 13px;font-size:.92rem;
+  font-family:var(--serif);line-height:1.4}
+.opt .ol{font-family:var(--mono);font-size:.6rem;letter-spacing:.13em;text-transform:uppercase;
+  display:block;margin-bottom:5px;color:var(--ink-faint)}
+.opt.chosen{border-color:var(--warm-line);background:var(--panel)}
+.opt.chosen .ol{color:var(--warm-ink)}
+.opt.chosen .ol::after{content:" ✓"}
+.fork .vs{align-self:center;font-family:var(--mono);font-size:.72rem;color:var(--ink-faint);
+  display:flex;align-items:center;letter-spacing:.05em}
+.dp-why{font-size:.95rem;color:var(--ink-soft);margin:0;line-height:1.55;font-family:var(--serif)}
+.dp-why b{color:var(--warm-ink);font-weight:600}
+
+/* code / data */
+.code{background:var(--panel-3);border:1px solid var(--border);border-radius:8px;
+  font-family:var(--mono);font-size:.8rem;line-height:1.65;margin:22px 0;overflow-x:auto;max-width:100%}
+.code .bar{display:flex;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border-soft);
+  color:var(--ink-faint);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase}
+.code pre{margin:0;padding:14px 16px;white-space:pre;color:var(--ink)}
+.code .cm{color:var(--ink-faint)} .code .at{color:var(--cool-ink)} .code .st{color:var(--warm-ink)}
+.code .kw{color:var(--warm-ink)} .code .fn{color:var(--cool-ink)}
+
+.tablewrap{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-family:var(--grot);font-size:.86rem;min-width:440px}
+th,td{text-align:left;padding:9px 14px;border-bottom:1px solid var(--border-soft)}
+th{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;background:var(--panel-2)}
+tr:last-child td{border-bottom:none}
+td.num{font-variant-numeric:tabular-nums;text-align:right;font-family:var(--mono);font-size:.82rem}
+td.warm{color:var(--warm-ink);font-weight:600} td.cool{color:var(--cool-ink);font-weight:600}
+td .u{color:var(--ink-faint);font-size:.85em}
+
+/* callout / note */
+.note{border-left:3px solid var(--cool);background:var(--cool-soft);padding:13px 16px;
+  border-radius:0 6px 6px 0;margin:22px 0;font-size:.94rem;color:var(--ink-soft);max-width:74ch}
+.note b{color:var(--cool-ink)}
+.note.warmn{border-left-color:var(--warm);background:var(--warm-soft)}
+.note.warmn b{color:var(--warm-ink)}
+
+/* the bug centerpiece */
+.bug{background:linear-gradient(180deg,var(--panel-3),var(--panel));border-top:1px solid var(--warm-line);
+  border-bottom:1px solid var(--warm-line)}
+.bugcalc{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:26px 0;max-width:74ch}
+.bugcalc .cell{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px}
+.bugcalc .cell.bad{border-color:var(--fail)}
+.bugcalc .cell.good{border-color:var(--pass)}
+.bugcalc .lab{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+.bugcalc .big{font-family:var(--grot);font-weight:800;font-size:2.1rem;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;margin:8px 0 4px}
+.bugcalc .cell.bad .big{color:var(--fail)} .bugcalc .cell.good .big{color:var(--pass)}
+.bugcalc .sm{font-size:.85rem;color:var(--ink-soft);font-family:var(--serif)}
+
+/* exploit cards */
+.exgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:24px 0;max-width:74ch}
+.excard{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 17px}
+.excard .en{font-family:var(--mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--fail)}
+.excard h4{font-family:var(--grot);font-weight:700;font-size:1.02rem;margin:6px 0 7px}
+.excard p{font-size:.9rem;color:var(--ink-soft);margin:0;line-height:1.5;font-family:var(--serif)}
+.excard .fix{font-size:.82rem;color:var(--ink);margin-top:10px;padding-top:10px;border-top:1px solid var(--border-soft);font-family:var(--serif)}
+.excard .fix b{color:var(--pass);font-family:var(--mono);font-size:.62rem;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:3px}
+
+/* verification ladder */
+.ladder{display:flex;flex-direction:column;gap:8px;margin:24px 0;max-width:74ch}
+.rung{display:grid;grid-template-columns:52px 1fr;gap:14px;background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:13px 15px;align-items:start}
+.rung .id{font-family:var(--mono);font-weight:700;font-size:.92rem;color:var(--cool-ink);
+  background:var(--cool-soft);border-radius:5px;text-align:center;padding:6px 0}
+.rung .rt{font-family:var(--grot);font-weight:650;font-size:.95rem}
+.rung .rd{font-size:.87rem;color:var(--ink-soft);margin-top:3px;line-height:1.45;font-family:var(--serif)}
+.rung .rd code{font-family:var(--mono);font-size:.85em;color:var(--ink)}
+
+/* status board */
+.board{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:26px 0;max-width:78ch}
+.col{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px 17px}
+.col h4{font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;
+  margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.col h4 .pip{width:9px;height:9px;border-radius:50%}
+.col.done h4 .pip{background:var(--pass)} .col.done h4{color:var(--pass)}
+.col.prog h4 .pip{background:var(--warn)} .col.prog h4{color:var(--warn)}
+.col.front h4 .pip{background:var(--warm)} .col.front h4{color:var(--warm-ink)}
+.col ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.col li{font-size:.87rem;color:var(--ink-soft);line-height:1.45;font-family:var(--serif);padding-left:16px;position:relative}
+.col li::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:1px;background:var(--border);
+  border:1px solid var(--ink-faint)}
+.col li b{color:var(--ink);font-weight:600}
+
+footer{border-top:1px solid var(--border);padding:40px 0 70px;color:var(--ink-faint);
+  font-family:var(--mono);font-size:.76rem;line-height:1.7}
+footer b{color:var(--ink-soft)}
+footer .big{font-family:var(--serif);font-size:1.05rem;color:var(--ink-soft);max-width:60ch;
+  line-height:1.6;margin:0 0 22px}
+footer .big em{color:var(--warm-ink);font-style:italic}
+
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+
+@media (max-width:940px){
+  .layout{grid-template-columns:1fr;gap:0}
+  .rail{position:static;max-height:none;padding:20px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .rail nav{flex-direction:row;flex-wrap:wrap;border-left:none;gap:6px}
+  .rail nav a{border-left:none;border:1px solid var(--border);border-radius:20px;padding:5px 11px;margin:0}
+  .rail nav a.active{border-color:var(--warm);background:var(--warm-soft)}
+  .rail nav a .n{display:none}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .fork{grid-template-columns:1fr}.fork .vs{transform:rotate(90deg);justify-self:start}
+  .bugcalc,.exgrid,.board{grid-template-columns:1fr}
+}
+@media (max-width:520px){.stats{grid-template-columns:1fr 1fr}.wrap{padding:0 16px}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+<div class="layout">
+
+  <!-- ================= NAV RAIL ================= -->
+  <aside class="rail">
+    <div class="rail-brand"><span class="dot"></span>Motorloop</div>
+    <div class="rail-sub">Modeling → RL Pipeline</div>
+    <nav id="nav">
+      <a href="#top"><span class="n">00</span>Overview</a>
+      <a href="#model"><span class="n">01</span>Model the body</a>
+      <a href="#bug"><span class="n">02</span>The 8% bug</a>
+      <a href="#scale"><span class="n">03</span>Simulate at scale</a>
+      <a href="#task"><span class="n">04</span>Define the task</a>
+      <a href="#walk"><span class="n">05</span>Learn to walk</a>
+      <a href="#fight"><span class="n">06</span>Learn to fight</a>
+      <a href="#honest"><span class="n">07</span>Keep it honest</a>
+      <a href="#status"><span class="n">08</span>Where it stands</a>
+    </nav>
+    <button class="theme-btn" id="themeBtn" type="button"><span id="themeIcon">◐</span><span>Theme</span></button>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <main id="top">
+
+    <header class="hero">
+      <div class="eyebrow">A field guide to a robot-learning pipeline</div>
+      <h1>How a simulated quadruped goes from <em>bench-measured motors</em> to a gait.</h1>
+      <p class="standfirst">This project turns a single provenance-tracked config into a GPU physics world where thousands of copies of a robot learn to walk — and then to fight. Follow the whole pipeline below, stopping at the <b>decision point</b> that defines each stage. The through-line, learned the hard way: <b>a simulation is only as honest as its cheapest unverified assumption.</b></p>
+
+      <div class="gaitwrap">
+        <span class="cap">Central-pattern-generator gait prior · 4 legs, phase-offset oscillators</span>
+        <canvas id="gait" width="1100" height="120" aria-hidden="true"></canvas>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="v cool">0.83<span style="font-size:1rem;font-weight:600"> m/s</span></div><div class="l">Walk speed, verified on video (2.8× the milestone bar)</div></div>
+        <div class="stat"><div class="v warm">6 lb</div><div class="l">Hard mass budget · 12 bus servos</div></div>
+        <div class="stat"><div class="v cool">1024+</div><div class="l">Parallel physics worlds per GPU step</div></div>
+        <div class="stat"><div class="v warm">1&nbsp;line</div><div class="l">of missing XML that hid the whole problem for months</div></div>
+      </div>
+
+      <div class="pipemap">
+        <h4>The pipeline, end to end</h4>
+        <div class="track">
+          <div class="chip"><div class="cn">01</div><div class="ct">Model</div><div class="cd">Motors → <span class="mono">robot.toml</span> → MJCF</div></div>
+          <div class="chip"><div class="cn">03</div><div class="ct">Simulate</div><div class="cd">MuJoCo-Warp, thousands of envs</div></div>
+          <div class="chip"><div class="cn">04</div><div class="ct">Task</div><div class="cd">Commands, rewards, observations</div></div>
+          <div class="chip"><div class="cn">05</div><div class="ct">Walk</div><div class="cd">CPG teacher → PPO student</div></div>
+          <div class="chip"><div class="cn">06</div><div class="ct">Fight</div><div class="cd">Self-play league + coach</div></div>
+          <div class="chip"><div class="cn">07</div><div class="ct">Verify</div><div class="cd">Metrics select, videos confirm</div></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ 01 MODEL ============ -->
+    <section id="model" class="reveal">
+      <div class="sec-num">Stage 01 — Modeling</div>
+      <h2>Model the body from measured motors</h2>
+      <p class="lede">Before any learning happens, a robot has to exist as physics. That body is grown from one source of truth — and its “muscles” are real motors that were characterized on a bench, not invented.</p>
+
+      <div class="prose">
+        <h3>It starts with a motor that has receipts <span class="tag">sim/tests/motors.py</span></h3>
+        <p>Every actuator traces back to a profiled part. The chosen one is a <strong>Waveshare ST3215-HS</strong> bus servo, and it is modelled honestly — an integrated servo has no meaningful winding resistance or back-EMF constant at its interface, so it is represented as a <em>torque–speed line</em>, not a fake motor. Each number carries a provenance tag: <span class="k">measured</span>, <span class="k">datasheet</span>, <span class="k">decided</span>, or <span class="k">assumed</span>.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>ST3215-HS property</th><th>Value</th><th>Source</th></tr></thead>
+            <tbody>
+              <tr><td>Stall torque @ 12 V</td><td class="num warm">1.961 <span class="u">N·m</span></td><td>datasheet (20 kgf·cm)</td></tr>
+              <tr><td>No-load speed</td><td class="num">11.10 <span class="u">rad/s</span></td><td>datasheet (106 rpm)</td></tr>
+              <tr><td>Mass</td><td class="num">0.068 <span class="u">kg</span></td><td>datasheet</td></tr>
+              <tr><td>Output inertia</td><td class="num">2.7e-3 <span class="u">kg·m²</span></td><td>assumed (est.)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Model a servo as a torque–speed line, not a motor</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Position servo clipped to stall torque, derated to zero at no-load speed</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Invent R / L / K<sub>e</sub> and drive it like a raw BLDC</div>
+          </div>
+          <p class="dp-why">Why: the honest interface of an integrated servo <b>is</b> stall-torque and no-load-speed. Faking electrical internals would let a policy exploit torque the hardware can never deliver.</p>
+        </div>
+
+        <h3>One config generates the whole robot <span class="tag">robot.toml → gen_robot_mjcf.py</span></h3>
+        <p>A single provenance-tracked file, <span class="k">robot.toml</span>, defines the torso, four 3-DOF legs, springs, a pneumatic striker, and the ranges over which the body may be randomized. A generator compiles it to <strong>MJCF</strong> — the XML MuJoCo actually simulates. The whole point is that <em>swapping a part is a config edit</em>, and the total mass is budgeted so torso + legs + twelve 68 g servos lands exactly on the 6 lb (2.72 kg) limit.</p>
+        <p>Each hinge’s peak torque is derived, never guessed: <span class="k">τ = stall_torque × gear</span>. That single relationship links the simulated muscle to the bench motor — the same discipline the firmware side uses to link RTL to its plant.</p>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Randomize the body so part-swaps need no retrain</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Train across a <span class="k">[domain_randomization]</span> range of masses, lengths, stiffness</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Alt</span>Train one policy per exact body</div>
+          </div>
+          <p class="dp-why">Why: a physical swap that stays inside the trained envelope <b>warm-starts</b> for free. Only a change that alters the action dimension — adding a leg or a DOF — forces a from-scratch retrain.</p>
+        </div>
+
+        <h3>The catch that MuJoCo hides <span class="tag">the gear attribute</span></h3>
+        <p>Here is the line that becomes the whole story of Stage 02. In MuJoCo a motor’s torque is <span class="k">gear × ctrl</span>, the control signal is clamped to ±1, the default gear is <strong>1</strong>, and <span class="k">forcerange</span> only <em>clamps</em> — it never amplifies. So the generator must emit <span class="k">gear</span> equal to the derived torque, or the actuator silently collapses to 1 N·m.</p>
+
+        <div class="code">
+          <div class="bar"><span>generated MJCF · one hinge motor</span><span>gen_robot_mjcf.py</span></div>
+<pre><span class="cm">&lt;!-- torque = gear × ctrl(±1); forcerange only CLAMPS, never amplifies --&gt;</span>
+<span class="kw">&lt;motor</span> <span class="at">name</span>=<span class="st">"RR_knee_m"</span> <span class="at">joint</span>=<span class="st">"RR_knee"</span>
+       <span class="at">gear</span>=<span class="st">"5.884"</span>   <span class="cm">&lt;!-- MUST equal τ. default=1 ⇒ the bug --&gt;</span>
+       <span class="at">ctrlrange</span>=<span class="st">"-1 1"</span>
+       <span class="at">forcerange</span>=<span class="st">"-5.884 5.884"</span><span class="kw">/&gt;</span></pre>
+        </div>
+
+        <h3>Two bodies, two fidelities <span class="tag">parametric vs CAD mesh</span></h3>
+        <p>There are deliberately <strong>two</strong> body pipelines. The <em>parametric</em> quadruped uses a uniform 3:1 gear and simple capsules — fast, uniform, the target for most training. The <em>CAD mesh</em> body is the real mechanism authored in Blender, exported as a <span class="k">.physics.json</span> contract, and carries per-axis transmissions that behave very differently:</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Real leg axis</th><th>Transmission</th><th>Peak τ</th><th>Speed</th><th>Character</th></tr></thead>
+            <tbody>
+              <tr><td>Hip yaw</td><td>Belt, 6:1</td><td class="num warm">11.77 <span class="u">N·m</span></td><td class="num">1.85 <span class="u">rad/s</span></td><td>Series-elastic</td></tr>
+              <tr><td>Leg swing</td><td>Worm, 20:1</td><td class="num warm">39.23 <span class="u">N·m</span></td><td class="num">0.56 <span class="u">rad/s</span></td><td>Self-locking</td></tr>
+              <tr><td>Knee / foot</td><td>Toggle press, 1:1</td><td class="num warm">1.96 <span class="u">N·m</span></td><td class="num">11.10 <span class="u">rad/s</span></td><td>Force-amplifying at stow</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Close the slider-crank foot loop with a polynomial, not a weld</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Fit quartics coupling the foot linkage joints (<span class="k">polycoef</span> equality)</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>A rigid <span class="k">&lt;connect&gt;</span> weld at the linkage</div>
+          </div>
+          <p class="dp-why">Why: the polynomial keeps the constraint Jacobian full-rank at the toggle dead-center, so the whole fleet can run at <b>dt = 0.004 s</b> instead of being forced to half that — and the toggle’s force-amplification survives. The worm’s self-locking is modelled as friction, and the belt as a spring, or steering would train unrealistically crisp.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 02 BUG ============ -->
+    <section id="bug" class="bug reveal">
+      <div class="sec-num">Stage 02 — The plot twist</div>
+      <h2>The one line of XML that crippled every training run</h2>
+      <p class="lede">For months, the robots shuffled, scooted and undulated but never truly walked. Serious attempts stalled. A July-2026 audit — 52 agents crawling the codebase adversarially — found the reason, and it wasn’t the learning algorithm.</p>
+
+      <div class="prose">
+        <p>The MJCF generator never emitted the <span class="k">gear</span> attribute on the hinge motors. Torque is <span class="k">gear × ctrl</span>; control clamps to ±1; the default gear is 1. The design called for roughly <strong>13 N·m</strong> per joint. Every joint actually maxed out at <strong>1 N·m</strong>.</p>
+
+        <div class="bugcalc">
+          <div class="cell bad">
+            <div class="lab">What the body had</div>
+            <div class="big">1 N·m</div>
+            <div class="sm">default <span class="k">gear=1</span> · about <b>8%</b> of design torque at every hinge</div>
+          </div>
+          <div class="cell good">
+            <div class="lab">What it needed just to stand</div>
+            <div class="big">4.8 N·m</div>
+            <div class="sm">measured hold torque at the rear knees in a settle test</div>
+          </div>
+        </div>
+
+        <p><strong>Every training run in the project’s history was performed by a robot physically incapable of standing under its own strength.</strong> The standing-still exploit, the shuffling, the failed CPG paddle, the warm-start that wouldn’t transfer — all of it happened on a fighter running at 8% of its intended muscle. The RL stack had spent months being psychoanalyzed for a problem that lived in one line of XML.</p>
+
+        <div class="note warmn">
+          <b>The cruelest irony:</b> a body-validation script <em>did</em> check torque margin — but it read the limit from the attribute that <b>documented intent</b> (<span class="k">forcerange</span>) instead of commanding the actuator and measuring the force it actually produced. The spec said 13 N·m; the compiled artifact delivered 1; and for the project’s entire lifetime, no test made them meet.</p>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Verify outcomes, never attributes</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Command <span class="k">ctrl=1</span>, step physics, assert the <b>joint</b> force equals τ</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Read the torque limit off the model’s declared attribute</div>
+          </div>
+          <p class="dp-why">Why: this bug class can only be caught by measuring what the actuator <b>does</b>. A contract test now re-derives τ and even re-strips the gear to prove the check would fail on the historical model. <b>See Stage 07.</b></p>
+        </div>
+
+        <div class="note"><b>Since the audit,</b> the body has been re-specced onto the servo-true mesh leg and then upgraded to a “v2” actuator (peak-factor 6 / gear 10 ⇒ <b>16.21 N·m</b>, 32 rad/s), passing 18/18 verification tests including an independent cross-engine check. The 8% figure is the audit-era parametric body — the exact number that made the failure legible.</div>
+      </div>
+    </section>
+
+    <!-- ============ 03 SCALE ============ -->
+    <section id="scale" class="reveal">
+      <div class="sec-num">Stage 03 — Simulation</div>
+      <h2>Simulate thousands of worlds at once</h2>
+      <p class="lede">Modern robot RL works because of an almost embarrassingly simple trick: don’t simulate one arena — simulate a thousand, as a single tensor operation on a GPU. The learner sees every slightly-different world at the same time.</p>
+
+      <div class="prose">
+        <p>Physics runs in <strong>MuJoCo-Warp</strong> (with plain MuJoCo kept as a CPU oracle). Every world differs a little — spawn positions, joint noise, randomized physical parameters — so a single policy has to generalize instead of memorize. Two clocks matter: the physics integrator ticks at <strong>250 Hz</strong> (dt = 0.004 s), while the policy only acts at <strong>50 Hz</strong>, with the low-level servo controller running every physics substep in between.</p>
+
+        <div class="stats" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat"><div class="v cool">250 <span style="font-size:1rem">Hz</span></div><div class="l">Physics substeps</div></div>
+          <div class="stat"><div class="v cool">50 <span style="font-size:1rem">Hz</span></div><div class="l">Policy control rate</div></div>
+          <div class="stat"><div class="v warm">11.8×</div><div class="l">Warp vs MJX throughput on the fight scene</div></div>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">MuJoCo-Warp over MJX for contact-heavy fights</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Warp — a compacted contact pool (92k env-steps/s on the fight scene)</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Alt</span>MJX — a trace-frozen worst-case allocation (7.8k env-steps/s)</div>
+          </div>
+          <p class="dp-why">Why: the fight scene has ~20 real contacts but MJX must pre-allocate for hundreds. Warp’s compaction gives an <b>11.8×</b> speedup. Fight throughput is flat from 1k–16k worlds (solver-bound), so training runs at <b>1–4k</b> worlds where the GPU is best utilized.</p>
+        </div>
+
+        <div class="note">Everything downstream is functional GPU array math — no Python-controlled loops, no branching on values the GPU hasn’t computed yet. Every algorithm in the later stages had to be expressed as pure tensor operations to survive compilation. That constraint shapes the entire codebase.</div>
+      </div>
+    </section>
+
+    <!-- ============ 04 TASK ============ -->
+    <section id="task" class="reveal">
+      <div class="sec-num">Stage 04 — The environment</div>
+      <h2>Define the task: how the robot senses and is scored</h2>
+      <p class="lede">A learning environment is three choices: what the policy controls, what it observes, and what it is paid for. This stack follows the Go2/ANYmal recipe that made quadruped RL reliable — and hardens every reward against being gamed.</p>
+
+      <div class="prose">
+        <h3>Control: pose targets, not torques <span class="tag">PD servo @ 250 Hz</span></h3>
+        <p>The policy does not output torques. It outputs small <em>offsets from a standing pose</em>; a position controller turns those into torque every physics substep, with the torque faded to zero as the joint approaches its no-load speed (a real servo can’t push hard and spin fast). Random exploration on pose offsets produces coherent posture perturbations instead of instant collapse.</p>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Position targets → PD → torque</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Policy emits pose offsets; a PD servo makes torque at 250 Hz</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Policy emits raw joint torques directly</div>
+          </div>
+          <p class="dp-why">Why: this single choice is the <b>best-documented uplift in legged RL</b>. It turns noise into wiggling posture rather than falling over, so exploration actually explores gaits.</p>
+        </div>
+
+        <h3>Observation: an asymmetric actor–critic <span class="tag">50 obs / +34 privileged</span></h3>
+        <p>The <strong>actor</strong> — the network that could someday run on real hardware — sees only what a real robot could: 50 dimensions of joint angles, velocities, orientation, its last action, and the velocity command, all rotated into the body frame. In combat it also gets a deliberately-degraded 144-ray lidar (per-ray noise, dropouts read as max-range, a latency buffer). The <strong>critic</strong> — which only exists during training and never ships — gets 34 extra dimensions of privileged truth: exact contact states, foot penetration, true root velocity.</p>
+        <div class="note"><b>The coach sees everything; the player sees only the field.</b> The player’s habits must work under fog, but the critic’s feedback is never confused by it.</div>
+
+        <h3>Reward: many small terms, all adversarially chosen <span class="tag">walk mode</span></h3>
+        <p>The term that actually conjures a gait is <strong>air-time</strong>: each foot is paid for swing phases of roughly the right duration — and the credit saturates, so hopping can’t out-earn a clean cadence. You cannot farm it without lifting feet in rhythm, and lifting feet in rhythm <em>is</em> walking.</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Reward term</th><th>Weight</th><th>What it buys</th></tr></thead>
+            <tbody>
+              <tr><td>Progress along command</td><td class="num cool">+12.0</td><td>go where told</td></tr>
+              <tr><td>Velocity tracking</td><td class="num cool">+5.0</td><td>match commanded speed</td></tr>
+              <tr><td>Air-time</td><td class="num cool">+1.0</td><td>rhythmic foot swings</td></tr>
+              <tr><td>Command alignment</td><td class="num cool">+1.0</td><td>face the right way</td></tr>
+              <tr><td>Foot clearance</td><td class="num cool">+1.0</td><td>lift the swing foot</td></tr>
+              <tr><td>Uprightness</td><td class="num cool">+0.5</td><td>stay vertical</td></tr>
+              <tr><td>Backward motion</td><td class="num warm">−6.0</td><td>penalize retreat</td></tr>
+              <tr><td>Foot slip</td><td class="num warm">−2.0</td><td>don’t drag a planted foot</td></tr>
+              <tr><td>Vertical velocity</td><td class="num warm">−0.5</td><td>no bouncing</td></tr>
+              <tr><td>Pose / action-rate</td><td class="num warm">−0.15 / −0.05</td><td>smooth, natural posture</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Enforce hard limits as terminations, not just penalties</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Constraints-as-Terminations: a violation randomly <b>ends</b> the episode</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Alt</span>Only subtract a reward penalty for the violation</div>
+          </div>
+          <p class="dp-why">Why: a penalty can be out-earned; a termination cuts the value bootstrap and makes the behavior structurally unprofitable. Slip, tipping, over-speed joints, and standing-still-when-commanded all trigger a stochastic end — the machinery that stops the reward hacks in <b>Stage 07</b>.</p>
+        </div>
+
+        <div class="note warmn"><b>The actuator curriculum:</b> a parameter <span class="k">α</span> blends from an <em>ideal</em> actuator (no speed droop) at the start of training to the <em>servo-true</em> torque–speed envelope by 60% through. Learn the gait on an easy motor, then force it to obey the real hardware.</div>
+      </div>
+    </section>
+
+    <!-- ============ 05 WALK ============ -->
+    <section id="walk" class="reveal">
+      <div class="sec-num">Stage 05 — Learning to walk</div>
+      <h2>Teach a gait, then let PPO refine it</h2>
+      <p class="lede">Rather than hope raw reinforcement learning discovers walking from scratch, the stack seeds it with a rhythmic prior, clones a rough policy, then improves it with PPO — the workhorse of robot learning.</p>
+
+      <div class="prose">
+        <h3>A central pattern generator as the teacher <span class="tag">cpg_teacher.py</span></h3>
+        <p>Biological spinal cords hold coupled oscillators that produce rhythmic gaits without the brain micromanaging each muscle. The same idea here is a <strong>35-parameter</strong> CPG: base frequency, per-leg phase offsets, duty factor, foot clearance and per-joint sinusoid coefficients, tuned by rollout-grounded search (not by hand). The learned policy outputs a <em>residual</em> on top of this prior, so it starts from a rhythm rather than from noise.</p>
+
+        <h3>PPO with the four fixes that mattered <span class="tag">train_mesh_warp.py</span></h3>
+        <p>The learner is <strong>PPO</strong> (Proximal Policy Optimization): let the policy play, nudge it toward better-than-expected actions, but <em>clip</em> the nudge so no single batch can overwrite what it already knows. The audit found the historical runs weren’t just under-torqued — they were under-everything. All four were cheap to fix:</p>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Fix</th><th>Before</th><th>After</th></tr></thead>
+            <tbody>
+              <tr><td>Torque (the gear)</td><td class="num warm">1 N·m</td><td class="num cool">~13 N·m</td></tr>
+              <tr><td>Optimization budget</td><td class="num warm">~37 iters</td><td class="num cool">100M+ steps</td></tr>
+              <tr><td>Discount horizon (γ)</td><td class="num warm">0.97 · 0.66 s</td><td class="num cool">0.99 · ~2.0 s</td></tr>
+              <tr><td>Network size</td><td class="num warm">4×32</td><td class="num cool">512·256·128</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The old discount factor gave a credit horizon <em>shorter than a single stride</em> — the policy literally could not see far enough ahead to value a footfall. The old network was a 15:1 bottleneck on a 470-dim observation. The current learner uses a squashed-Gaussian policy, GAE (γ=0.99, λ=0.95, clip 0.2), a SiLU (512·256·128) actor and privileged critic, and schedules that anneal exploration, the actuator curriculum, and imitation weight over the run.</p>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Teacher → student adaptation (RMA-style)</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Privileged teacher; a student infers the hidden world from its recent history</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Alt</span>Ship the privileged policy and hope the extra inputs exist on hardware</div>
+          </div>
+          <p class="dp-why">Why: the deployable student never sees privileged truth, so it learns to <b>estimate</b> physical parameters online from what it can measure. Success is defined as the student closing most of the return gap to the teacher on held-out worlds.</p>
+        </div>
+
+        <div class="note"><b>The result:</b> with all four fixes and a green preflight, a 40.5M-step run produced a policy that walks at <b>0.83 m/s</b> on the deployed route eval, survived a full 600-step episode, and recovered from a stumble without falling — confirmed by rendered video, at 2.8× the 0.3 m/s milestone bar. <i>“The body walks; the gear bug was the whole story.”</i></div>
+      </div>
+    </section>
+
+    <!-- ============ 06 FIGHT ============ -->
+    <section id="fight" class="reveal">
+      <div class="sec-num">Stage 06 — Learning to fight</div>
+      <h2>Learn against an opponent that’s also learning</h2>
+      <p class="lede">Walking is a command; fighting is a curriculum. Once a robot can move on demand, combat training layers self-play, a widening opponent pool, and an automated coach on top of the same learner.</p>
+
+      <div class="prose">
+        <h3>Self-play against a hall of fame <span class="tag">PFSP league</span></h3>
+        <p>The policy trains against frozen snapshots of its past selves. Good snapshots are periodically promoted into the opponent pool, and opponents are sampled by <strong>Prioritized Fictitious Self-Play</strong>: an opponent’s weight rises the harder it is to beat (<span class="k">w ∝ (1−winrate)²</span>). Nothing ever leaves the pool.</p>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Sample the whole hall of fame, weighted by difficulty</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>PFSP over the full archive — hard opponents most often</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Best-respond to the most recent opponent only</div>
+          </div>
+          <p class="dp-why">Why: chasing one opponent at a time causes <b>cycling</b> — the classic Red-Queen forgetting where a policy peaks then collapses. Keeping the whole archive in support is what stops it.</p>
+        </div>
+
+        <h3>Walk-then-fight, and exploration as a search dimension</h3>
+        <p>A curriculum first pays the robot for locomotion toward the opponent, then fades combat reward in while widening the spawn distance — and keeps a fraction of episodes as pure walking drills forever, so the fighter can never forget its legs. Three exploration add-ons ride along, and crucially they aren’t hand-tuned — they’re <strong>population-training hyperparameters</strong> the run discovers per-agent:</p>
+
+        <div class="exgrid">
+          <div class="excard"><div class="en">RND</div><h4>Curiosity</h4><p>Pay a bonus for states a predictor network finds surprising — measured over <em>tactical</em> descriptors (engagement geometry, contact events), not raw joint angles.</p></div>
+          <div class="excard"><div class="en">HER</div><h4>Hindsight</h4><p>If the robot ended somewhere useless, relabel the episode as if that was the goal — learn from the success that accidentally happened.</p></div>
+          <div class="excard"><div class="en">PBT</div><h4>Population training</h4><p>Many runs in parallel; the weak periodically copy the strong and mutate hyperparameters. Tuning happens <em>during</em> training, not between runs.</p></div>
+          <div class="excard"><div class="en">Coach</div><h4>Adaptive weights</h4><p>A control loop reads a held-out benchmark and raises the reward weight on lagging skills — gated by whether that skill is actually <em>learnable</em> right now.</p></div>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Let a coach move reward weights, don’t hand-tune them</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>Feedback loop: weight rises on a lagging-but-tractable competency, decays on a satisfied one</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Alt</span>Fix reward weights by hand and re-run on every plateau</div>
+          </div>
+          <p class="dp-why">Why: a satisfied objective can be over-optimized into a degenerate one; a lagging objective may be unlearnable right now. Reading a <b>held-out benchmark decomposition</b> lets the coach avoid pouring reward into a hole the body can’t climb out of.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 07 HONEST ============ -->
+    <section id="honest" class="reveal">
+      <div class="sec-num">Stage 07 — Verification</div>
+      <h2>Keep it honest: metrics select, videos confirm</h2>
+      <p class="lede">RL agents are amoral optimizers of exactly what you wrote. This project was burned twice — metrics claimed “walking,” video falsified it — and responded by treating the simulator itself as something to be audited.</p>
+
+      <div class="prose">
+        <h3>The villain arc: how the agents cheated</h3>
+        <p>Every exploit forced the <em>task definition</em> to get smarter. The catalog is instructive precisely because each one looked great on a scoreboard:</p>
+
+        <div class="exgrid">
+          <div class="excard"><div class="en">Exploit 01</div><h4>The catapult</h4><p>Launched its own torso 1.5 m into the air at the bell, landed all its damage in the spawn chaos, then idled. Beautiful damage ratio; terrible video.</p><div class="fix"><b>Patched by</b>a torque-ratio band that flags catapult-strength actuation</div></div>
+          <div class="excard"><div class="en">Exploit 02</div><h4>The pacifist statue</h4><p>“Won” by standing perfectly still and letting incidental contact do the scoring.</p><div class="fix"><b>Patched by</b>a stationary penalty + a min-progress termination</div></div>
+          <div class="excard"><div class="en">Exploit 03</div><h4>The oscillator</h4><p>Farmed a movement-speed reward by vibrating in place — max instantaneous speed, zero displacement.</p><div class="fix"><b>Patched by</b>rewarding net displacement, penalizing wasted energy</div></div>
+          <div class="excard"><div class="en">Exploit 04</div><h4>The curiosity junkie</h4><p>RND paid novelty for unseen joint angles, so the policy jittered to manufacture novelty without doing anything.</p><div class="fix"><b>Patched by</b>measuring novelty over tactical descriptors, not proprioception</div></div>
+        </div>
+
+        <p>Checkpoint promotion is now gated on <strong>trajectory-level behavior</strong> — net displacement, genuine approach, path quality — not just score, backed by roughly two dozen “did you actually fight or did you find a loophole” metrics. As the note in the repo puts it: <em>a reward function is a contract written against a very hostile lawyer.</em></p>
+
+        <h3>The layered check stack <span class="tag">cheapest first</span></h3>
+        <p>Every layer kills a specific class of bug, ordered so the fastest checks fail first:</p>
+
+        <div class="ladder">
+          <div class="rung"><div class="id">T0</div><div><div class="rt">Model-build contract</div><div class="rd">Command <code>ctrl=1</code>, assert the joint delivers τ; assert gear on every hinge, mass, ranges, armature. <em>Kills the gear-bug class on day one.</em></div></div></div>
+          <div class="rung"><div class="id">T1</div><div><div class="rt">Static capability</div><div class="rd">Measure torque by outcome; hold the canonical stance (no adaptive bar); a <code>--strip-gear</code> run must fail. <em>Kills spring-propped false stands.</em></div></div></div>
+          <div class="rung"><div class="id">T2</div><div><div class="rt">Training-config preflight</div><div class="rd">Fail if PPO iterations &lt; 200, if the credit horizon is shorter than a stride, or if a config flag is silently ignored. <em>Kills the 37-iteration, γ=0.97, tiny-net runs.</em></div></div></div>
+          <div class="rung"><div class="id">T3</div><div><div class="rt">Mechanism liveness</div><div class="rd">Resets must differ; every control/obs mode gets a smoke rollout. <em>Kills dead code that exists but never fires.</em></div></div></div>
+          <div class="rung"><div class="id">T4</div><div><div class="rt">Reward red-teaming</div><div class="rd">Pre-registered exploit fixtures (stand-still, oscillate, catapult) must each score less than an honest attempt before any reward change merges. <em>Kills reward hacks pre-GPU.</em></div></div></div>
+          <div class="rung"><div class="id">T7</div><div><div class="rt">Checkpoint semantics</div><div class="rd">Every checkpoint carries a model hash + action/obs semantics; a frozen opponent is rejected on semantics, not just shape. <em>Kills silently mis-driven policies.</em></div></div></div>
+        </div>
+
+        <div class="dp">
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Break the “a simulator can’t disagree with itself” trap</span></div>
+          <div class="fork">
+            <div class="opt chosen"><span class="ol">Chosen</span>An independent Drake model re-derives τ from motor primitives and cross-checks</div>
+            <div class="vs">vs</div>
+            <div class="opt"><span class="ol">Rejected</span>Trust the compiled model because its own checks pass</div>
+          </div>
+          <p class="dp-why">Why: shared-fate is exactly how the gear bug survived — the model and its tests read the same wrong number. A second engine that never reads the MJCF agrees to <b>0.003%</b> on torque, and fires loudly (12.97×) on the stripped model.</p>
+        </div>
+
+        <div class="note"><b>The launch gate.</b> One command — <span class="k">run_pre_gpu_tests.sh --require-gpu</span> — is the only complete verdict: dependency contract, plain-MuJoCo vs Warp parity, contract tests, training-scale GPU pytest, and a same-seed determinism canary. A pile of individually-green commands is explicitly <em>not</em> permission to launch.</div>
+      </div>
+    </section>
+
+    <!-- ============ 08 STATUS ============ -->
+    <section id="status" class="reveal">
+      <div class="sec-num">Stage 08 — Where it stands</div>
+      <h2>Done, in progress, and the frontier</h2>
+      <p class="lede">The pipeline is real end to end, and it produced its first honest behavioral milestone in July 2026. The map below is deliberately unglamorous — the project’s rule is that only video counts.</p>
+
+      <div class="prose">
+        <div class="board">
+          <div class="col done">
+            <h4><span class="pip"></span>Done</h4>
+            <ul>
+              <li>Full verification stack: contract tests, preflight, exploit fixtures, goldens, cross-engine check</li>
+              <li><b>Walks on command at 0.83 m/s</b>, confirmed on rendered video</li>
+              <li>Warp performance ladder complete, with upstream fixes contributed back</li>
+              <li>Body upgraded to <b>v2</b> — 16.21 N·m, 32 rad/s, 18/18 tests</li>
+            </ul>
+          </div>
+          <div class="col prog">
+            <h4><span class="pip"></span>In progress</h4>
+            <ul>
+              <li>First two-sided fight: a walking <b>pursuer opponent</b> vs the stronger body</li>
+              <li>A real PFSP league driven by the adaptive coach</li>
+              <li>Whack-a-mole reward hardening: the anti-creep terms revealed a stand-still exploit; a min-progress termination is the next fix</li>
+            </ul>
+          </div>
+          <div class="col front">
+            <h4><span class="pip"></span>Frontier</h4>
+            <ul>
+              <li><b>Open-ended self-play combat</b> — built and tested, not yet a result</li>
+              <li>The real CAD leg: the as-built worm/blade mechanism is a stomp weapon, not yet a walker; a co-design arc points at a BLDC actuator direction</li>
+              <li>Sim-to-real: the current walker is a surrogate; hardware fit is gated on bench measurements</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="note warmn"><b>The honest caveat.</b> The 0.83 m/s walker runs on a <em>parametric surrogate</em> body. The actual mechanism in CAD — worm-driven pitch, series-elastic yaw, a toggle-press blade foot — was found to be built for stomping, not striding; its knee <em>does</em> retract enough to lift a foot, and a Drake-certified crawl geometry got feet lifting in sim, but transferring to real hardware remains deliberately gated behind bench measurements. Simulation is an executable claim, not truth.</div>
+      </div>
+    </section>
+
+    <footer>
+      <p class="big">The through-line of the whole project, if it has one: <em>simulation is only as honest as its cheapest unverified assumption.</em> The firmware side learned that years ago and tests everything. The RL side learned it the hard way — and wrote it down.</p>
+      <p><b>Motorloop</b> · a motor-to-robot co-simulation &amp; RL stack · pipeline walkthrough<br>
+      Grounded in a live trace of <b>robot.toml → gen_robot_mjcf → MuJoCo-Warp → PPO → arena</b>. Figures reflect the July 2026 audit era; the committed body has since evolved.</p>
+    </footer>
+
+  </main>
+</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---- theme toggle ---- */
+  var root = document.documentElement, btn = document.getElementById("themeBtn"),
+      icon = document.getElementById("themeIcon");
+  function apply(t){ root.setAttribute("data-theme", t); icon.textContent = t==="dark"?"☾":"☀"; }
+  var start = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark":"light";
+  apply(start);
+  btn.addEventListener("click", function(){
+    apply(root.getAttribute("data-theme")==="dark" ? "light":"dark");
+  });
+
+  /* ---- scroll spy ---- */
+  var links = Array.prototype.slice.call(document.querySelectorAll("#nav a"));
+  var map = {};
+  links.forEach(function(a){ map[a.getAttribute("href").slice(1)] = a; });
+  var secs = Array.prototype.slice.call(document.querySelectorAll("main [id]"));
+  var spy = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if(e.isIntersecting){
+        links.forEach(function(a){ a.classList.remove("active"); });
+        if(map[e.target.id]) map[e.target.id].classList.add("active");
+      }
+    });
+  }, {rootMargin:"-15% 0px -75% 0px", threshold:0});
+  secs.forEach(function(s){ spy.observe(s); });
+
+  /* ---- reveal on scroll ---- */
+  if(reduce){
+    Array.prototype.forEach.call(document.querySelectorAll(".reveal"), function(el){ el.classList.add("in"); });
+  } else {
+    var rev = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add("in"); rev.unobserve(e.target); } });
+    }, {rootMargin:"0px 0px -8% 0px", threshold:.08});
+    Array.prototype.forEach.call(document.querySelectorAll(".reveal"), function(el){ rev.observe(el); });
+  }
+
+  /* ---- gait canvas: 4 phase-offset oscillators (the CPG) ---- */
+  var cv = document.getElementById("gait");
+  if(cv && cv.getContext){
+    var ctx = cv.getContext("2d"), W=0, H=0, dpr=Math.min(window.devicePixelRatio||1,2);
+    function css(v){ return getComputedStyle(root).getPropertyValue(v).trim(); }
+    function resize(){
+      W = cv.clientWidth; H = cv.clientHeight;
+      cv.width = W*dpr; cv.height = H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    resize();
+    var legs = [0, .25, .5, .75]; // diagonal-ish phase offsets
+    function draw(t){
+      var cool = css("--cool"), warm = css("--warm"), faint = css("--ink-faint");
+      ctx.clearRect(0,0,W,H);
+      // baseline grid
+      ctx.globalAlpha = .35; ctx.strokeStyle = css("--border-soft"); ctx.lineWidth = 1;
+      for(var gx=0; gx<W; gx+=44){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+      ctx.globalAlpha = 1;
+      var mid = H/2, amp = H*0.26, freq = 1.6, speed = reduce?0:t*0.0006;
+      for(var i=0;i<legs.length;i++){
+        var ph = legs[i]*Math.PI*2;
+        ctx.beginPath();
+        ctx.strokeStyle = (i%2===0)? cool : warm;
+        ctx.globalAlpha = 0.55 - i*0.06;
+        ctx.lineWidth = 2;
+        for(var x=0;x<=W;x+=4){
+          var u = x/W*Math.PI*2*freq + ph + speed;
+          var y = mid - Math.sin(u)*amp*(0.6+0.4*i/3);
+          if(x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+        // foot dot at the swing peak
+        var fx = ((0.5 - (ph+speed)/(Math.PI*2*freq))*W);
+        fx = ((fx%W)+W)%W;
+        var fu = fx/W*Math.PI*2*freq + ph + speed;
+        var fy = mid - Math.sin(fu)*amp*(0.6+0.4*i/3);
+        ctx.globalAlpha = 1; ctx.fillStyle = (i%2===0)? cool : warm;
+        ctx.beginPath(); ctx.arc(fx, fy, 3.2, 0, Math.PI*2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    if(reduce){ draw(0); }
+    else {
+      var raf; function loop(ts){ draw(ts); raf=requestAnimationFrame(loop); }
+      raf = requestAnimationFrame(loop);
+    }
+    var rt; window.addEventListener("resize", function(){ clearTimeout(rt); rt=setTimeout(function(){ resize(); if(reduce) draw(0); }, 120); });
+  }
+})();
+</script>
+</body>
+</html>

@@ -5,7 +5,7 @@ The one thing we want swappable between the fast RL inner loop and the real-comp
 the ACTUATOR: how a commanded action becomes *deliverable* torque. An `Actuator` maps joint speed →
 the per-joint fraction of the static torque limit the drive can actually produce at that speed. Two
 backends today:
-  * `IdealActuator` — delivers full commanded torque at any speed (what the MJX inner loop assumes).
+  * `IdealActuator` — delivers full commanded torque at any speed (the idealized baseline).
   * `FocActuator`   — the real motorloop FOC/motor envelope (back-EMF + current limit + voltage sag +
                       thermal derate + gear efficiency), parameterized from a `motors.py` datasheet.
                       This is the component-IP-grounded actuator the RTL gate (Phase 11) validates against.

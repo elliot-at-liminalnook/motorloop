@@ -24,7 +24,11 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from gen_mesh_robot_mjcf import (ARMATURE, build_mesh_robot, load_assembly,  # noqa: E402
+from gen_mesh_robot_mjcf import (ARMATURE, MAX_ROBOT_MASS_KG, MAX_ROBOT_MASS_LB,  # noqa: E402
+                                 SERVO_COUNT, SERVO_FREE_RAD_S, SERVO_MASS,
+                                 SERVO_MODEL, SERVO_NO_LOAD_CURRENT_A,
+                                 SERVO_STALL_CURRENT_A, SERVO_STALL_NM,
+                                 build_mesh_robot, load_assembly,
                                  loop_consistent_pose, slider_crank_s)
 
 ASM = load_assembly()
@@ -71,7 +75,9 @@ def test_quartic_fit_matches_closed_form():
 
 # ------------------------------------------------------- 2. ctrl->qfrc outcome
 def test_ctrl_one_delivers_design_torque():
-    want = {"yaw_m": 1.2, "swing_m": 24.0, "knee_m": 3.0}
+    from gen_mesh_robot_mjcf import GEARS
+    want = {"yaw_m": GEARS["hip_yaw"], "swing_m": GEARS["leg_swing"],
+            "knee_m": GEARS["knee_blade"]}   # single source: servo-true generator
     d = mujoco.MjData(M)
     for i in range(M.nu):
         name = mujoco.mj_id2name(M, mujoco.mjtObj.mjOBJ_ACTUATOR, i)
@@ -82,6 +88,24 @@ def test_ctrl_one_delivers_design_torque():
         tau = float(d.qfrc_actuator[dof])
         expect = next(v for k, v in want.items() if name.endswith(k))
         assert abs(tau - expect) < 0.05 * expect, (name, tau, expect)
+
+
+def test_all_twelve_actuators_use_the_selected_st3215_hs_envelope():
+    """The part choice is a compiled-model contract, not just a catalog comment."""
+    assert SERVO_MODEL == "waveshare_st3215_hs"
+    assert M.nu == SERVO_COUNT == 12
+    assert math.isclose(SERVO_STALL_NM, 20.0 * 0.0980665, rel_tol=1e-9)
+    assert math.isclose(SERVO_FREE_RAD_S, 106.0 * 2 * math.pi / 60, rel_tol=1e-9)
+    assert SERVO_MASS == 0.068
+    assert SERVO_NO_LOAD_CURRENT_A == 0.240
+    assert SERVO_STALL_CURRENT_A == 2.4
+    contract = ASM["hardware_contract"]
+    assert contract["motor_count"] == 12
+    assert contract["motor_model"] == "Waveshare ST3215-HS"
+    acts = [a for L in LEGS for a in ASM["legs"][L]["actuators"]]
+    assert len(acts) == 12
+    assert {a["motor_model"] for a in acts} == {"Waveshare ST3215-HS"}
+    assert all(math.isclose(a["motor_mass_kg"], SERVO_MASS) for a in acts)
 
 
 # ----------------------------------------------------------------- 3. armature
@@ -95,10 +119,17 @@ def test_armature_matches_json_guidance():
 
 # --------------------------------------------------------------------- 4. mass
 def test_mass_census():
-    per_leg = ASM["legs"]["FL"]["leg_total_mass_kg"]          # 1.31, all legs equal
-    want = 3.0 + 0.1 + 4 * per_leg                            # torso ph + striker ph + legs
-    got = float(M.body_mass.sum())
-    assert abs(got - want) <= 0.05 * want, (got, want)
+    assert math.isclose(SERVO_COUNT * SERVO_MASS, 0.816, abs_tol=1e-12)
+    for sea in (False, True):
+        model = mujoco.MjModel.from_xml_string(build_mesh_robot(ASM, floor=False, sea=sea))
+        got = float(model.body_mass.sum())
+        assert got <= MAX_ROBOT_MASS_KG + 1e-9, (
+            f"sea={sea}: model is {got / 0.45359237:.6f} lb, "
+            f"above {MAX_ROBOT_MASS_LB:.1f} lb")
+        # The simulation intentionally carries the maximum legal mass so gravity
+        # and inertia are conservative. Placeholder structure fills the remainder.
+        assert math.isclose(got, MAX_ROBOT_MASS_KG, abs_tol=1e-9), (
+            sea, got, MAX_ROBOT_MASS_KG)
 
 
 # ----------------------------------------------------------- 5. limits + axes

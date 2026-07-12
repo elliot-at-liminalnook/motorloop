@@ -1,5 +1,10 @@
 # SPARC Learning Log
 
+> **Document status:** Active · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Canonical summary:** [`locomotion-status.md`](locomotion-status.md)
+
+This is a detailed experiment log. Use the linked summary for the current
+project-level verdict; entries below retain exact intermediate outcomes.
+
 Purpose: keep the working lessons from SPARC experiments explicit, including rejected paths.
 
 ## Current Baseline

@@ -540,7 +540,8 @@ PYBIND11_MODULE(bldcsim, m) {
       .def_property_readonly("foc_iq", &bldcsim::Bench::foc_iq)
       .def_property_readonly("foc_vd", &bldcsim::Bench::foc_vd)
       .def_property_readonly("foc_vq", &bldcsim::Bench::foc_vq)
-      .def("run_for", &bldcsim::Bench::run_for)
+      .def("run_for", &bldcsim::Bench::run_for,
+           py::call_guard<py::gil_scoped_release>())
       .def("run_cycles", &bldcsim::Bench::run_cycles)
       .def("inject_drv_register_reset",
            &bldcsim::Bench::inject_drv_register_reset)

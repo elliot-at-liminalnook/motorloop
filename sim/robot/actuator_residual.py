@@ -4,7 +4,7 @@
 The analytic envelope (`reality_gap.actuator_scale`: back-EMF droop + current limit +
 voltage sag + thermal + gear efficiency) captures the first-order torque-speed shape.
 RS2 learns the *residual it misses* — stiction, cogging, nonlinear thermal coupling,
-control latency — with a compact net inserted between the policy output and the MJX
+control latency, with a compact net inserted between policy output and the Warp
 motor, so it only models what the prior gets wrong (not the whole map).
 
 Compact net = a random-feature ridge model (a 1-hidden-layer net with fixed random
