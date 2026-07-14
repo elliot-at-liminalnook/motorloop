@@ -48,6 +48,48 @@ def test_gate_directions_are_explicit():
     assert not early_gates_pass(early, {"up": 0.9, "catrate": 0.01})
 
 
+def test_ladder_promotion_uses_worst_deterministic_seed(tmp_path):
+    args = make_parser().parse_args(["run", "--out", str(tmp_path)])
+    runner = LadderRunner(args)
+    rung = RUNGS[5]
+    metrics = {
+        "duty": 0.80,
+        "foot_cycle_duty": 0.86,
+        "speed": 0.06,
+        "ladder_step_clock": 0.71,
+        "ladder_swing_clearance": 0.63,
+        "up": 1.0,
+        "catrate": 0.0001,
+        "fallrate": 0.0,
+        "diagnostics": {"multi_seed_evaluation": {"metrics": {
+            # The means pass both contracts, but one held-out seed on each
+            # boundary does not.  Promotion must preserve those failures.
+            "ladder_step_clock": {"values": [0.6995, 0.7005, 0.7006]},
+            "catrate": {"values": [0.0001, 0.0011, 0.0002]},
+        }}},
+    }
+
+    passed, details = runner._gate(rung, metrics)
+
+    assert not passed
+    assert any("FAIL ladder_step_clock" in row and "worst of 3" in row
+               for row in details)
+    assert any("FAIL catrate" in row and "worst of 3" in row
+               for row in details)
+
+
+def test_ladder_gate_falls_back_to_standalone_fixed_seed(tmp_path):
+    args = make_parser().parse_args(["run", "--out", str(tmp_path)])
+    runner = LadderRunner(args)
+    gate = Gate("score", ">=", 0.7)
+
+    value, source, values = runner._gate_observation(gate, {"score": 0.8})
+
+    assert value == pytest.approx(0.8)
+    assert source == "direct fixed-seed observation"
+    assert values == [0.8]
+
+
 def test_gate_diagnostics_expose_normalized_headroom_and_learning_slopes():
     gates = parse_early_gates(["xprogress,>=,0.1", "catrate,<=,0.001"])
     report = gate_diagnostics(gates, {"xprogress": 0.04, "catrate": 0.0002})

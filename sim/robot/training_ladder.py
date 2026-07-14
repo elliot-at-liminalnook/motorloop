@@ -753,15 +753,44 @@ class LadderRunner:
             raise ValueError(f"no evaluation metrics in {path}")
         return raw["evals"][-1]
 
+    @staticmethod
+    def _gate_observation(gate: Gate, metrics: dict) -> tuple[float | None, str, list[float]]:
+        """Return the conservative observation represented by an evaluation.
+
+        Trainer evaluations retain the first deterministic seed at the top level
+        for backward compatibility, plus all held-out seeds in the diagnostics
+        payload.  Promotion must not happen because that first seed happened to
+        be easier than the others: lower-bound gates use the minimum seed value,
+        while upper-bound gates use the maximum.  A standalone fixed-seed replay
+        has no multi-seed payload and therefore uses its direct observation.
+        """
+        direct = metrics.get(gate.metric)
+        seed_metric = (metrics.get("diagnostics", {})
+                       .get("multi_seed_evaluation", {})
+                       .get("metrics", {})
+                       .get(gate.metric, {}))
+        raw_values = seed_metric.get("values", []) if isinstance(seed_metric, dict) else []
+        values = [float(value) for value in raw_values
+                  if isinstance(value, (int, float)) and math.isfinite(float(value))]
+        if values:
+            observed = min(values) if gate.comparison == ">=" else max(values)
+            return observed, f"worst of {len(values)} deterministic seeds", values
+        if isinstance(direct, (int, float)) and math.isfinite(float(direct)):
+            return float(direct), "direct fixed-seed observation", [float(direct)]
+        return None, "missing observation", []
+
     def _gate(self, rung: Rung, metrics: dict) -> tuple[bool, list[str]]:
         if self.args.no_gates or self.args.tiny:
             return True, ["gates bypassed for smoke/dry validation"]
         details = []
         passed = True
         for gate in rung.gates:
-            ok = gate.passes(metrics)
-            value = metrics.get(gate.metric, "MISSING")
-            details.append(f"{'PASS' if ok else 'FAIL'} {gate.describe()} (got {value})")
+            value, source, values = self._gate_observation(gate, metrics)
+            ok = value is not None and gate.passes({gate.metric: value})
+            got = "MISSING" if value is None else value
+            details.append(
+                f"{'PASS' if ok else 'FAIL'} {gate.describe()} "
+                f"(got {got}; {source}; values={values})")
             passed &= ok
         return passed, details
 

@@ -18,7 +18,9 @@ navigation gates before combat training is promoted.
   are implemented.
 - Rungs 1–5 are accepted. The resumable rung-6 stepping policy is at step
   10,002,432 and passes every physical/safety gate; step-clock agreement is
-  0.699512 against a 0.70 gate, so it remains correctly unpromoted.
+  0.699512 on the worst of three deterministic seeds against a 0.70 gate, so it
+  remains correctly unpromoted. The other two seeds score 0.700459 and 0.700644;
+  promotion uses the adverse seed tail rather than the passing mean.
 - The stopped RunPod artifacts and exact resume command are recorded in
   [`training-ladder-runbook.md`](training-ladder-runbook.md).
 - The complete verification entry point covers walker, mesh, combat, ladder,
@@ -29,11 +31,13 @@ navigation gates before combat training is promoted.
 A ladder artifact is promotable only when it:
 
 1. passes every task-specific physical and competence threshold;
-2. reproduces the pass at the fixed retention seed;
-3. replays every prior same-family skill within its stored tolerance;
-4. has compatible model, observation, action, reward, and dependency metadata;
+2. passes each threshold at the conservative tail of its deterministic
+   multi-seed evaluation bank;
+3. reproduces the pass at the separate fixed retention seed;
+4. replays every prior same-family skill within its stored tolerance;
+5. has compatible model, observation, action, reward, and dependency metadata;
    and
-5. produces a plausible rendered rollout before a behavioral claim is promoted.
+6. produces a plausible rendered rollout before a behavioral claim is promoted.
 
 Until that gate passes for the active design, downstream open-ended combat is a
 frontier rather than a result.

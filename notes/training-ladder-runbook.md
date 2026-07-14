@@ -12,7 +12,10 @@ fixed-seed gate and prior-skill replay, and stops at the first unproved rung.
 Training was intentionally stopped at 2026-07-14 04:16 UTC before the RunPod was
 terminated. Rungs 1–5 are accepted. Rung 6, **Step in place**, has a resumable
 candidate but is not accepted: its final deterministic evaluation was only
-`0.0004883` below the step-clock threshold.
+`0.0004883` below the step-clock threshold on the worst member of its three-seed
+evaluation bank. The individual results were `0.699512`, `0.700459`, and
+`0.700644`: the mean passes, but robust promotion intentionally uses the adverse
+tail rather than averaging that failure away.
 
 | Evidence | Saved value | Gate | Verdict |
 | --- | ---: | ---: | --- |
@@ -105,6 +108,13 @@ Each rung follows this sequence:
 6. record every gate margin in the persistent regression matrix; and
 7. promote only if the new skill and every replay pass.
 
+The ordinary trainer evaluation is also a promotion bank, not just a diagnostic.
+For every `>=` gate the ladder uses the minimum value across its deterministic
+seeds; for every `<=` gate it uses the maximum. The standalone retention-seed
+evaluation remains an additional independent reproduction check. This prevents
+the first or mean seed from hiding a brittle policy while requiring no manually
+tuned confidence margin.
+
 If an accepted gate contract changes, the ladder re-audits the accepted prefix.
 A failing rung and all dependent successors are quarantined rather than silently
 grandfathered. Unaccepted downstream candidates and derived gait priors are also
@@ -150,6 +160,9 @@ it is not permission to hand-increase an arbitrary reward weight.
   source hashes must match the accepted prerequisite.
 - Promotion is evidence, not a filename: fixed-seed reproduction, checkpoint
   replay, multi-seed tails, and regression replay are mandatory.
+- A mean can hide a boundary failure. Gate on the adverse deterministic-seed
+  tail, then use the separate fixed seed to test reproduction rather than
+  lowering a threshold because the aggregate is close.
 
 ## Safe shutdown
 
