@@ -117,6 +117,27 @@ def test_resumed_eval_schedule_covers_only_new_experience():
     assert incremental_eval_interval(99, 100, 4, rollout) == rollout
 
 
+def test_interrupted_ladder_attempt_resumes_at_next_durable_target(tmp_path):
+    tag = tmp_path / "rung_06_step_in_place"
+    Path(str(tag) + ".stats.json").write_text(json.dumps({"evals": [
+        {"step": 8_822_784},
+        {"step": 10_002_432},
+    ]}))
+
+    completed = LadderRunner._durable_completed_attempts(
+        tag, base_steps=2_000_000, recorded_attempts=6)
+
+    assert completed == 5
+    assert 2_000_000 * (completed + 1) == 12_000_000
+
+
+def test_resume_retries_recorded_attempt_when_legacy_stats_are_missing(tmp_path):
+    completed = LadderRunner._durable_completed_attempts(
+        tmp_path / "missing", base_steps=2_000_000, recorded_attempts=6)
+
+    assert completed == 5
+
+
 def test_actor_and_critic_gradient_clipping_are_disjoint():
     actor = torch.nn.Linear(2, 1, bias=False)
     critic = torch.nn.Linear(2, 1, bias=False)

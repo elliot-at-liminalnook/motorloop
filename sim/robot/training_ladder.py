@@ -754,6 +754,31 @@ class LadderRunner:
         return raw["evals"][-1]
 
     @staticmethod
+    def _durable_completed_attempts(tag: Path, base_steps: int,
+                                    recorded_attempts: int) -> int:
+        """Count only attempt boundaries represented by a durable evaluation.
+
+        The ladder records an attempt number after its trainer subprocess exits,
+        including an intentional SIGTERM.  If that subprocess was interrupted
+        before reaching its target, blindly trusting the counter skips the next
+        target on resume.  Evaluation checkpoints are the durable unit: round
+        their latest step down to a whole attempt and cap it by the state counter.
+        If legacy stats are unavailable, conservatively retry the recorded
+        attempt instead of skipping unseen experience.
+        """
+        stats_path = Path(str(tag) + ".stats.json")
+        try:
+            raw = json.loads(stats_path.read_text())
+            evaluated_steps = [int(row["step"]) for row in raw.get("evals", [])
+                               if isinstance(row, dict) and "step" in row]
+            if evaluated_steps:
+                durable = max(evaluated_steps) // max(1, int(base_steps))
+                return min(max(0, int(recorded_attempts)), durable)
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
+        return max(0, int(recorded_attempts) - 1)
+
+    @staticmethod
     def _gate_observation(gate: Gate, metrics: dict) -> tuple[float | None, str, list[float]]:
         """Return the conservative observation represented by an evaluation.
 
@@ -899,9 +924,10 @@ class LadderRunner:
         base_steps = max(1, int(base_steps * rung.step_scale))
         last_metrics: dict = {}
         candidate_path = Path(str(tag) + ".pt")
-        completed_attempts = (int(self.state.get("attempts", {}).get(str(rung.number), 0))
-                              if candidate_path.exists()
-                              and self._failed_on_entry == rung.number else 0)
+        recorded_attempts = int(self.state.get("attempts", {}).get(str(rung.number), 0))
+        completed_attempts = (
+            self._durable_completed_attempts(tag, base_steps, recorded_attempts)
+            if candidate_path.exists() and self._failed_on_entry == rung.number else 0)
         for offset in range(1, self.args.attempts + 1):
             attempt = completed_attempts + offset
             target_steps = base_steps * attempt
