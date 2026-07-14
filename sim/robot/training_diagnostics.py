@@ -368,6 +368,45 @@ def scalar_metric_gap(training: Mapping, evaluation: Mapping,
     return out
 
 
+def checkpoint_replay_comparison(before: Mapping, after: Mapping,
+                                 keys: Iterable[str], *,
+                                 atol: float = 1.0e-6,
+                                 rtol: float = 1.0e-6) -> dict:
+    """Compare replay metrics with an absolute-plus-relative float tolerance.
+
+    GPU physics reductions are not bitwise deterministic, so exact trajectory
+    hashes remain useful evidence but cannot be the sole checkpoint contract.
+    Scaling the tolerance prevents one last-place rounding quantum in a large
+    accumulated reward from being treated like a meaningful behavior change.
+    """
+    differences, tolerances, tolerance_ratios, failures = {}, {}, {}, []
+    for key in keys:
+        before_value, after_value = before.get(key), after.get(key)
+        if not isinstance(before_value, (int, float)) or not isinstance(
+                after_value, (int, float)):
+            continue
+        difference = abs(float(after_value) - float(before_value))
+        tolerance = float(atol) + float(rtol) * max(
+            abs(float(before_value)), abs(float(after_value)))
+        ratio = difference / max(tolerance, EPS)
+        differences[key] = difference
+        tolerances[key] = tolerance
+        tolerance_ratios[key] = ratio
+        if ratio > 1.0:
+            failures.append(key)
+    return {
+        "pass": not failures,
+        "atol": float(atol),
+        "rtol": float(rtol),
+        "max_abs_metric_difference": max(differences.values(), default=0.0),
+        "max_tolerance_ratio": max(tolerance_ratios.values(), default=0.0),
+        "metric_differences": differences,
+        "metric_tolerances": tolerances,
+        "metric_tolerance_ratios": tolerance_ratios,
+        "failed_metrics": failures,
+    }
+
+
 def multi_seed_summary(results: list[Mapping], keys: Iterable[str]) -> dict:
     """Mean, uncertainty, and worst observed value across held-out seeds."""
     out = {"count": len(results), "metrics": {}}

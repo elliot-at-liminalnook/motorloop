@@ -10,6 +10,7 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from training_diagnostics import (  # noqa: E402
+    checkpoint_replay_comparison,
     critic_calibration,
     diagnostic_alerts,
     gradient_clip_diagnostics,
@@ -34,6 +35,17 @@ class _Actor(torch.nn.Module):
 
     def forward(self, value):
         return self.linear(value)
+
+
+def test_checkpoint_replay_comparison_is_scale_aware():
+    comparison = checkpoint_replay_comparison(
+        {"reward": 19.0, "clock": 0.698},
+        {"reward": 19.000002, "clock": 0.698020},
+        ("reward", "clock"))
+    assert not comparison["pass"]
+    assert comparison["failed_metrics"] == ["clock"]
+    assert comparison["metric_tolerance_ratios"]["reward"] < 1.0
+    assert comparison["metric_tolerance_ratios"]["clock"] > 1.0
 
 
 class _Norm(torch.nn.Module):

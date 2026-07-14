@@ -62,6 +62,7 @@ from leg_attack_warp_env import LegAttackWarpEnv  # noqa: E402
 from ladder_warp_env import LadderCombatWarpEnv, LadderLocomotionWarpEnv  # noqa: E402
 from codesign_warp_env import DesignEnsembleWarpEnv  # noqa: E402
 from training_diagnostics import (  # noqa: E402
+    checkpoint_replay_comparison,
     critic_calibration,
     diagnostic_alerts,
     gradient_clip_diagnostics,
@@ -1451,12 +1452,8 @@ def train(args) -> dict:
             replay_after = evaluate_policy(
                 eval_env, replay_actor, replay_norm, alpha, imit, replay_steps,
                 reset_seed=replay_seed, fingerprint=True)
-            replay_differences = {
-                key: abs(float(replay_after[key]) - float(replay_before[key]))
-                for key in metric_keys
-                if isinstance(replay_before.get(key), (int, float))
-                and isinstance(replay_after.get(key), (int, float))
-            }
+            replay_comparison = checkpoint_replay_comparison(
+                replay_before, replay_after, metric_keys)
             checkpoint_replay = {
                 "steps": replay_steps,
                 "seed": replay_seed,
@@ -1464,12 +1461,11 @@ def train(args) -> dict:
                 "after_sha256": replay_after.get("trajectory_sha256"),
                 "fingerprint_match": (replay_before.get("trajectory_sha256")
                                       == replay_after.get("trajectory_sha256")),
-                "max_abs_metric_difference": max(replay_differences.values(), default=0.0),
-                "metric_differences": replay_differences,
+                **replay_comparison,
             }
             checkpoint_replay["pass"] = (
                 checkpoint_replay["fingerprint_match"]
-                or checkpoint_replay["max_abs_metric_difference"] <= 1.0e-6)
+                or replay_comparison["pass"])
             del checkpoint, replay_actor, replay_norm, frozen_normalizer
 
             update_diagnostics.update({
