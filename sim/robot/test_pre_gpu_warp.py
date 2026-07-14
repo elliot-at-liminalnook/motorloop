@@ -327,7 +327,7 @@ def test_checkpoint_contract_rejects_model_drift(tmp_path, monkeypatch):
 def test_reward_only_migration_preserves_actor_but_resets_critic(tmp_path, monkeypatch):
     _disable_terminations(monkeypatch)
     env = W.WalkerWarpEnv(1, seed=0, device="cpu", episode_length=10)
-    args = SimpleNamespace(geometry="walker", marker="test")
+    args = SimpleNamespace(geometry="walker", marker="test", steps=20)
     actor = Actor(env.obs_dim, env.act_dim, (8,))
     critic = Critic(env.obs_dim + env.priv_dim, (8,))
     on, pn = RunningNorm(env.obs_dim), RunningNorm(env.priv_dim)
@@ -353,7 +353,7 @@ def test_reward_only_migration_preserves_actor_but_resets_critic(tmp_path, monke
         path, actor, critic, on, pn, opt, "cpu",
         expected_contract=new_contract, allow_reward_migration=True)
 
-    assert step == 10 and runtime == {"canary": True}
+    assert step == 10 and runtime == {"canary": True, "schedule_progress": 0.5}
     for name, value in actor.state_dict().items():
         torch.testing.assert_close(value, saved_actor[name])
     for name, value in critic.state_dict().items():

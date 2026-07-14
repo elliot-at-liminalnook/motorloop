@@ -25,7 +25,8 @@ from train_mesh_warp import (action_prior_weight, adaptive_ppo_learning_rate,
                              incremental_eval_interval,
                              kl_epoch_should_stop,
                              parse_early_gates,
-                             prior_competence_pressure)  # noqa: E402
+                             prior_competence_pressure, schedule_progress,
+                             schedules)  # noqa: E402
 from training_ladder import (LadderRunner, RUNGS, Gate, make_parser,
                              merge_candidate_archives, validate_manifest)  # noqa: E402
 
@@ -564,6 +565,25 @@ def test_action_prior_yields_to_learned_constraint_pressure():
                                3.0, 5.0) == pytest.approx(1.0)
     assert action_prior_weight(5.0, 0.1, 2_000_000, 2_000_000,
                                0.0, 1.0) == pytest.approx(0.5)
+
+
+def test_extended_resume_cannot_reheat_annealing_schedules():
+    args = type("Args", (), {
+        "steps": 14_000_000,
+        "alpha_frac": 0.60,
+        "alpha_start": 0.0,
+        "alpha_end": 1.0,
+        "imit_anneal_frac": 0.45,
+    })()
+    assert schedule_progress(12_000_000, args) < 1.0
+    assert schedule_progress(12_000_000, args, 1.0) == 1.0
+    ent, alpha, imitation = schedules(12_000_000, args, 1.0)
+    assert ent == pytest.approx(0.005)
+    assert alpha == pytest.approx(1.0)
+    assert imitation == pytest.approx(0.0)
+    assert action_prior_weight(
+        5.0, 0.1, 12_000_000, 14_000_000,
+        progress_fraction=1.0) == pytest.approx(0.5)
 
 
 @pytest.mark.parametrize("rung", (2, 4, 9, 14, 16, 17, 18, 19, 23))

@@ -404,10 +404,12 @@ def restore_env_state(env, state: dict) -> None:
         device=env.qacc_warmstart.device, dtype=env.qacc_warmstart.dtype))
 
 
-def capture_runtime_state(env) -> dict:
+def capture_runtime_state(env, *, schedule_progress: float | None = None) -> dict:
     out = {"env": capture_env_state(env), "torch_rng": torch.get_rng_state()}
     if torch.cuda.is_available():
         out["cuda_rng"] = torch.cuda.get_rng_state_all()
+    if schedule_progress is not None:
+        out["schedule_progress"] = min(max(float(schedule_progress), 0.0), 1.0)
     return out
 
 
@@ -512,7 +514,16 @@ def load_ckpt(path, actor, critic, obs_norm, priv_norm, opt, device, *,
         critic.load_state_dict(ck["critic"])
         if opt is not None and ck.get("opt") is not None:
             opt.load_state_dict(ck["opt"])
-    return int(ck["step"]), ck.get("runtime")
+    runtime = dict(ck.get("runtime") or {})
+    # Before schedule_progress was persisted explicitly, every run annealed
+    # against the target stored in its own checkpoint.  Recover that completed
+    # fraction so extending a resumed run cannot make entropy/imitation younger.
+    saved_steps = (ck.get("args") or {}).get("steps")
+    if saved_steps:
+        previous_progress = min(int(ck["step"]) / max(int(saved_steps), 1), 1.0)
+        runtime["schedule_progress"] = max(
+            float(runtime.get("schedule_progress", 0.0)), previous_progress)
+    return int(ck["step"]), runtime
 
 
 def load_policy(path, obs_dim: int, act_dim: int, device):
@@ -572,9 +583,14 @@ def frozen_anchor_policy(path, obs_dim: int, act_dim: int, hidden,
     return actor, norm
 
 
-def schedules(step: int, args) -> tuple[float, float, float]:
+def schedule_progress(step: int, args, progress_floor: float = 0.0) -> float:
+    """Monotonic annealing progress across extensions of a resumed run."""
+    return min(max(float(progress_floor), step / max(args.steps, 1)), 1.0)
+
+
+def schedules(step: int, args, progress_floor: float = 0.0) -> tuple[float, float, float]:
     """(ent_coef, alpha, imit_anneal) at env-step `step` — all linear."""
-    p = min(step / max(args.steps, 1), 1.0)
+    p = schedule_progress(step, args, progress_floor)
     ent = ENT_START + (ENT_END - ENT_START) * p
     ap = min(p / max(args.alpha_frac, 1e-9), 1.0)
     alpha = args.alpha_start + (args.alpha_end - args.alpha_start) * ap
@@ -598,7 +614,8 @@ def parse_early_gates(specs: list[str]) -> tuple[tuple[str, str, float], ...]:
 
 def action_prior_weight(base: float, floor: float, progress: int, total: int,
                         constraint_pressure: float = 0.0,
-                        competence_pressure: float = 1.0) -> float:
+                        competence_pressure: float = 1.0,
+                        progress_fraction: float | None = None) -> float:
     """Anneal a behavior prior while automatically yielding to safety pressure.
 
     Purely time-based annealing can discard a useful scaffold even though its
@@ -609,8 +626,9 @@ def action_prior_weight(base: float, floor: float, progress: int, total: int,
     yields automatically.  This is a dimensionless arbitration between measured
     contracts rather than another rung-specific reward coefficient.
     """
-    time_schedule = max(
-        float(floor), 1.0 - (float(progress) / max(total, 1)) / 0.60)
+    if progress_fraction is None:
+        progress_fraction = float(progress) / max(total, 1)
+    time_schedule = max(float(floor), 1.0 - float(progress_fraction) / 0.60)
     pressure = max(float(competence_pressure), 1.0)
     competence_schedule = 1.0 - 1.0 / pressure
     schedule = max(time_schedule, competence_schedule)
@@ -828,6 +846,7 @@ def train(args) -> dict:
         env.set_opponent(opponent)
         eval_env.set_opponent(opponent)
     global_step = 0
+    schedule_progress_floor = 0.0
     contract = checkpoint_contract(env, args)
     if args.init_policy and args.resume:
         raise ValueError("--init-policy and --resume are mutually exclusive")
@@ -841,6 +860,7 @@ def train(args) -> dict:
             expected_contract=contract, allow_legacy=args.allow_legacy_resume,
             allow_reward_migration=args.allow_reward_migration)
         restore_runtime_state(env, runtime)
+        schedule_progress_floor = float(runtime.get("schedule_progress", 0.0))
         print(f"resumed {args.resume} at step {global_step}", flush=True)
     anchor_actor = anchor_norm = None
     anchor_indices: tuple[int, ...] = ()
@@ -922,7 +942,10 @@ def train(args) -> dict:
         diagnostic_update = (global_step + T * N >= next_eval
                              or global_step + T * N >= args.steps)
         obs_norm_before = normalization_snapshot(obs_norm)
-        ent_coef, alpha, imit = schedules(global_step, args)
+        schedule_progress_floor = schedule_progress(
+            global_step, args, schedule_progress_floor)
+        ent_coef, alpha, imit = schedules(
+            global_step, args, schedule_progress_floor)
         constraint_pressure = (float(getattr(
             env, "action_prior_suppression_pressure", env.constraint_duals.max()))
             if constraint_names else 0.0)
@@ -932,7 +955,8 @@ def train(args) -> dict:
             else 1.0)
         current_action_prior_weight = action_prior_weight(
             action_prior_base_weight, action_prior_floor, global_step,
-            args.steps, constraint_pressure, competence_pressure)
+            args.steps, constraint_pressure, competence_pressure,
+            progress_fraction=schedule_progress_floor)
         with torch.no_grad():
             rollout_telemetry = EvalTelemetry(dev) if diagnostic_update else None
             constraint_sums = torch.zeros(len(constraint_names), device=dev)
@@ -1413,7 +1437,8 @@ def train(args) -> dict:
                 reset_seed=replay_seed, fingerprint=True)
             checkpoint_started = time.perf_counter()
             save_ckpt(ckpt_path, global_step, actor, critic, obs_norm, priv_norm, opt, args,
-                      contract=contract, runtime=capture_runtime_state(env))
+                      contract=contract, runtime=capture_runtime_state(
+                          env, schedule_progress=schedule_progress_floor))
             checkpoint_hash = sha256_file(ckpt_path)
             checkpoint = torch.load(ckpt_path, map_location=dev, weights_only=False)
             replay_actor = Actor(
@@ -1511,7 +1536,8 @@ def train(args) -> dict:
                 sys.exit(3)
 
     save_ckpt(ckpt_path, global_step, actor, critic, obs_norm, priv_norm, opt, args,
-              contract=contract, runtime=capture_runtime_state(env))
+              contract=contract, runtime=capture_runtime_state(
+                  env, schedule_progress=schedule_progress_floor))
     stats_path = Path(f"{args.tag}.stats.json")
     finished = time.time()
     stats["run"].update(
