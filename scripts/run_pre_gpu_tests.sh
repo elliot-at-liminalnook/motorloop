@@ -83,7 +83,7 @@ if ((REQUIRE_GPU)); then
       "COMPONENT_PY=$WARP_PY"
 
   run_stage "complete deterministic CPU oracle and robot contracts" \
-    "$WARP_PY" -m pytest sim/robot -q -m "not gpu"
+    env ROBOT_WARP_DEVICE=cpu "$WARP_PY" -m pytest sim/robot -q -m "not gpu"
   run_stage "training-scale MuJoCo-Warp CUDA pytest" \
     env ROBOT_REQUIRE_GPU=1 "$WARP_PY" -m pytest sim/robot -q -m gpu
 else
@@ -94,7 +94,7 @@ else
       sim/tests/test_model_form_harness.py \
       sim/tests/test_foc_math.py::test_svpwm_bus_utilization
   run_stage "deterministic CPU oracle and robot contracts (CUDA tier excluded)" \
-    "$WARP_PY" -m pytest sim/robot -q -m "not gpu"
+    env ROBOT_WARP_DEVICE=cpu "$WARP_PY" -m pytest sim/robot -q -m "not gpu"
 fi
 
 run_stage "body trainability proof" "$WARP_PY" sim/robot/validate_body.py
@@ -108,6 +108,10 @@ if ((REQUIRE_GPU)); then
     --device cuda --nworld 256 --warmup 10 --steps 100
   run_stage "combat CUDA execution" "$WARP_PY" sim/robot/combat_warp_env.py \
     --device cuda --nworld 256 --warmup 10 --steps 100
+  run_stage "ladder locomotion CUDA execution" "$WARP_PY" sim/robot/ladder_warp_env.py \
+    --rung 23 --device cuda --nworld 256 --warmup 10 --steps 100
+  run_stage "commanded-leg combat CUDA execution" "$WARP_PY" sim/robot/ladder_warp_env.py \
+    --rung 26 --device cuda --nworld 256 --warmup 10 --steps 100
   run_stage "target-GPU same-seed training repeatability canary" \
     "$WARP_PY" sim/robot/gpu_determinism_canary.py
   printf '\nVERIFICATION RESULT: PASS (complete GPU-host verification)\n'

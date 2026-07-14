@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Simulation and RL verification entry point
 
-> **Document status:** Current · **Audience:** Robot-learning developers · **Last reviewed:** 2026-07-12 · **Canonical for:** Robot/RL verification and long-run launch authorization
+> **Document status:** Current · **Audience:** Robot-learning developers · **Last reviewed:** 2026-07-14 · **Canonical for:** Robot/RL verification and long-run launch authorization
 
 ## The only entry point
 
@@ -93,6 +93,13 @@ make gpu-warp-combat
 make gpu-warp-selfplay
 make gpu-warp-codesign
 ```
+
+The current sequential production curriculum has its own resume-safe command,
+artifact contract, and shutdown procedure in
+[`training-ladder-runbook.md`](training-ladder-runbook.md). Do not reconstruct a
+resume from a bare checkpoint: copy `ladder_state.json`, the regression matrix
+when present, normalizers/runtime state, metrics, and all accepted prerequisite
+checkpoints.
 
 ## Determinism contract
 

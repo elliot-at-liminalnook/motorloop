@@ -26,9 +26,11 @@ def test_entrypoint_runs_every_warp_geometry_and_full_robot_suite():
     assert "make test" in runner
     assert 'pytest sim/robot -q' in runner
     assert all(name in runner for name in (
-        "walker_warp_env.py", "mesh_warp_env.py", "combat_warp_env.py"))
+        "walker_warp_env.py", "mesh_warp_env.py", "combat_warp_env.py",
+        "ladder_warp_env.py"))
     assert all(f'"{name}"' in canary
-               for name in ("walker", "mesh", "combat", "universal"))
+               for name in ("walker", "mesh", "combat", "ladder_locomotion",
+                            "ladder_combat", "universal"))
 
 
 def test_runtime_scripts_do_not_reference_retired_environments():

@@ -161,7 +161,8 @@ class WalkerWarpEnv:
     def __init__(self, nworld: int, seed: int = 0, device: str | None = None,
                  frame_skip: int = FRAME_SKIP, episode_length: int | None = None,
                  nconmax: int | None = None, njmax: int | None = 128,
-                 gait_path: Path | str = REFERENCE_GAIT, model_transform=None):
+                 gait_path: Path | str = REFERENCE_GAIT, model_transform=None,
+                 model_xml_transform=None):
         wp.init()
         use_cuda = torch.cuda.is_available() if device is None else str(device).startswith("cuda")
         self.device = torch.device("cuda:0" if use_cuda else "cpu")
@@ -173,6 +174,8 @@ class WalkerWarpEnv:
                 wp.get_stream(self._wp_device).cuda_stream, device=self.device))
 
         model_xml = build_walker(DEFAULTS, floor=True)
+        if model_xml_transform is not None:
+            model_xml = model_xml_transform(model_xml)
         m = mujoco.MjModel.from_xml_string(model_xml)  # from spec, never a disk path
         if model_transform is not None:
             model_transform(m)
@@ -203,6 +206,7 @@ class WalkerWarpEnv:
         # Per-actuator torque-speed no-load speeds from TARGET: yaw/pitch rad/s,
         # lift slide m/s. Gear and speed are emitted from the same ST3215-HS spec.
         wfree = np.array(WALK._DESIGN.wfrees())
+        self._kp_t, self._wfree_t, self._gear_t = ft(kp), ft(wfree), ft(gear)
         # per-leg lift SLIDE addressing (the deep-knee mechanism state / priv tensor)
         self._lift_q = lt([m.jnt_qposadr[j] for j in aj[2::3]])
         feet_gid = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"{L}_foot") for L in LEGS]
@@ -253,6 +257,11 @@ class WalkerWarpEnv:
         self.qfrc_actuator = wp.to_torch(self._wd.qfrc_actuator)  # (nworld, nv)
         self.qacc_warmstart = wp.to_torch(self._wd.qacc_warmstart)
         self.sim_time = wp.to_torch(self._wd.time)
+        self.constraint_rows = wp.to_torch(self._wd.nefc)
+        self.solver_iterations = wp.to_torch(self._wd.solver_niter)
+        # The island-index buffer can legitimately be zero-width; Data.njmax
+        # is the configured constraint-row capacity used by the solver.
+        self.constraint_capacity = int(self._wd.njmax)
         self._target_t = wp.to_torch(self._target_wp)
         self._alpha_t = wp.to_torch(self._alpha_wp)
 
@@ -323,11 +332,12 @@ class WalkerWarpEnv:
         mjwp.step(self._wm, self._wd)
 
     def _run_physics(self):
-        if self._graph is not None:
-            wp.capture_launch(self._graph)
-        else:
-            for _ in range(self._fs):
-                self._substep()
+        with wp.ScopedDevice(self._wp_device):
+            if self._graph is not None:
+                wp.capture_launch(self._graph)
+            else:
+                for _ in range(self._fs):
+                    self._substep()
 
     # ------------------------------------------------------------------ commands
     def _sample_cmd(self) -> torch.Tensor:
@@ -351,7 +361,8 @@ class WalkerWarpEnv:
         if mask is None:
             mask = torch.ones(self.nworld, dtype=torch.bool, device=self.device)
         self._reset_worlds(mask)
-        mjwp.forward(self._wm, self._wd)
+        with wp.ScopedDevice(self._wp_device):
+            mjwp.forward(self._wm, self._wd)
         return self.observe()
 
     def _reset_worlds(self, mask: torch.Tensor):
@@ -504,7 +515,9 @@ class WalkerWarpEnv:
                                          self._progress_ema)
         # action low-pass; the USED action is what obs reports as prev_action
         a = ACT_LP * self._prev_a + (1.0 - ACT_LP) * action.clamp(-1.0, 1.0)
-        target = (self._stand + a * self._authority).clamp(self._jr_lo, self._jr_hi)
+        raw_target = self._stand + a * self._authority
+        target_clamped = ((raw_target < self._jr_lo) | (raw_target > self._jr_hi)).float()
+        target = raw_target.clamp(self._jr_lo, self._jr_hi)
         self._target_t.copy_(target)
         self._alpha_t.fill_(float(alpha))
         self._run_physics()
@@ -535,7 +548,8 @@ class WalkerWarpEnv:
         fcf = first_c.float()
         air_rwd = ((air.clamp(max=SPEC.AIRTIME_CAP) - SPEC.AIRTIME_TARGET) * fcf).sum(-1)
         new_air = torch.where(contact, torch.zeros_like(air), air + dt)
-        act_rate = ((a - self._prev_a) ** 2).sum(-1)
+        action_delta = (a - self._prev_a).abs()
+        act_rate = action_delta.square().sum(-1)
         pose_dev = ((q[:, self._qa] - self._stand) ** 2).sum(-1)
         progress_c = progress.clamp(-cmd_norm, cmd_norm) / SPEC.MESH_VMAX
         phase = (self._t.float() * dt * SPEC.CLOCK_HZ) % 1.0
@@ -551,15 +565,22 @@ class WalkerWarpEnv:
         hop_stable_landing = torch.zeros(n, device=dev)
         new_hop_peak_z = self._hop_peak_z
         new_hop_airborne = self._hop_airborne
+        reward_components: dict[str, torch.Tensor]
         if REWARD_MODE == "sprint":
-            reward = (SPRINT_SPEED_W * active * xprogress
-                      + SPRINT_UPRIGHT_W * up.clamp(min=0.0)
-                      + SPRINT_ALIGN_W * active * align.clamp(-1.0, 1.0)
-                      - SPRINT_BACKWARD_W * active * (-xprogress).clamp(min=0.0)
-                      - SPRINT_LATERAL_W * active * lateral ** 2
-                      - SPRINT_POSE_W * pose_dev - SPRINT_ACTRATE_W * act_rate
-                      - SPRINT_VELZ_W * v[:, 2] ** 2
-                      - SPRINT_ANGXY_W * (v[:, 3] ** 2 + v[:, 4] ** 2))
+            reward_components = {
+                "sprint_progress": SPRINT_SPEED_W * active * xprogress,
+                "upright": SPRINT_UPRIGHT_W * up.clamp(min=0.0),
+                "alignment": SPRINT_ALIGN_W * active * align.clamp(-1.0, 1.0),
+                "backward_penalty": -SPRINT_BACKWARD_W * active
+                    * (-xprogress).clamp(min=0.0),
+                "lateral_penalty": -SPRINT_LATERAL_W * active * lateral.square(),
+                "pose_penalty": -SPRINT_POSE_W * pose_dev,
+                "action_rate_penalty": -SPRINT_ACTRATE_W * act_rate,
+                "vertical_speed_penalty": -SPRINT_VELZ_W * v[:, 2].square(),
+                "angular_speed_penalty": -SPRINT_ANGXY_W
+                    * (v[:, 3].square() + v[:, 4].square()),
+            }
+            reward = sum(reward_components.values())
         elif REWARD_MODE == "hop":
             hop_peak_delta = (height - self._hop_peak_z).clamp(min=0.0)
             new_hop_peak_z = torch.maximum(self._hop_peak_z, height)
@@ -571,29 +592,42 @@ class WalkerWarpEnv:
                            & (body_angxy < HOP_LAND_ANGXY_MAX))
             hop_stable_landing = (hop_landed & stable_mask).float()
             bad_landing = (hop_landed.float() * (1.0 - stable_mask.float()))
-            reward = (HOP_HEIGHT_W * hop_peak_delta
-                      + HOP_UPVEL_W * v[:, 2].clamp(min=0.0)
-                      + HOP_AIR_W * hop_airborne.float()
-                      + HOP_LAND_W * hop_stable_landing
-                      + HOP_UPRIGHT_W * up.clamp(min=0.0)
-                      - HOP_BAD_LAND_W * bad_landing
-                      - HOP_TIME_W
-                      - HOP_DRIFT_W * speed ** 2
-                      - HOP_POSE_W * pose_dev
-                      - HOP_ACTRATE_W * act_rate
-                      - HOP_ANGXY_W * (v[:, 3] ** 2 + v[:, 4] ** 2))
+            reward_components = {
+                "hop_peak": HOP_HEIGHT_W * hop_peak_delta,
+                "hop_upward_speed": HOP_UPVEL_W * v[:, 2].clamp(min=0.0),
+                "hop_airborne": HOP_AIR_W * hop_airborne.float(),
+                "hop_landing": HOP_LAND_W * hop_stable_landing,
+                "upright": HOP_UPRIGHT_W * up.clamp(min=0.0),
+                "bad_landing_penalty": -HOP_BAD_LAND_W * bad_landing,
+                "time_penalty": torch.full_like(speed, -HOP_TIME_W),
+                "drift_penalty": -HOP_DRIFT_W * speed.square(),
+                "pose_penalty": -HOP_POSE_W * pose_dev,
+                "action_rate_penalty": -HOP_ACTRATE_W * act_rate,
+                "angular_speed_penalty": -HOP_ANGXY_W
+                    * (v[:, 3].square() + v[:, 4].square()),
+            }
+            reward = sum(reward_components.values())
             new_hop_airborne = torch.where(hop_landed, torch.zeros_like(self._hop_airborne),
                                            self._hop_airborne | hop_airborne)
         else:
-            reward = (SPEC.TRACK_W * track + SPEC.UPRIGHT_W * up + 0.1
-                      + SPEC.CLOCK_W * active * clock_bonus
-                      + SPEC.ALIGN_W * active * align.clamp(-1.0, 1.0)
-                      + SPEC.PROGRESS_W * active * progress_c
-                      + SPEC.AIRTIME_W * air_rwd * (cmd_norm / SPEC.MESH_VMAX).clamp(0.0, 1.0)
-                      - SPEC.BACKWARD_W * active * (-progress).clamp(min=0.0)
-                      - SPEC.POSE_W * pose_dev - SPEC.ACTRATE_W * act_rate
-                      - SPEC.VELZ_W * v[:, 2] ** 2
-                      - SPEC.ANGXY_W * (v[:, 3] ** 2 + v[:, 4] ** 2))
+            reward_components = {
+                "tracking": SPEC.TRACK_W * track,
+                "upright": SPEC.UPRIGHT_W * up,
+                "alive": torch.full_like(track, 0.1),
+                "gait_clock": SPEC.CLOCK_W * active * clock_bonus,
+                "alignment": SPEC.ALIGN_W * active * align.clamp(-1.0, 1.0),
+                "progress": SPEC.PROGRESS_W * active * progress_c,
+                "airtime": SPEC.AIRTIME_W * air_rwd
+                    * (cmd_norm / SPEC.MESH_VMAX).clamp(0.0, 1.0),
+                "backward_penalty": -SPEC.BACKWARD_W * active
+                    * (-progress).clamp(min=0.0),
+                "pose_penalty": -SPEC.POSE_W * pose_dev,
+                "action_rate_penalty": -SPEC.ACTRATE_W * act_rate,
+                "vertical_speed_penalty": -SPEC.VELZ_W * v[:, 2].square(),
+                "angular_speed_penalty": -SPEC.ANGXY_W
+                    * (v[:, 3].square() + v[:, 4].square()),
+            }
+            reward = sum(reward_components.values())
         imit = torch.zeros(n, device=dev)
         motion_prior = torch.zeros(n, device=dev)
         if (REWARD_MODE == "walk" and self._gait is not None
@@ -616,7 +650,9 @@ class WalkerWarpEnv:
             motion_prior = torch.exp(-err2 / IMIT_SIGMA ** 2) + IMIT_FEET_W * feet_agree
             if imit_anneal > 0.0 and IMIT_W > 0.0:
                 imit = motion_prior
-            reward = reward + ((IMIT_W * imit_anneal) + MOTION_PRIOR_W * active) * motion_prior
+            prior_reward = ((IMIT_W * imit_anneal) + MOTION_PRIOR_W * active) * motion_prior
+            reward = reward + prior_reward
+            reward_components["motion_prior"] = prior_reward
 
         # --- (A) anti-loophole term-level rewards (folded into the sum) ----------
         # Fresh, exact world-frame horizontal foot speed (cvel-derived; reused by
@@ -629,15 +665,19 @@ class WalkerWarpEnv:
         # (A1) FOOT-SLIP PENALTY: dragging a foot that is IN CONTACT costs reward —
         # the direct anti-creep term (a creep drags planted feet forward).
         slip = (foot_hspeed * cf).sum(-1) / n_contact                # mean over contacting feet
+        stance_foot_speed = (foot_hspeed * cf).amax(-1)
         # (A2) FOOT-CLEARANCE REWARD: a SWING foot is rewarded for reaching a target
         # ground clearance (capped, so it need only lift high enough, not fly).
         clearance = (foot_z.clamp(max=CLEAR_TARGET) * (1.0 - cf)).sum(-1) / n_swing
         if REWARD_MODE == "walk":
-            reward = reward - SLIP_W * slip + CLEAR_W * clearance
+            reward_components["slip_penalty"] = -SLIP_W * slip
+            reward_components["clearance"] = CLEAR_W * clearance
+            reward = reward + reward_components["slip_penalty"] + reward_components["clearance"]
 
         fall = (height < SPEC.FALL_Z) | (up < SPEC.MIN_UP_Z)      # spec line 231
         if REWARD_MODE == "hop":
-            reward = reward - HOP_FALL_W * fall.float()
+            reward_components["fall_penalty"] = -HOP_FALL_W * fall.float()
+            reward = reward + reward_components["fall_penalty"]
 
         # --- (B) CaT: constraints enforced by stochastic termination ------------
         # Per-step nonneg violations (0 = satisfied), each normalized by ~its own
@@ -681,27 +721,71 @@ class WalkerWarpEnv:
         else:
             trunc = torch.zeros(n, dtype=torch.bool, device=dev)
         done = term | trunc
+        q_actuated = q[:, self._qa]
+        qd_actuated = v[:, self._da]
+        requested_effort = self._kp_t * (target - q_actuated) / self._gear_t
+        drive_derating = (requested_effort * qd_actuated) > 0.0
+        speed_limit = (1.0 - qd_actuated.abs() / self._wfree_t).clamp(0.0, 1.0)
+        effective_limit = 1.0 - float(alpha) * (1.0 - speed_limit)
+        effective_limit = torch.where(drive_derating, effective_limit,
+                                      torch.ones_like(effective_limit))
+        effort_ratio = requested_effort.abs() / effective_limit.clamp_min(1.0e-6)
+        joint_margin = torch.minimum(q_actuated - self._jr_lo,
+                                     self._jr_hi - q_actuated)
+        joint_range = (self._jr_hi - self._jr_lo).clamp_min(1.0e-6)
+        foot_penetration = (self._foot_r - foot_z).clamp_min(0.0)
+        actuator_diagnostics = {
+            "target_clamped": target_clamped,
+            "effort_saturated": (effort_ratio >= 1.0).float(),
+            "effort_ratio": effort_ratio,
+            "requested_effort_abs": requested_effort.abs(),
+            "available_effort": effective_limit,
+            "effort_shortfall": (
+                requested_effort.abs() - effective_limit).clamp_min(0.0),
+            "speed_derated": (drive_derating & (effective_limit < 0.999)).float(),
+            "joint_limit_near": (joint_margin < 0.01 * joint_range).float(),
+            "action_delta": action_delta,
+        }
+        simulation_diagnostics = {
+            "constraint_rows": self.constraint_rows.float(),
+            "constraint_capacity": torch.full_like(
+                self.constraint_rows, float(self.constraint_capacity), dtype=torch.float32),
+            "solver_iterations": self.solver_iterations.float(),
+            "foot_penetration": foot_penetration.amax(-1),
+            "state_nonfinite": ((~torch.isfinite(q)).sum(-1)
+                                + (~torch.isfinite(v)).sum(-1)).float(),
+        }
         obs_pre = self.observe()
         priv_pre = self.privileged()
         self._reset_worlds(done)                 # branchless per-world autoreset, no host sync
         # Refresh derived kinematics/contact/forces after qpos/qvel replacement.
         # Unconditional execution avoids a done.any() host synchronization on CUDA.
-        mjwp.forward(self._wm, self._wd)
+        with wp.ScopedDevice(self._wp_device):
+            mjwp.forward(self._wm, self._wd)
         info = {"truncated": trunc.float(), "terminal_obs": obs_pre, "terminal_priv": priv_pre,
                 "priv": self.privileged(),
                 "cat_done": cat_done.float(), "cat_delta": cat_delta,
-                "slip": slip, "clearance": clearance,
+                "reward_components": reward_components,
+                "actuator_diagnostics": actuator_diagnostics,
+                "simulation_diagnostics": simulation_diagnostics,
+                "gait_phase": phase,
+                "slip": slip, "stance_foot_speed": stance_foot_speed,
+                "clearance": clearance,
+                "foot_hspeed": foot_hspeed, "foot_height": foot_z,
                 "contact": cf, "first_contact": fcf, "air_pre": air_pre,
                 "track": track, "verr": torch.sqrt(verr), "align": align, "speed": speed,
+                "command_speed": cmd_norm, "forward_efficiency": align,
+                "lateral_speed_fraction": lateral / speed.clamp_min(1.0e-3),
                 "progress": progress, "xprogress": xprogress, "lateral": lateral,
                 "progress_ema": progress_ema,
                 "progress_req": progress_req, "duty_ema": duty_ema,
+                "foot_duty_ema_by_leg": foot_duty_ema,
                 "foot_duty_ema": foot_duty_ema.amax(-1),
                 "hop_peak": new_hop_peak_z, "hop_peak_delta": hop_peak_delta,
                 "hop_airborne": hop_airborne.float(), "hop_landed": hop_landed.float(),
                 "hop_stable_landing": hop_stable_landing,
                 "up": up, "height": height, "imit": imit,
-                "motion_prior": motion_prior, **cat_terms}
+                "motion_prior": motion_prior, "fallrate": fall.float(), **cat_terms}
         return self.observe(), reward, done.float(), info
 
 

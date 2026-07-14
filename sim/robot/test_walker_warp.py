@@ -35,9 +35,65 @@ pytest.importorskip("warp")
 pytest.importorskip("mujoco_warp")
 
 import mujoco  # noqa: E402
+import warp as wp  # noqa: E402
 
 from walker_improved import DEFAULTS, LEGS, build_walker  # noqa: E402
 from walker_warp_env import EvalTelemetry, WalkerWarpEnv  # noqa: E402
+
+
+def test_eval_telemetry_keeps_distribution_tails_and_per_leg_means():
+    tel = EvalTelemetry(torch.device("cpu"))
+    info = {
+        "contact": torch.tensor(((1.0, 0.0, 1.0, 0.0),
+                                 (0.0, 1.0, 0.0, 1.0))),
+        "first_contact": torch.zeros((2, 4)),
+        "air_pre": torch.zeros((2, 4)),
+        "foot_hspeed": torch.tensor(((0.1, 0.2, 0.3, 0.4),
+                                     (0.2, 0.3, 0.4, 0.5))),
+        "foot_height": torch.tensor(((0.01, 0.02, 0.03, 0.04),
+                                     (0.02, 0.03, 0.04, 0.05))),
+        "track": torch.ones(2), "verr": torch.zeros(2),
+        "align": torch.tensor((0.25, 0.75)), "speed": torch.tensor((0.2, 0.4)),
+        "progress": torch.tensor((0.05, 0.30)), "up": torch.ones(2),
+        "height": torch.full((2,), 0.4),
+        "xprogress": torch.tensor((0.04, 0.24)),
+        "lateral": torch.tensor((0.10, 0.08)),
+        "stance_foot_speed": torch.tensor((0.2, 0.5)),
+        "cat_slip": torch.tensor((0.0, 0.002)),
+        "cat_done": torch.tensor((0.0, 1.0)),
+        "fallrate": torch.zeros(2),
+        "truncated": torch.tensor((1.0, 0.0)),
+        "gait_phase": torch.tensor((0.05, 0.55)),
+        "reward_components": {
+            "task": torch.tensor((2.0, 4.0)),
+            "penalty": torch.tensor((-0.5, -1.0)),
+        },
+        "actuator_diagnostics": {
+            "effort_saturated": torch.tensor(
+                ((1.0,) + (0.0,) * 11, (0.0,) * 12)),
+        },
+        "simulation_diagnostics": {
+            "constraint_rows": torch.tensor((12.0, 16.0)),
+            "constraint_capacity": torch.tensor((128.0, 128.0)),
+            "state_nonfinite": torch.zeros(2),
+        },
+    }
+    tel.add(torch.tensor((1.0, 2.0)), info)
+    result = tel.result()
+    assert result["xprogress_p10"] < result["xprogress_p90"]
+    assert result["cat_slip_p99"] > 0.001
+    assert result["duty_fl"] == pytest.approx(0.5)
+    assert result["foot_speed_rr"] == pytest.approx(0.45)
+    assert result["foot_height_rl"] == pytest.approx(0.035)
+    assert result["forward_speed_fraction"] == pytest.approx(0.14 / 0.30)
+    assert result["lateral_forward_ratio"] == pytest.approx(0.09 / 0.14)
+    assert result["reward_components"]["task"]["mean"] == pytest.approx(3.0)
+    assert result["actuator_diagnostics"]["effort_saturated"][
+        "by_leg"]["fl"]["mean"] == pytest.approx(1.0 / 6.0)
+    assert result["simulation_diagnostics"]["constraint_rows"]["p99"] > 15.0
+    assert result["termination_ledger"]["truncation"]["count"] == 1.0
+    assert result["termination_ledger"]["constraint"]["count"] == 1.0
+    assert len(result["phase_profile"]["bins"]) == 8
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +113,7 @@ def _addressing(m):
 # ---------------------------------------------------------------------------
 def test_obs_parity_numpy_mirror(small_env):
     env = small_env
+    assert env.constraint_capacity == 128
     m = mujoco.MjModel.from_xml_string(build_walker(DEFAULTS, floor=True))
     aj, qa, da = _addressing(m)
 
@@ -244,7 +301,8 @@ def test_anti_hack_slip_and_clearance():
     qpos[1, 2] = 0.44          # world 1: raise the whole robot -> feet SWING (clear)
     env.qpos.copy_(qpos)
     env.qvel.copy_(qvel)
-    mjwp.forward(env._wm, env._wd)       # refresh cvel/geom_xpos/subtree_com
+    with wp.ScopedDevice(env._wp_device):
+        mjwp.forward(env._wm, env._wd)   # refresh cvel/geom_xpos/subtree_com
 
     foot_z = env.geom_xpos[:, env._feet, 2]
     cf = (foot_z < W.WALKER_CONTACT_Z).float()

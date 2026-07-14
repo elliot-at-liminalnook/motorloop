@@ -166,8 +166,21 @@ class CombatWarpEnv:
             "contact": zero4, "first_contact": zero4, "air_pre": zero4,
             "track": torch.exp(-dist), "verr": dist, "align": torch.zeros_like(dist),
             "speed": speed, "progress": -dist, "up": up_t, "height": height,
+            "fallrate": terminated.to(torch.float32),
             "constraint_rows": self.constraint_rows.clone(),
             "constraint_capacity": self.layer.njmax,
+            "reward_components": {"combat_base": reward},
+            "actuator_diagnostics": {
+                "command_saturated": (self.actions_a.abs() > 0.95).to(torch.float32),
+                "action_magnitude": self.actions_a.abs(),
+            },
+            "simulation_diagnostics": {
+                "constraint_rows": self.constraint_rows.to(torch.float32),
+                "constraint_capacity": torch.full_like(
+                    self.constraint_rows, float(self.layer.njmax), dtype=torch.float32),
+                "state_nonfinite": ((~torch.isfinite(self.qpos)).sum(dim=-1)
+                                    + (~torch.isfinite(self.qvel)).sum(dim=-1)).to(torch.float32),
+            },
         }
         self._reset_worlds(done)
         with wp.ScopedDevice(self._wp_device):

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Documentation home
 
-> **Document status:** Current · **Audience:** All readers · **Last reviewed:** 2026-07-12 · **Canonical for:** Documentation navigation and document ownership
+> **Document status:** Current · **Audience:** All readers · **Last reviewed:** 2026-07-14 · **Canonical for:** Documentation navigation and document ownership
 
 Start with the question you need answered. This page intentionally favors a
 small set of maintained entry points over a chronological list of everything
@@ -23,8 +23,13 @@ ever written.
 
 - [`reproduce.md`](reproduce.md) — canonical full-repository setup and
   verification procedure.
+- [`blender-agent-workflow.md`](blender-agent-workflow.md) — safe live control,
+  screenshot inspection, visual guidance, and validation for Blender/Phobos
+  modeling sessions.
 - [`pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md) — canonical robot/RL
   precheck, CUDA verification, and long-run authorization.
+- [`training-ladder-runbook.md`](training-ladder-runbook.md) — current 31-rung
+  training state, exact resume command, adaptive contracts, and safe shutdown.
 - [`sim/README.md`](../sim/README.md) — focused component-bench development and
   manual scenarios.
 - [`formal/README.md`](../formal/README.md) — running and interpreting formal
@@ -58,6 +63,8 @@ navigation.
 
 - [`locomotion-status.md`](locomotion-status.md) — short current promotion state
   and combat prerequisite.
+- [`training-ladder-runbook.md`](training-ladder-runbook.md) — resumable ladder
+  state and regression-preserving handoff.
 - [`locomotion-bootstrap-teacher-checklist.md`](locomotion-bootstrap-teacher-checklist.md)
   — detailed append-only locomotion work record.
 - [`sparc-learning-log.md`](sparc-learning-log.md) — detailed combat-learning log.

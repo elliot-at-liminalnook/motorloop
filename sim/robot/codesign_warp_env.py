@@ -24,6 +24,8 @@ DEFAULT_DESIGN_BANK = np.asarray([
 class CodesignWarpEnv(WalkerWarpEnv):
     """A real fixed design: model fields are edited before Warp upload."""
 
+    architecture_task_dim = DESIGN_DIM
+
     def __init__(self, nworld: int, seed: int = 0, device: str | None = None,
                  episode_length: int | None = 800, design=(0.5, 0.5, 0.5), **kwargs):
         self.design = torch.as_tensor(design, dtype=torch.float32,
@@ -55,6 +57,7 @@ class DesignEnsembleWarpEnv:
 
     action_semantics = "pd_target@50hz:lowpass+torque_speed_v1"
     reward_semantics = "design_ensemble:velocity_command:v1"
+    architecture_task_dim = DESIGN_DIM
 
     def __init__(self, nworld: int, seed: int = 0, device: str | None = None,
                  episode_length: int | None = 800, designs=DEFAULT_DESIGN_BANK):

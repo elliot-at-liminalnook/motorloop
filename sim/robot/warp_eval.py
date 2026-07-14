@@ -16,7 +16,9 @@ import warp as wp
 
 from combat_warp_env import CombatWarpEnv
 from codesign_warp_env import DesignEnsembleWarpEnv
-from mesh_warp_env import MeshWarpEnv
+from leg_attack_warp_env import LEG_NAMES, LegAttackWarpEnv
+from ladder_warp_env import LadderCombatWarpEnv, LadderLocomotionWarpEnv
+from mesh_warp_env import EvalTelemetry, MeshWarpEnv
 from train_mesh_warp import load_policy
 from walker_warp_env import WalkerWarpEnv
 
@@ -25,8 +27,12 @@ ENVIRONMENTS = {
     "walker": WalkerWarpEnv,
     "mesh": MeshWarpEnv,
     "combat": CombatWarpEnv,
+    "leg_attack": LegAttackWarpEnv,
+    "ladder_locomotion": LadderLocomotionWarpEnv,
+    "ladder_combat": LadderCombatWarpEnv,
     "universal": DesignEnsembleWarpEnv,
 }
+COMBAT_ENVIRONMENTS = frozenset(("combat", "leg_attack", "ladder_combat"))
 
 
 def resolve_checkpoint(value: str | Path) -> Path:
@@ -42,37 +48,49 @@ def resolve_checkpoint(value: str | Path) -> Path:
 
 
 def make_env(geometry: str, nworld: int, seed: int, device: str | None,
-             episode_length: int, lidar: bool = False):
+             episode_length: int, lidar: bool = False, rung: int | None = None):
     kwargs = dict(nworld=nworld, seed=seed, device=device,
                   episode_length=episode_length)
-    if geometry == "combat":
+    if geometry in COMBAT_ENVIRONMENTS:
         kwargs["lidar"] = lidar
+    if geometry in ("ladder_locomotion", "ladder_combat"):
+        if rung is None:
+            raise ValueError(f"--geometry {geometry} requires --rung")
+        kwargs["rung"] = rung
     return ENVIRONMENTS[geometry](**kwargs)
 
 
 @torch.no_grad()
 def evaluate(checkpoint: str | Path | None, geometry="walker", episodes=4,
              steps=250, nworld=16, seed=0, device=None, command=None,
-             opponent=None, lidar=False, record=False):
-    env = make_env(geometry, nworld, seed, device, steps, lidar)
+             opponent=None, lidar=False, record=False, attack_leg=None,
+             attack_active=None, rung=None):
+    env = make_env(geometry, nworld, seed, device, steps, lidar, rung)
     policy = (load_policy(resolve_checkpoint(checkpoint), env.obs_dim, env.act_dim, env.device)
               if checkpoint else lambda obs: torch.zeros((len(obs), env.act_dim), device=env.device))
     if opponent:
-        if geometry != "combat":
-            raise ValueError("an opponent checkpoint requires --geometry combat")
+        if geometry not in COMBAT_ENVIRONMENTS:
+            raise ValueError("an opponent checkpoint requires a combat-family geometry")
         env.set_opponent(load_policy(resolve_checkpoint(opponent), env.obs_dim,
                                      env.act_dim, env.device))
+    if attack_leg is not None:
+        if not hasattr(env, "set_attack_command"):
+            raise ValueError("--attack-leg requires --geometry leg_attack")
+        env.set_attack_command(attack_leg, True if attack_active is None else attack_active)
+    elif attack_active is not None:
+        if not hasattr(env, "set_attack_enabled"):
+            raise ValueError("--attack-off requires --geometry leg_attack")
+        env.set_attack_enabled(attack_active)
     command_t = None if command is None else torch.as_tensor(
         command, dtype=torch.float32, device=env.device).reshape(1, 3)
     returns = torch.zeros(nworld, device=env.device)
     falls = torch.zeros(nworld, device=env.device)
     start_xy = None
     frames = []
-    metrics = {key: torch.zeros((), device=env.device)
-               for key in ("track", "verr", "align", "speed", "progress", "up", "height")}
+    telemetry = EvalTelemetry(env.device)
     obs = env.reset()
     if hasattr(env, "xpos"):
-        torso = env.layer.idx.At if geometry == "combat" else env._torso
+        torso = env.layer.idx.At if geometry in COMBAT_ENVIRONMENTS else env._torso
         start_xy = env.xpos[:, torso, :2].clone()
     total_steps = int(episodes) * int(steps)
     for _ in range(total_steps):
@@ -82,21 +100,29 @@ def evaluate(checkpoint: str | Path | None, geometry="walker", episodes=4,
         obs, reward, done, info = env.step(policy(obs))
         returns += reward
         falls += done
-        for key in metrics:
-            metrics[key] += info[key].mean()
+        telemetry.add(reward, info)
         if record:
             frames.append(env.qpos[0].detach().cpu().numpy().copy())
     result = {"checkpoint": str(checkpoint) if checkpoint else None,
               "geometry": geometry, "return_mean": float(returns.mean() / episodes),
               "done_rate": float(falls.mean() / episodes)}
-    result.update({key: float(value / total_steps) for key, value in metrics.items()})
+    result.update(telemetry.result())
     if start_xy is not None:
         result["displacement"] = float(torch.linalg.vector_norm(
             env.xpos[:, torso, :2] - start_xy, dim=-1).mean())
-    if geometry == "combat":
+    if geometry in COMBAT_ENVIRONMENTS:
         result.update(dealt=float(wp.to_torch(env.layer.dealt_leg).mean()),
                       taken=float(wp.to_torch(env.layer.taken_leg).mean()),
                       penetration=float(wp.to_torch(env.layer.pen_peak).max()))
+    if geometry == "leg_attack":
+        result.update(
+            attack_leg=attack_leg,
+            attack_active=(True if attack_active is None else bool(attack_active)),
+            selected_hit=float(info["attack_selected_hit"].mean()),
+            wrong_leg_hit=float(info["attack_wrong_hit"].mean()),
+            support=float(info["attack_support"].mean()),
+            kick_speed=float(info["attack_kick_speed"].mean()),
+        )
     return result, env, frames
 
 
@@ -139,12 +165,18 @@ def main(argv=None):
     parser.add_argument("--checkpoints", nargs="*")
     parser.add_argument("--opponent", "--b")
     parser.add_argument("--geometry", choices=tuple(ENVIRONMENTS), default="walker")
+    parser.add_argument("--rung", type=int,
+                        help="task number for ladder_locomotion/ladder_combat")
     parser.add_argument("--episodes", type=int, default=4)
     parser.add_argument("--steps", type=int, default=250)
     parser.add_argument("--envs", type=int, default=16)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--device", default=None)
     parser.add_argument("--command", default=None)
+    parser.add_argument("--attack-leg", choices=LEG_NAMES,
+                        help="lock the leg_attack policy to FL, FR, RL, or RR")
+    parser.add_argument("--attack-off", action="store_true",
+                        help="disable the attack channel while preserving balance")
     parser.add_argument("--lidar", action="store_true")
     parser.add_argument("--out", default=None)
     args, _ = parser.parse_known_args(argv)
@@ -153,14 +185,17 @@ def main(argv=None):
         command = (*command, 0.0)
     common = dict(geometry=args.geometry, episodes=args.episodes, steps=args.steps,
                   nworld=args.envs, seed=args.seed, device=args.device,
-                  command=command, opponent=args.opponent, lidar=args.lidar)
+                  command=command, opponent=args.opponent, lidar=args.lidar,
+                  attack_leg=args.attack_leg,
+                  attack_active=False if args.attack_off else None,
+                  rung=args.rung)
     if args.mode == "rank":
         result = rank(args.checkpoints or ([args.checkpoint] if args.checkpoint else []), **common)
     else:
         result, env, frames = evaluate(args.checkpoint, record=args.mode == "render", **common)
         if args.mode == "render":
             output = Path(args.out or f"{args.geometry}_warp.mp4")
-            model = env.layer.mjm if args.geometry == "combat" else env.mjm
+            model = env.layer.mjm if args.geometry in COMBAT_ENVIRONMENTS else env.mjm
             render_video(model, frames, output)
             result["video"] = str(output)
     text = json.dumps(result, indent=2)

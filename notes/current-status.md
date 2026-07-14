@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Current project status
 
-> **Document status:** Current · **Audience:** All readers · **Last reviewed:** 2026-07-12 · **Canonical for:** High-level maturity, current frontiers, and evidence precedence
+> **Document status:** Current · **Audience:** All readers · **Last reviewed:** 2026-07-14 · **Canonical for:** High-level maturity, current frontiers, and evidence precedence
 
 This page answers “what is true now?” It deliberately avoids copying volatile
 test counts and timing numbers. Follow the evidence links for the latest generated
@@ -16,7 +16,7 @@ values.
 | FPGA synthesis and packaging | Open ECP5 place-and-route meets the target clock; reusable blocks have packaging and contracts | [`synth/synth_report.md`](../synth/synth_report.md), [`rtl/contracts/`](../rtl/contracts/) | Other vendor flows are portability evidence unless run in their authoritative tools |
 | Active robot backend | Plain MuJoCo oracle plus batched MuJoCo-Warp physics and Torch PPO | [`pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md), [`runpod-warp-validation-2026-07-10.md`](runpod-warp-validation-2026-07-10.md) | CUDA reductions are bounded-repeatable, not promised bitwise identical |
 | Active robot hardware envelope | 6 lb maximum, twelve ST3215-HS bus servos | [`robot-hardware-contract.md`](robot-hardware-contract.md) | Continuous torque, output inertia, power delivery, and the physical mass budget need measurement |
-| Locomotion | Active development against strict waypoint and rendered-behavior gates | [`locomotion-status.md`](locomotion-status.md) | No current-hardware-contract locomotion policy has been promoted through the full gate |
+| Locomotion | Active development through a gated 31-rung curriculum with fixed-seed and prior-skill replay | [`locomotion-status.md`](locomotion-status.md), [`training-ladder-runbook.md`](training-ladder-runbook.md) | Rungs 1–5 are accepted; rung 6 remains fractionally below its timing gate, and no later locomotion/combat rung is yet promoted |
 | Combat and self-play | Environments, scoring, curricula, opponent machinery, and verification fixtures exist | [`locomotion-status.md`](locomotion-status.md), [`rl-verification-playbook.md`](rl-verification-playbook.md) | Open-ended self-play combat is an active frontier, not a completed result |
 | Real2Sim2Real | Identification, residual, adaptation, and robust-ranking hooks exist | [`codesign-realization-report.md`](codesign-realization-report.md) | No complete hardware fit or sim-to-real deployment has been validated |
 

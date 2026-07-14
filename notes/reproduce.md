@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Reproduce from scratch
 
-> **Document status:** Current · **Audience:** Developers and release reviewers · **Last reviewed:** 2026-07-12 · **Canonical for:** Full repository setup and reproduction
+> **Document status:** Current · **Audience:** Developers and release reviewers · **Last reviewed:** 2026-07-14 · **Canonical for:** Full repository setup and reproduction
 
 The audit artifact: a clean clone → the pinned toolchain → every required gate
 green with generated evidence. Versions are pinned in `toolchain.lock`.
@@ -47,6 +47,12 @@ parallelized across CPU workers on the GPU host, followed by exact CPU robot
 oracles and the CUDA rollout, PPO, and repeatability tiers. A local precheck exit
 of zero is not authorization to start a long simulation or RL run. See
 [`pre-gpu-test-entrypoint.md`](pre-gpu-test-entrypoint.md).
+
+The production 31-rung curriculum is intentionally not part of `make verify`:
+it is a long, resumable experiment whose accepted prefix and regression matrix
+are data artifacts. Reproduce or resume it using
+[`training-ladder-runbook.md`](training-ladder-runbook.md) only after the full
+GPU-host verification above passes.
 
 ## 1. Toolchain (one pinned tarball covers the HDL stack)
 

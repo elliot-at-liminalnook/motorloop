@@ -121,6 +121,11 @@ gpu-warp-selfplay:  ## run MuJoCo-Warp Hall-of-Fame self-play
 	$(WARP_PY) sim/robot/train_combat_warp.py --selfplay --device cuda --tag selfplay_warp
 gpu-warp-codesign:  ## train across grouped actual MuJoCo-Warp design models
 	$(WARP_PY) sim/robot/train_codesign_warp.py --device cuda --tag codesign_warp
+training-ladder-list:  ## print all 31 executable tasks and their fixed-seed gates
+	$(WARP_PY) sim/robot/training_ladder.py list
+gpu-training-ladder:  ## run/resume the gated 31-task ladder with retention replay
+	$(WARP_PY) sim/robot/training_ladder.py run --device cuda --resume \
+	  --out $${CODESIGN_OUT:-sim/build/gpu/out}/training_ladder
 gpu-validate:  ## run complete verification; requires execution on a CUDA host
 	bash scripts/run_pre_gpu_tests.sh --require-gpu
 

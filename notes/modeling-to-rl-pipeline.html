@@ -242,6 +242,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
 
 @media (max-width:940px){
   .layout{grid-template-columns:1fr;gap:0}
+  .layout>*{min-width:0}
   .rail{position:static;max-height:none;padding:20px 0 8px;border-bottom:1px solid var(--border);margin-bottom:8px}
   .rail nav{flex-direction:row;flex-wrap:wrap;border-left:none;gap:6px}
   .rail nav a{border-left:none;border:1px solid var(--border);border-radius:20px;padding:5px 11px;margin:0}
@@ -420,7 +421,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
         <p><strong>Every training run in the project’s history was performed by a robot physically incapable of standing under its own strength.</strong> The standing-still exploit, the shuffling, the failed CPG paddle, the warm-start that wouldn’t transfer — all of it happened on a fighter running at 8% of its intended muscle. The RL stack had spent months being psychoanalyzed for a problem that lived in one line of XML.</p>
 
         <div class="note warmn">
-          <b>The cruelest irony:</b> a body-validation script <em>did</em> check torque margin — but it read the limit from the attribute that <b>documented intent</b> (<span class="k">forcerange</span>) instead of commanding the actuator and measuring the force it actually produced. The spec said 13 N·m; the compiled artifact delivered 1; and for the project’s entire lifetime, no test made them meet.</p>
+          <b>The cruelest irony:</b> a body-validation script <em>did</em> check torque margin — but it read the limit from the attribute that <b>documented intent</b> (<span class="k">forcerange</span>) instead of commanding the actuator and measuring the force it actually produced. The spec said 13 N·m; the compiled artifact delivered 1; and for the project’s entire lifetime, no test made them meet.
         </div>
 
         <div class="dp">
@@ -550,7 +551,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           </table>
         </div>
 
-        <p>The old discount factor gave a credit horizon <em>shorter than a single stride</em> — the policy literally could not see far enough ahead to value a footfall. The old network was a 15:1 bottleneck on a 470-dim observation. The current learner uses a squashed-Gaussian policy, GAE (γ=0.99, λ=0.95, clip 0.2), a SiLU (512·256·128) actor and privileged critic, and schedules that anneal exploration, the actuator curriculum, and imitation weight over the run.</p>
+        <p>The old discount factor gave a credit horizon <em>shorter than a single stride</em> — the policy literally could not see far enough ahead to value a footfall. The old network was a 15:1 bottleneck on a 470-dim observation. The current learner uses a squashed-Gaussian policy, GAE (γ=0.99, λ=0.95, clip 0.2), a task-conditioned residual actor and privileged critic. A task embedding modulates shared physical-state blocks, while schedules anneal exploration, the actuator curriculum and imitation weight over the run. The earlier SiLU (512·256·128) MLP remains loadable for existing checkpoints.</p>
 
         <div class="dp">
           <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Teacher → student adaptation (RMA-style)</span></div>
@@ -611,25 +612,27 @@ footer .big em{color:var(--warm-ink);font-style:italic}
     <!-- ============ 07 LADDER ============ -->
     <section id="ladder" class="reveal">
       <div class="sec-num">Stage 07 — The training ladder</div>
-      <h2>Thirty tasks, easiest to hardest</h2>
-      <p class="lede">You do not point reinforcement learning at “win a fight” and wait. The same body climbs a ladder of about thirty tasks whose difficulty rises one axis at a time — hold, then step, then travel, then survive a shove, then chase an opponent that fights back. Each rung warm-starts from the policy below it and carries its own cheap pass-check, so training and verification stay gradual instead of all-or-nothing.</p>
+      <h2>Thirty-one tasks, easiest to hardest</h2>
+      <p class="lede">You do not point reinforcement learning at “win a fight” and wait. The same body climbs an executable ladder of thirty-one tasks whose difficulty rises one axis at a time — hold, then step, then travel, then survive a shove, then kick with a controller-selected leg, then chase an opponent that fights back. Each rung warm-starts within its policy family, clears a fixed-seed pass-check, and replays every earlier skill before it can advance.</p>
 
       <div class="prose">
         <div class="stats" style="grid-template-columns:repeat(3,1fr)">
-          <div class="stat"><div class="v cool">30</div><div class="l">Graduated tasks, easy → hard</div></div>
+          <div class="stat"><div class="v cool">31</div><div class="l">Graduated tasks, easy → hard</div></div>
           <div class="stat"><div class="v warm">6</div><div class="l">Difficulty tiers, one new demand each</div></div>
-          <div class="stat"><div class="v cool">1</div><div class="l">Metric-plus-video gate per rung</div></div>
+          <div class="stat"><div class="v cool">N×</div><div class="l">All prior skills replayed for forgetting</div></div>
         </div>
 
         <div class="dp">
           <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Climb a gated ladder, don’t train the destination</span></div>
           <div class="fork">
-            <div class="opt chosen"><span class="ol">Chosen</span>~30 rungs of rising difficulty; each warm-starts from the last and clears its own gate first</div>
+            <div class="opt chosen"><span class="ol">Chosen</span>31 rungs of rising difficulty; each clears its own gate and the complete retention matrix</div>
             <div class="vs">vs</div>
             <div class="opt"><span class="ol">Rejected</span>Point PPO straight at “fight and win” and hope it discovers the whole stack</div>
           </div>
-          <p class="dp-why">Why: a regression stays <b>localized to one rung</b> instead of hiding inside an all-or-nothing run, and difficulty rises along <b>one axis at a time</b> — torque, then perturbation, then goals, then an adversary. Verification becomes incremental: the pass-signal in each row below is exactly what must go green — and be confirmed on video — before the next rung earns GPU time.</p>
+          <p class="dp-why">Why: a regression stays <b>localized to one rung</b> instead of hiding inside an all-or-nothing run, and difficulty rises along <b>one axis at a time</b> — torque, then perturbation, then goals, then an adversary. After a candidate learns the new task, it is evaluated on every prior same-family rung at fixed seeds. A drop beyond the stored baseline tolerance is treated as forgetting: the candidate is not promoted.</p>
         </div>
+
+        <div class="note"><b>This ladder is executable.</b> One resume-safe manifest owns all 31 task numbers, physical variants, checkpoint-family boundaries, pass metrics and retry rules. Locomotion uses a shared 234-value contract (including pose, height, goal, heading, 144 lidar rays and a 23-way task command); combat uses the same seven-value attack command plus a six-way combat-task command. The ladder’s default actor is a task-conditioned residual network: a compact task embedding modulates shared physical-state blocks, while frozen-policy behavior replay and fixed-seed retention checks limit skill interference. A failure stops the sequence with the last accepted checkpoint intact.</div>
 
         <h3>Tier A · Foundations <span class="tag">posture, no travel</span></h3>
         <p>Can the body even hold itself up? These rungs never leave the spawn tile; they exist to prove torque, balance and joint tracking before a single step is asked for — the tier that would have failed loudly on the 8%-torque body.</p>
@@ -667,9 +670,9 @@ footer .big em{color:var(--warm-ink);font-style:italic}
             <tr><td class="num">13</td><td><b>Servo-true motors</b></td><td>hold the gait as α → 1 (the real torque droop returns)</td><td>speed retained after the actuator curriculum completes</td></tr>
             <tr><td class="num">14</td><td><b>Stumble recovery</b></td><td>trip on an obstacle and stay up</td><td>recovers to gait with no tip termination; confirmed on video</td></tr>
             <tr><td class="num">15</td><td><b>Push recovery</b></td><td>reject an impulse mid-stride</td><td>resumes the commanded velocity across a push sweep</td></tr>
-            <tr><td class="num">16</td><td><b>Rough terrain</b></td><td>walk a randomized height field and friction</td><td>speed held on held-out terrain seeds; foot-slip penalty low</td></tr>
-            <tr><td class="num">17</td><td><b>Slope walking</b></td><td>ascend and descend an incline</td><td>commanded speed held on the grade; stays upright</td></tr>
-            <tr><td class="num">18</td><td><b>Payload carry</b></td><td>walk with added torso mass</td><td>gait holds across the domain-randomized mass range</td></tr>
+            <tr><td class="num">16</td><td><b>Rough terrain</b></td><td>cross a physical raised-tile field with varied friction</td><td>uprightness retained on held-out seeds; foot-slip penalty low</td></tr>
+            <tr><td class="num">17</td><td><b>Slope walking</b></td><td>ascend a nine-degree physical incline</td><td>positive commanded progress on the grade; stays upright</td></tr>
+            <tr><td class="num">18</td><td><b>Payload carry</b></td><td>walk with 30% added torso mass and inertia</td><td>upright gait retained with the payload</td></tr>
           </tbody>
         </table></div>
 
@@ -693,9 +696,10 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           <tbody>
             <tr><td class="num">24</td><td><b>Approach a dummy</b></td><td>close distance to a stationary target</td><td>genuine net approach, not oscillation-farmed distance</td></tr>
             <tr><td class="num">25</td><td><b>Strike a target</b></td><td>aim and fire the striker to land a hit</td><td>contact hit registered; torque-ratio stays in the legal band (no catapult)</td></tr>
-            <tr><td class="num">26</td><td><b>Pursue an evader</b></td><td>track a scripted fleeing target</td><td>closes on the evader without cycling</td></tr>
-            <tr><td class="num">27</td><td><b>Beat a frozen self</b></td><td>win against one frozen snapshot opponent</td><td>win-rate above one-half, confirmed on video not scoreboard</td></tr>
-            <tr><td class="num">28</td><td><b>PFSP league</b></td><td>train against the whole weighted hall-of-fame</td><td>win-rate holds across the archive (no Red-Queen collapse); coach benchmark rises</td></tr>
+            <tr><td class="num">26</td><td><b>Commanded leg kick</b></td><td>switch FL / FR / RL / RR at runtime; selected foot attacks while the other three rebalance</td><td>selected-leg contact and kick speed rise; wrong-leg hits stay low; three-leg support survives every switch</td></tr>
+            <tr><td class="num">27</td><td><b>Pursue an evader</b></td><td>track a scripted fleeing target</td><td>closes on the evader without cycling</td></tr>
+            <tr><td class="num">28</td><td><b>Beat a frozen self</b></td><td>win against one frozen snapshot opponent</td><td>win-rate above one-half, confirmed on video not scoreboard</td></tr>
+            <tr><td class="num">29</td><td><b>PFSP league</b></td><td>train against a growing hall of frozen snapshots</td><td>return and retention hold across the archive (no Red-Queen collapse)</td></tr>
           </tbody>
         </table></div>
 
@@ -704,12 +708,12 @@ footer .big em{color:var(--warm-ink);font-style:italic}
         <div class="tablewrap"><table>
           <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
           <tbody>
-            <tr><td class="num">29</td><td><b>Cross-morphology</b></td><td>one policy over a randomized body distribution</td><td>return retained across the morphology envelope</td></tr>
-            <tr><td class="num">30</td><td><b>Co-design loop</b></td><td>optimize body and brain together (CEM / coevolution)</td><td>fitness or Pareto gain on the multifidelity ladder, under the same launch gate</td></tr>
+            <tr><td class="num">30</td><td><b>Cross-morphology</b></td><td>one design-conditioned policy over several actual compiled bodies</td><td>return retained across the morphology envelope</td></tr>
+            <tr><td class="num">31</td><td><b>Co-design loop</b></td><td>optimize body and brain together with CEM over policy return</td><td>fitness gain on the multifidelity ladder, under the same launch gate</td></tr>
           </tbody>
         </table></div>
 
-        <div class="note">Every pass-signal above is an <b>outcome</b>, never an attribute — and the rule from the next stage still governs: <b>metrics select, videos confirm</b>. A rung is only “climbed” when its metric is green <em>and</em> the rendered behavior shows the real skill. The tiers map onto the same check stack: Tier A leans on the T0/T1 contract and static-capability tests, Tiers B–D on the preflight and reward red-teaming, Tiers E–F on checkpoint semantics and the cross-engine oracle.</div>
+        <div class="note">Every pass-signal above is an <b>outcome</b>, never an attribute — and the rule from the next stage still governs: <b>metrics select, videos confirm</b>. Promotion requires the current fixed-seed metric, every prior retention replay, and a rendered behavior audit. The tiers map onto the same check stack: Tier A leans on the T0/T1 contract and static-capability tests, Tiers B–D on the preflight and reward red-teaming, Tiers E–F on checkpoint semantics and the cross-engine oracle.</div>
       </div>
     </section>
 
@@ -741,7 +745,27 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           <div class="rung"><div class="id">T2</div><div><div class="rt">Training-config preflight</div><div class="rd">Fail if PPO iterations &lt; 200, if the credit horizon is shorter than a stride, or if a config flag is silently ignored. <em>Kills the 37-iteration, γ=0.97, tiny-net runs.</em></div></div></div>
           <div class="rung"><div class="id">T3</div><div><div class="rt">Mechanism liveness</div><div class="rd">Resets must differ; every control/obs mode gets a smoke rollout. <em>Kills dead code that exists but never fires.</em></div></div></div>
           <div class="rung"><div class="id">T4</div><div><div class="rt">Reward red-teaming</div><div class="rd">Pre-registered exploit fixtures (stand-still, oscillate, catapult) must each score less than an honest attempt before any reward change merges. <em>Kills reward hacks pre-GPU.</em></div></div></div>
+          <div class="rung"><div class="id">T5</div><div><div class="rt">Learner health</div><div class="rd">Measure whole-rollout KL, importance-ratio tails, effective sample size, actual parameter movement, optimizer state, and actor/critic gradients separately. <em>Kills silent PPO instability and critic-dominated updates.</em></div></div></div>
+          <div class="rung"><div class="id">T6</div><div><div class="rt">Behavior and retention</div><div class="rd">Slice outcomes by leg and gait phase; compare deterministic and stochastic evaluation across seeds; replay every promoted skill. <em>Kills averages that hide one broken leg and new skills that erase old ones.</em></div></div></div>
           <div class="rung"><div class="id">T7</div><div><div class="rt">Checkpoint semantics</div><div class="rd">Every checkpoint carries a model hash + action/obs semantics; a frozen opponent is rejected on semantics, not just shape. <em>Kills silently mis-driven policies.</em></div></div></div>
+        </div>
+
+        <h3>Lessons to carry into future training sessions <span class="tag">the reusable playbook</span></h3>
+        <p>These are the high-level rules earned from failed and misleading runs. They apply to later ladder rungs, new robots, and most policy-learning projects:</p>
+
+        <div class="exgrid">
+          <div class="excard"><div class="en">Lesson 01</div><h4>Prove that every constraint can fire</h4><p>A configured limit is functionally absent if its timer, reset path, or activation mask never lets it become active.</p><div class="fix"><b>Take forward</b>Log activation rate, violation rate, grace age, and termination cause independently.</div></div>
+          <div class="excard"><div class="en">Lesson 02</div><h4>Match windows to physical time</h4><p>A gait-duty rule cannot be judged before one complete gait cycle; a short grace window can punish the policy before success is observable.</p><div class="fix"><b>Take forward</b>Derive horizons, grace periods, and evaluation windows from strides, contacts, and task phases.</div></div>
+          <div class="excard"><div class="en">Lesson 03</div><h4>Treat resets as a possible reward source</h4><p>An agent may learn that failing quickly is cheaper than attempting the task, while averages make the repeated resets look harmless.</p><div class="fix"><b>Take forward</b>Track episode length, termination ledger, post-reset reward, and sustained success.</div></div>
+          <div class="excard"><div class="en">Lesson 04</div><h4>Measure the update that actually happened</h4><p>PPO clipping is not a hard trust region: repeated epochs can still move the new policy too far from the policy that collected the rollout.</p><div class="fix"><b>Take forward</b>Use whole-rollout KL and parameter deltas to stop stale-data epochs and adapt the next learning rate.</div></div>
+          <div class="excard"><div class="en">Lesson 05</div><h4>Audit actor and critic separately</h4><p>A large critic gradient can consume a shared clipping budget and quietly starve the policy of useful learning.</p><div class="fix"><b>Take forward</b>Report separate norms, clipping fractions, updates, explained variance, and objective conflicts.</div></div>
+          <div class="excard"><div class="en">Lesson 06</div><h4>Prefer self-tuning physical contracts</h4><p>One hand-picked penalty rarely stays correct as the task changes, and one multiplier cannot faithfully represent several different failure modes.</p><div class="fix"><b>Take forward</b>Normalize each physical violation and give it its own bounded primal-dual multiplier.</div></div>
+          <div class="excard"><div class="en">Lesson 07</div><h4>Never trust the mean alone</h4><p>A good average can conceal one failed leg, a bad gait phase, rare catastrophic actions, seed sensitivity, or evaluation noise.</p><div class="fix"><b>Take forward</b>Keep per-leg and phase bins, tails, multiple seeds, and deterministic/stochastic comparisons.</div></div>
+          <div class="excard"><div class="en">Lesson 08</div><h4>Promote evidence, not a checkpoint</h4><p>New competence is not progress if it forgets balance, locomotion, or earlier commands, and a saved file is not trustworthy until it reloads identically.</p><div class="fix"><b>Take forward</b>Require checkpoint replay, provenance, video, and a persistent regression matrix before promotion.</div></div>
+          <div class="excard"><div class="en">Lesson 09</div><h4>Validate the diagnostics too</h4><p>A canary reading the wrong buffer can report a healthy system with perfect confidence; observability code is production code.</p><div class="fix"><b>Take forward</b>Inject known failures and prove each alert changes before trusting it on an expensive run.</div></div>
+          <div class="excard"><div class="en">Lesson 10</div><h4>Make cyclic measurements temporally fair</h4><p>An endpoint EMA remembers late events better than early ones, so two feet with identical duty can receive different verdicts solely because one swings first.</p><div class="fix"><b>Take forward</b>Accumulate exact per-leg contact over a complete cycle; use EMAs for live trends, not order-sensitive pass/fail contracts.</div></div>
+          <div class="excard"><div class="en">Lesson 11</div><h4>Demonstrate intent, credit physical outcomes</h4><p>An action imitation target can punish the anticipatory command a real actuator needs when contact lags command, locking the policy to the teacher's timing error.</p><div class="fix"><b>Take forward</b>Let demonstrations bootstrap motion, then yield automatically to contact, clearance, balance, and task success.</div></div>
+          <div class="excard"><div class="en">Lesson 12</div><h4>Invalidate descendants when prerequisites change</h4><p>A later-rung checkpoint still contains behavior learned from its original seed, even if its filename and tensor shapes remain valid after an earlier skill is relearned.</p><div class="fix"><b>Take forward</b>Track dependency provenance, archive stale descendants, and warm-start them again from the newly accepted prerequisite.</div></div>
         </div>
 
         <div class="dp">

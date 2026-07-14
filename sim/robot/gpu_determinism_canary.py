@@ -48,7 +48,7 @@ TENSOR_TOLERANCES = {
 
 
 def _tolerance_group(geometry: str) -> str:
-    if geometry == "combat":
+    if geometry in ("combat", "leg_attack", "ladder_combat"):
         return "combat"
     if geometry == "mesh":
         return "mesh"
@@ -57,7 +57,7 @@ def _tolerance_group(geometry: str) -> str:
 
 def _args(root: Path, geometry: str, tag: str):
     envs, horizon, updates = 16, 16, 2
-    return build_args([
+    argv = [
         "--geometry", geometry,
         "--device", "cuda",
         "--steps", str(envs * horizon * updates),
@@ -73,7 +73,12 @@ def _args(root: Path, geometry: str, tag: str):
         "--seed", "20260709",
         "--preflight", "off",
         "--tag", str(root / tag),
-    ])
+    ]
+    if geometry == "ladder_locomotion":
+        argv += ["--rung", "23"]
+    elif geometry == "ladder_combat":
+        argv += ["--rung", "26"]
+    return build_args(argv)
 
 
 def _metric_drift(first, second, prefix="") -> tuple[float, float, str]:
@@ -206,7 +211,9 @@ def _run_isolated(root: Path, geometry: str, tag: str) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--geometry", choices=("all", "walker", "mesh", "combat", "universal"),
+    parser.add_argument("--geometry", choices=("all", "walker", "mesh", "combat",
+                                                "ladder_locomotion", "ladder_combat",
+                                                "universal"),
                         default="all")
     parser.add_argument("--report-only", action="store_true",
                         help="print measured drift without applying acceptance bounds")
@@ -225,7 +232,8 @@ def main(argv=None) -> int:
         return 0
     with tempfile.TemporaryDirectory(prefix="warp-gpu-canary-") as td:
         root = Path(td)
-        geometries = ("walker", "mesh", "combat", "universal") \
+        geometries = ("walker", "mesh", "combat", "ladder_locomotion",
+                      "ladder_combat", "universal") \
             if args.geometry == "all" else (args.geometry,)
         for geometry in geometries:
             first = _run_isolated(root, geometry, f"{geometry}_a")

@@ -55,6 +55,8 @@ def search(mode="cpg", candidates=32, generations=4, seed=0, **kwargs):
     mean = np.asarray(DEFAULT_RAW, dtype=float) if mode == "cpg" else np.full(dim, 0.5)
     std = np.full(dim, 0.15 if mode == "cpg" else 0.3)
     best = (float("-inf"), mean.copy())
+    baseline = (score_design(mean, seed=seed + 100_000, **kwargs)
+                if mode == "design" else None)
     for generation in range(generations):
         population = mean + rng.normal(size=(candidates, dim)) * std
         if mode != "cpg":
@@ -70,7 +72,11 @@ def search(mode="cpg", candidates=32, generations=4, seed=0, **kwargs):
         if scores[index] > best[0]:
             best = float(scores[index]), population[index].copy()
         print(f"SEARCH generation={generation} best={scores.max():.6f}", flush=True)
-    return {"mode": mode, "score": best[0], "parameters": best[1].tolist()}
+    result = {"mode": mode, "score": best[0], "parameters": best[1].tolist()}
+    if baseline is not None:
+        result.update(baseline_score=float(baseline),
+                      improvement=float(best[0] - baseline))
+    return result
 
 
 def main(argv=None):

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Locomotion and combat status
 
-> **Document status:** Active · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-12 · **Canonical for:** Short current summary of locomotion promotion and combat prerequisites
+> **Document status:** Active · **Audience:** Robot-learning contributors · **Last reviewed:** 2026-07-14 · **Canonical for:** Short current summary of locomotion promotion and combat prerequisites
 
 The active work is no longer “can any corrected model walk?” It is whether the
 current robot design and its learned/teacher stack can satisfy strict, composable
@@ -13,21 +13,27 @@ navigation gates before combat training is promoted.
   are not supported.
 - The 6 lb, twelve-servo physical envelope is defined and contract-tested in
   [`robot-hardware-contract.md`](robot-hardware-contract.md).
-- Cardinal CPG priors, route-aware search, transition datasets, behavior cloning,
-  residual-policy paths, rendering, and strict checkpoint evaluation exist.
-- The best documented route scaffold reaches two of four strict waypoints without
-  falling. It does not satisfy the three-of-four teacher/policy promotion gate.
-- The complete verification entry point covers walker, mesh, combat, and grouped
-  co-design mechanics on CUDA.
+- A sequential thirty-one-rung curriculum, task-conditioned FiLM policy,
+  fixed-seed promotion, prior-skill replay, and a persistent regression matrix
+  are implemented.
+- Rungs 1–5 are accepted. The resumable rung-6 stepping policy is at step
+  10,002,432 and passes every physical/safety gate; step-clock agreement is
+  0.699512 against a 0.70 gate, so it remains correctly unpromoted.
+- The stopped RunPod artifacts and exact resume command are recorded in
+  [`training-ladder-runbook.md`](training-ladder-runbook.md).
+- The complete verification entry point covers walker, mesh, combat, ladder,
+  diagnostics, and grouped co-design mechanics on CUDA.
 
 ## Current gate
 
-A locomotion artifact is promotable only when it:
+A ladder artifact is promotable only when it:
 
-1. reaches at least three of four waypoints at the strict radius;
-2. passes fixed-direction survival and regression checks;
-3. has compatible model, observation, action, and checkpoint metadata; and
-4. produces a plausible rendered rollout.
+1. passes every task-specific physical and competence threshold;
+2. reproduces the pass at the fixed retention seed;
+3. replays every prior same-family skill within its stored tolerance;
+4. has compatible model, observation, action, reward, and dependency metadata;
+   and
+5. produces a plausible rendered rollout before a behavioral claim is promoted.
 
 Until that gate passes for the active design, downstream open-ended combat is a
 frontier rather than a result.
@@ -36,6 +42,8 @@ frontier rather than a result.
 
 - [`locomotion-bootstrap-teacher-checklist.md`](locomotion-bootstrap-teacher-checklist.md)
   is the append-only implementation and experiment log.
+- [`training-ladder-runbook.md`](training-ladder-runbook.md) owns the current
+  sequential run state, resume procedure, and adaptive-contract lessons.
 - [`sparc-learning-log.md`](sparc-learning-log.md) records the active combat
   scoring/router experiments.
 - [`codesign-win-exchanges-checklist.md`](codesign-win-exchanges-checklist.md)

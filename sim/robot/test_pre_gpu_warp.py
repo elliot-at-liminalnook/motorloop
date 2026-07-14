@@ -27,6 +27,7 @@ pytest.importorskip("mujoco_warp")
 
 import mujoco  # noqa: E402
 import mujoco_warp as mjwp  # noqa: E402
+import warp as wp  # noqa: E402
 
 import walker_warp_env as W  # noqa: E402
 from walker_improved import DEFAULTS, build_walker  # noqa: E402
@@ -157,7 +158,8 @@ def test_active_walker_mujoco_warp_trajectory_parity(monkeypatch, airborne, step
     if airborne:
         env.qpos[:, 2] = 1.0
         env.qvel.zero_()
-        mjwp.forward(env._wm, env._wd)
+        with wp.ScopedDevice(env._wp_device):
+            mjwp.forward(env._wm, env._wd)
 
     m = mujoco.MjModel.from_xml_string(build_walker(DEFAULTS, floor=True))
     d = mujoco.MjData(m)
@@ -228,7 +230,8 @@ def test_command_reward_is_rotation_equivariant(monkeypatch):
     env.qvel[1, 1] = 0.10
     env._cmd[0] = torch.tensor([0.20, 0.0, 0.0])
     env._cmd[1] = torch.tensor([0.0, 0.20, 0.0])
-    mjwp.forward(env._wm, env._wd)
+    with wp.ScopedDevice(env._wp_device):
+        mjwp.forward(env._wm, env._wd)
     obs = env.observe().cpu().numpy()
     # World orientation is intentionally present in quaternion slots 24:28;
     # every other zero-angular-velocity feature should agree in the body frame.
@@ -319,6 +322,44 @@ def test_checkpoint_contract_rejects_model_drift(tmp_path, monkeypatch):
     bad = {**contract, "model_hash": "different-body"}
     with pytest.raises(ValueError, match="incompatible"):
         load_ckpt(path, actor, critic, on, pn, opt, "cpu", expected_contract=bad)
+
+
+def test_reward_only_migration_preserves_actor_but_resets_critic(tmp_path, monkeypatch):
+    _disable_terminations(monkeypatch)
+    env = W.WalkerWarpEnv(1, seed=0, device="cpu", episode_length=10)
+    args = SimpleNamespace(geometry="walker", marker="test")
+    actor = Actor(env.obs_dim, env.act_dim, (8,))
+    critic = Critic(env.obs_dim + env.priv_dim, (8,))
+    on, pn = RunningNorm(env.obs_dim), RunningNorm(env.priv_dim)
+    opt = torch.optim.Adam(
+        list(actor.parameters()) + list(critic.parameters()), lr=1.23e-5)
+    path = tmp_path / "policy.pt"
+    contract = checkpoint_contract(env, args)
+    save_ckpt(path, 10, actor, critic, on, pn, opt, args,
+              contract=contract, runtime={"canary": True})
+    saved_actor = {name: value.detach().clone()
+                   for name, value in actor.state_dict().items()}
+    with torch.no_grad():
+        for value in actor.parameters():
+            value.add_(1.0)
+        for value in critic.parameters():
+            value.add_(2.0)
+    migrated_critic = {name: value.detach().clone()
+                       for name, value in critic.state_dict().items()}
+    opt.param_groups[0]["lr"] = 0.5
+    new_contract = {**contract, "reward_semantics": "reward:v2"}
+
+    step, runtime = load_ckpt(
+        path, actor, critic, on, pn, opt, "cpu",
+        expected_contract=new_contract, allow_reward_migration=True)
+
+    assert step == 10 and runtime == {"canary": True}
+    for name, value in actor.state_dict().items():
+        torch.testing.assert_close(value, saved_actor[name])
+    for name, value in critic.state_dict().items():
+        torch.testing.assert_close(value, migrated_critic[name])
+    assert opt.state == {}
+    assert opt.param_groups[0]["lr"] == pytest.approx(1.23e-5)
 
 
 def test_default_training_budget_has_enough_updates():

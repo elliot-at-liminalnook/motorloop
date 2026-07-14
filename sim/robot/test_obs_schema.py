@@ -13,6 +13,7 @@ pytest.importorskip("mujoco_warp")
 
 from codesign_warp_env import CodesignWarpEnv
 from combat_warp_env import CombatWarpEnv
+from ladder_warp_env import LadderCombatWarpEnv, LadderLocomotionWarpEnv
 from walker_warp_env import WalkerWarpEnv
 
 
@@ -20,6 +21,8 @@ from walker_warp_env import WalkerWarpEnv
     lambda: WalkerWarpEnv(2, device="cpu"),
     lambda: CodesignWarpEnv(2, device="cpu", design=(0.2, 0.4, 0.6)),
     lambda: CombatWarpEnv(2, device="cpu"),
+    lambda: LadderLocomotionWarpEnv(2, rung=23, device="cpu"),
+    lambda: LadderCombatWarpEnv(2, rung=26, device="cpu"),
 ))
 def test_observation_and_privileged_shapes_are_stable(env):
     instance = env()

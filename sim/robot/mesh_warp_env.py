@@ -165,6 +165,7 @@ class MeshWarpEnv:
         gear = np.array([float(m.actuator_gear[a, 0]) for a in range(m.nu)])
         kp = np.array(list(SPEC.KP) * 4)
         wfree = np.array([WFREE["hip_yaw"], WFREE["leg_swing"], WFREE["knee_blade"]] * 4)
+        self._kp_t, self._wfree_t, self._gear_t = ft(kp), ft(wfree), ft(gear)
         self._knee_q = lt([m.jnt_qposadr[j] for j in aj[2::3]])
         jid = {jname(j): j for j in range(m.njnt)}
         self._toe_q = lt([m.jnt_qposadr[jid[f"{L}_toe_hinge"]] for L in LEGS])
@@ -199,6 +200,12 @@ class MeshWarpEnv:
         self.qfrc_actuator = wp.to_torch(self._wd.qfrc_actuator)  # (nworld, nv)
         self.qacc_warmstart = wp.to_torch(self._wd.qacc_warmstart)
         self.sim_time = wp.to_torch(self._wd.time)
+        self.constraint_rows = wp.to_torch(self._wd.nefc)
+        self.solver_iterations = wp.to_torch(self._wd.solver_niter)
+        # ``efc_islandid`` is zero-width when island bookkeeping is disabled;
+        # it is not the allocated constraint capacity. MuJoCo-Warp keeps the
+        # actual dense constraint-row budget in Data.njmax.
+        self.constraint_capacity = int(self._wd.njmax)
         self._target_t = wp.to_torch(self._target_wp)
         self._alpha_t = wp.to_torch(self._alpha_wp)
 
@@ -257,11 +264,12 @@ class MeshWarpEnv:
         mjwp.step(self._wm, self._wd)
 
     def _run_physics(self):
-        if self._graph is not None:
-            wp.capture_launch(self._graph)
-        else:
-            for _ in range(self._fs):
-                self._substep()
+        with wp.ScopedDevice(self._wp_device):
+            if self._graph is not None:
+                wp.capture_launch(self._graph)
+            else:
+                for _ in range(self._fs):
+                    self._substep()
 
     # ------------------------------------------------------------------ commands
     def _sample_cmd(self) -> torch.Tensor:
@@ -281,7 +289,8 @@ class MeshWarpEnv:
         if mask is None:
             mask = torch.ones(self.nworld, dtype=torch.bool, device=self.device)
         self._reset_worlds(mask)
-        mjwp.forward(self._wm, self._wd)
+        with wp.ScopedDevice(self._wp_device):
+            mjwp.forward(self._wm, self._wd)
         return self.observe()
 
     def _reset_worlds(self, mask: torch.Tensor):
@@ -358,7 +367,9 @@ class MeshWarpEnv:
         self._timer = torch.where(resample, torch.zeros_like(self._timer), self._timer)
         # action low-pass; the USED action is what obs reports as prev_action
         a = ACT_LP * self._prev_a + (1.0 - ACT_LP) * action.clamp(-1.0, 1.0)
-        target = (self._stand + a * self._authority).clamp(self._jr_lo, self._jr_hi)
+        raw_target = self._stand + a * self._authority
+        target_clamped = ((raw_target < self._jr_lo) | (raw_target > self._jr_hi)).float()
+        target = raw_target.clamp(self._jr_lo, self._jr_hi)
         self._target_t.copy_(target)
         self._alpha_t.fill_(float(alpha))
         self._run_physics()
@@ -383,7 +394,8 @@ class MeshWarpEnv:
         fcf = first_c.float()
         air_rwd = ((air.clamp(max=SPEC.AIRTIME_CAP) - SPEC.AIRTIME_TARGET) * fcf).sum(-1)
         new_air = torch.where(contact, torch.zeros_like(air), air + dt)
-        act_rate = ((a - self._prev_a) ** 2).sum(-1)
+        action_delta = (a - self._prev_a).abs()
+        act_rate = action_delta.square().sum(-1)
         pose_dev = ((q[:, self._qa] - self._stand) ** 2).sum(-1)
         progress_c = progress.clamp(-cmd_norm, cmd_norm) / SPEC.MESH_VMAX
         phase = (self._t.float() * dt * SPEC.CLOCK_HZ) % 1.0
@@ -391,15 +403,24 @@ class MeshWarpEnv:
         want = self._pair_a * swing_a + self._pair_b * (1.0 - swing_a)
         cf = contact.float()
         clock_bonus = (want * (1.0 - cf) + (1.0 - want) * cf).mean(-1)
-        reward = (SPEC.TRACK_W * track + SPEC.UPRIGHT_W * up + 0.1
-                  + SPEC.CLOCK_W * active * clock_bonus
-                  + SPEC.ALIGN_W * active * align.clamp(-1.0, 1.0)
-                  + SPEC.PROGRESS_W * active * progress_c
-                  + SPEC.AIRTIME_W * air_rwd * (cmd_norm / SPEC.MESH_VMAX).clamp(0.0, 1.0)
-                  - SPEC.BACKWARD_W * active * (-progress).clamp(min=0.0)
-                  - SPEC.POSE_W * pose_dev - SPEC.ACTRATE_W * act_rate
-                  - SPEC.VELZ_W * v[:, 2] ** 2
-                  - SPEC.ANGXY_W * (v[:, 3] ** 2 + v[:, 4] ** 2))
+        reward_components = {
+            "tracking": SPEC.TRACK_W * track,
+            "upright": SPEC.UPRIGHT_W * up,
+            "alive": torch.full_like(track, 0.1),
+            "gait_clock": SPEC.CLOCK_W * active * clock_bonus,
+            "alignment": SPEC.ALIGN_W * active * align.clamp(-1.0, 1.0),
+            "progress": SPEC.PROGRESS_W * active * progress_c,
+            "airtime": SPEC.AIRTIME_W * air_rwd
+                * (cmd_norm / SPEC.MESH_VMAX).clamp(0.0, 1.0),
+            "backward_penalty": -SPEC.BACKWARD_W * active
+                * (-progress).clamp(min=0.0),
+            "pose_penalty": -SPEC.POSE_W * pose_dev,
+            "action_rate_penalty": -SPEC.ACTRATE_W * act_rate,
+            "vertical_speed_penalty": -SPEC.VELZ_W * v[:, 2].square(),
+            "angular_speed_penalty": -SPEC.ANGXY_W
+                * (v[:, 3].square() + v[:, 4].square()),
+        }
+        reward = sum(reward_components.values())
         imit = torch.zeros(n, device=dev)
         if self._gait is not None and imit_anneal > 0.0 and IMIT_W > 0.0:
             g = self._gait
@@ -413,7 +434,8 @@ class MeshWarpEnv:
             want_ref = g["swing"][i0]
             feet_agree = (want_ref * (1.0 - cf) + (1.0 - want_ref) * cf).mean(-1)
             imit = torch.exp(-err2 / IMIT_SIGMA ** 2) + IMIT_FEET_W * feet_agree
-            reward = reward + (IMIT_W * imit_anneal) * imit
+            reward_components["imitation"] = (IMIT_W * imit_anneal) * imit
+            reward = reward + reward_components["imitation"]
         height = self.xpos[:, self._torso, 2]
         fall = (height < SPEC.FALL_Z) | (up < SPEC.MIN_UP_Z)      # spec line 231
 
@@ -427,39 +449,122 @@ class MeshWarpEnv:
         else:
             trunc = torch.zeros(n, dtype=torch.bool, device=dev)
         done = fall | trunc
+        q_actuated = q[:, self._qa]
+        qd_actuated = v[:, self._da]
+        requested_effort = self._kp_t * (target - q_actuated) / self._gear_t
+        drive_derating = (requested_effort * qd_actuated) > 0.0
+        speed_limit = (1.0 - qd_actuated.abs() / self._wfree_t).clamp(0.0, 1.0)
+        effective_limit = 1.0 - float(alpha) * (1.0 - speed_limit)
+        effective_limit = torch.where(drive_derating, effective_limit,
+                                      torch.ones_like(effective_limit))
+        effort_ratio = requested_effort.abs() / effective_limit.clamp_min(1.0e-6)
+        joint_margin = torch.minimum(q_actuated - self._jr_lo,
+                                     self._jr_hi - q_actuated)
+        joint_range = (self._jr_hi - self._jr_lo).clamp_min(1.0e-6)
+        foot_penetration = (FOOT_R - foot_z).clamp_min(0.0)
         obs_pre = self.observe()
         priv_pre = self.privileged()
         self._reset_worlds(done)                 # branchless per-world autoreset, no host sync
         # Keep post-reset qpos/qvel and derived kinematics/contact/forces coherent.
         # Unconditional execution avoids a done.any() host synchronization on CUDA.
-        mjwp.forward(self._wm, self._wd)
+        with wp.ScopedDevice(self._wp_device):
+            mjwp.forward(self._wm, self._wd)
         info = {"truncated": trunc.float(), "terminal_obs": obs_pre, "terminal_priv": priv_pre,
                 "priv": self.privileged(),
+                "reward_components": reward_components,
+                "actuator_diagnostics": {
+                    "target_clamped": target_clamped,
+                    "effort_saturated": (effort_ratio >= 1.0).float(),
+                    "effort_ratio": effort_ratio,
+                    "requested_effort_abs": requested_effort.abs(),
+                    "available_effort": effective_limit,
+                    "effort_shortfall": (
+                        requested_effort.abs() - effective_limit).clamp_min(0.0),
+                    "speed_derated": (drive_derating & (effective_limit < 0.999)).float(),
+                    "joint_limit_near": (joint_margin < 0.01 * joint_range).float(),
+                    "action_delta": action_delta,
+                },
+                "simulation_diagnostics": {
+                    "constraint_rows": self.constraint_rows.float(),
+                    "constraint_capacity": torch.full_like(
+                        self.constraint_rows, float(self.constraint_capacity),
+                        dtype=torch.float32),
+                    "solver_iterations": self.solver_iterations.float(),
+                    "foot_penetration": foot_penetration.amax(-1),
+                    "state_nonfinite": ((~torch.isfinite(q)).sum(-1)
+                                        + (~torch.isfinite(v)).sum(-1)).float(),
+                },
+                "gait_phase": phase,
                 "contact": cf, "first_contact": fcf, "air_pre": air_pre,
                 "track": track, "verr": torch.sqrt(verr), "align": align, "speed": speed,
+                "command_speed": cmd_norm, "forward_efficiency": align,
                 "progress": progress, "up": up, "height": height, "imit": imit}
+        info["fallrate"] = fall.float()
         return self.observe(), reward, done.float(), info
 
 
 class EvalTelemetry:
-    """Cheap running-mean telemetry over an eval window (device scalars only):
-    duty factor, mean air-time at touchdown, diag_sync = mean Pearson corr of the
-    two diagonal-pair contact patterns over all (world, step) samples, plus the
-    standard tracking metrics."""
+    """Evaluation telemetry with means, tails, and per-leg diagnostics.
+
+    Training gates still consume the historical scalar means, but diagnosing a
+    failed gate from means alone is needlessly ambiguous.  A small, fixed set of
+    world/step samples is retained on the evaluation device so the result also
+    reports distribution tails.  Four-element physical fields are reduced per
+    leg, which makes asymmetric dragging or clearance failures visible without
+    saving a full trajectory.
+    """
 
     KEYS = ("track", "verr", "align", "speed", "progress", "up", "height")
-    OPTIONAL_KEYS = ("xprogress", "lateral", "progress_ema", "progress_req", "duty_ema",
-                     "foot_duty_ema", "motion_prior",
+    OPTIONAL_KEYS = ("xprogress", "lateral", "command_speed",
+                     "forward_efficiency", "lateral_speed_fraction",
+                     "slip", "clearance", "stance_foot_speed", "cat_delta",
+                     "progress_ema", "progress_req", "duty_ema",
+                     "foot_duty_ema", "cycle_duty", "foot_cycle_duty",
+                     "motion_prior",
+                     "fallrate",
                      "hop_peak", "hop_peak_delta", "hop_airborne", "hop_landed",
                      "hop_stable_landing",
                      "cat_slip", "cat_orient", "cat_qvel", "cat_progress",
-                     "cat_duty", "cat_foot_duty", "cat_support", "cat_body")
+                     "cat_duty", "cat_foot_duty", "cat_support", "cat_body",
+                     "attack_selected_hit", "attack_wrong_hit", "attack_support",
+                     "attack_selected_ground", "attack_kick_speed",
+                     "attack_recovery_speed", "attack_task_reward", "attack_active",
+                     "ladder_pose_error", "ladder_pose_score",
+                     "ladder_height_error", "ladder_height_score",
+                     "ladder_yaw_error", "ladder_yaw_score",
+                     "ladder_heading_error", "ladder_heading_score",
+                     "ladder_step_clock", "ladder_swing_clearance",
+                     "ladder_worst_swing_clearance", "ladder_step_action_score",
+                     "ladder_safe_progress", "ladder_stance_slip_ratio",
+                     "ladder_goal_distance", "ladder_goal_progress", "ladder_goal_hit",
+                     "ladder_stop_speed", "ladder_stop_score", "ladder_move_progress",
+                     "ladder_obstacle_clearance", "ladder_approach",
+                     "ladder_target_distance", "ladder_rod_hit", "ladder_taken",
+                     "ladder_combat_margin",
+                     "ladder_task_reward")
+    DISTRIBUTION_KEYS = (
+        "xprogress", "lateral", "align", "cat_slip", "stance_foot_speed",
+        "ladder_step_clock", "ladder_swing_clearance", "fallrate", "cat_done",
+    )
+    VECTOR_KEYS = {
+        "contact": "duty",
+        "foot_hspeed": "foot_speed",
+        "foot_height": "foot_height",
+        "foot_duty_ema_by_leg": "foot_duty_ema",
+        "cycle_duty_by_leg": "cycle_duty",
+        "attack_hit_by_leg": "attack_hit",
+        "attack_support_by_leg": "attack_support_contact",
+    }
+    LEG_NAMES = ("fl", "fr", "rl", "rr")
 
     def __init__(self, device):
         z = lambda: torch.zeros((), device=device)  # noqa: E731
         self._sums = {k: z() for k in self.KEYS}
         self._optional_sums = {k: z() for k in self.OPTIONAL_KEYS}
         self._optional_counts = {k: 0 for k in self.OPTIONAL_KEYS}
+        self._samples = {k: [] for k in self.DISTRIBUTION_KEYS}
+        self._vector_sums = {}
+        self._vector_counts = {k: 0 for k in self.VECTOR_KEYS}
         self._reward, self._duty, self._n = z(), z(), 0
         self._catrate = z()          # mean CaT termination rate (0 if env reports none)
         self._td_air, self._td_cnt = z(), z()
@@ -467,6 +572,19 @@ class EvalTelemetry:
         self._pa = [z() for _ in range(5)]
         self._pb = [z() for _ in range(5)]
         self._pn = 0
+        self._reward_component_samples: dict[str, list[torch.Tensor]] = {}
+        self._actuator_samples: dict[str, list[torch.Tensor]] = {}
+        self._simulation_samples: dict[str, list[torch.Tensor]] = {}
+        self._phase_samples: list[torch.Tensor] = []
+        self._phase_progress: list[torch.Tensor] = []
+        self._phase_lateral: list[torch.Tensor] = []
+        self._phase_slip: list[torch.Tensor] = []
+        self._phase_contact: list[torch.Tensor] = []
+        self._episode_age: torch.Tensor | None = None
+        self._episode_lengths: list[torch.Tensor] = []
+        self._termination_counts: dict[str, torch.Tensor] = {}
+        self._termination_world_steps = 0
+        self._constraint_violation_samples: dict[str, list[torch.Tensor]] = {}
 
     def add(self, reward, info):
         cf = info["contact"]
@@ -483,6 +601,21 @@ class EvalTelemetry:
             if k in info:
                 self._optional_sums[k] += info[k].mean()
                 self._optional_counts[k] += 1
+        for k in self.DISTRIBUTION_KEYS:
+            if k in info:
+                value = info[k].detach().reshape(-1)
+                self._samples[k].append(value)
+        for source in self.VECTOR_KEYS:
+            if source not in info:
+                continue
+            value = info[source].detach()
+            if value.ndim != 2 or value.shape[1] != len(self.LEG_NAMES):
+                continue
+            if source not in self._vector_sums:
+                self._vector_sums[source] = torch.zeros(
+                    len(self.LEG_NAMES), dtype=value.dtype, device=value.device)
+            self._vector_sums[source].add_(value.mean(dim=0))
+            self._vector_counts[source] += 1
         self._td_air += (info["air_pre"] * info["first_contact"]).sum()
         self._td_cnt += info["first_contact"].sum()
         for sums, (i, j) in ((self._pa, (0, 3)), (self._pb, (1, 2))):
@@ -490,6 +623,48 @@ class EvalTelemetry:
             sums[0] += x.sum(); sums[1] += y.sum(); sums[2] += (x * y).sum()
             sums[3] += (x * x).sum(); sums[4] += (y * y).sum()
         self._pn += n
+        for name, value in info.get("reward_components", {}).items():
+            self._reward_component_samples.setdefault(name, []).append(
+                value.detach().reshape(-1))
+        for name, value in info.get("actuator_diagnostics", {}).items():
+            tensor = value.detach()
+            if tensor.ndim == 1:
+                tensor = tensor[:, None]
+            self._actuator_samples.setdefault(name, []).append(
+                tensor.reshape(-1, tensor.shape[-1]))
+        for name, value in info.get("simulation_diagnostics", {}).items():
+            self._simulation_samples.setdefault(name, []).append(
+                value.detach().reshape(-1))
+        if "gait_phase" in info and ("xprogress" in info or "progress" in info):
+            phase_progress = info.get("xprogress", info["progress"])
+            self._phase_samples.append(info["gait_phase"].detach().reshape(-1))
+            self._phase_progress.append(phase_progress.detach().reshape(-1))
+            self._phase_lateral.append(info.get(
+                "lateral", torch.zeros_like(phase_progress)).detach().reshape(-1))
+            self._phase_slip.append(info.get(
+                "cat_slip", torch.zeros_like(phase_progress)).detach().reshape(-1))
+            self._phase_contact.append(cf.detach().reshape(-1, len(self.LEG_NAMES)))
+
+        truncation = info.get("truncated", torch.zeros(n, device=cf.device)).detach() > 0
+        fall = info.get("fallrate", torch.zeros(n, device=cf.device)).detach() > 0
+        constraint = info.get("cat_done", torch.zeros(n, device=cf.device)).detach() > 0
+        terminal = truncation | fall | constraint
+        if self._episode_age is None or self._episode_age.numel() != n:
+            self._episode_age = torch.zeros(n, dtype=torch.long, device=cf.device)
+        self._episode_age.add_(1)
+        self._episode_lengths.append(self._episode_age[terminal].detach().clone())
+        self._episode_age.masked_fill_(terminal, 0)
+        for name, value in (("truncation", truncation), ("fall", fall),
+                            ("constraint", constraint)):
+            if name not in self._termination_counts:
+                self._termination_counts[name] = torch.zeros((), device=cf.device)
+            self._termination_counts[name].add_(value.float().sum())
+        self._termination_world_steps += n
+        for name in ("cat_slip", "cat_orient", "cat_qvel", "cat_progress",
+                     "cat_duty", "cat_foot_duty", "cat_support", "cat_body"):
+            if name in info:
+                self._constraint_violation_samples.setdefault(name, []).append(
+                    info[name].detach().reshape(-1))
 
     @staticmethod
     def _corr(sums, n):
@@ -498,6 +673,22 @@ class EvalTelemetry:
         var = (sxx / n - mx * mx) * (syy / n - my * my)
         return (sxy / n - mx * my) / (var ** 0.5) if var > 1e-12 else 0.0
 
+    @staticmethod
+    def _stats(value: torch.Tensor) -> dict:
+        value = value.detach().reshape(-1).to(torch.float32)
+        finite = value[torch.isfinite(value)]
+        if not finite.numel():
+            return {"count": int(value.numel()), "nonfinite_count": int(value.numel())}
+        q = torch.quantile(finite, finite.new_tensor((0.10, 0.50, 0.90, 0.99)))
+        return {
+            "count": int(value.numel()),
+            "nonfinite_count": int((~torch.isfinite(value)).sum()),
+            "mean": finite.mean().item(), "std": finite.std(unbiased=False).item(),
+            "min": finite.min().item(), "max": finite.max().item(),
+            "p10": q[0].item(), "p50": q[1].item(),
+            "p90": q[2].item(), "p99": q[3].item(),
+        }
+
     def result(self) -> dict:
         n = max(self._n, 1)
         out = {k: (self._sums[k] / n).item() for k in self.KEYS}
@@ -505,6 +696,22 @@ class EvalTelemetry:
             cnt = self._optional_counts[k]
             if cnt:
                 out[k] = (self._optional_sums[k] / cnt).item()
+        for key, chunks in self._samples.items():
+            if not chunks:
+                continue
+            values = torch.cat(chunks)
+            out[f"{key}_std"] = values.std(unbiased=False).item()
+            quantiles = torch.quantile(
+                values, values.new_tensor((0.10, 0.50, 0.90, 0.99)))
+            for suffix, value in zip(("p10", "p50", "p90", "p99"), quantiles):
+                out[f"{key}_{suffix}"] = value.item()
+        for source, prefix in self.VECTOR_KEYS.items():
+            cnt = self._vector_counts[source]
+            if not cnt:
+                continue
+            means = self._vector_sums[source] / cnt
+            for leg, value in zip(self.LEG_NAMES, means):
+                out[f"{prefix}_{leg}"] = value.item()
         out["reward"] = (self._reward / n).item()
         out["duty"] = (self._duty / n).item()
         out["catrate"] = (self._catrate / n).item()
@@ -512,6 +719,94 @@ class EvalTelemetry:
         out["air"] = (self._td_air.item() / cnt) if cnt > 0 else 0.0
         pn = max(self._pn, 1)
         out["diagsync"] = 0.5 * (self._corr(self._pa, pn) + self._corr(self._pb, pn))
+        if "xprogress" in out and "speed" in out:
+            out["forward_speed_fraction"] = (
+                out["xprogress"] / max(abs(out["speed"]), 1.0e-6))
+        if "xprogress" in out and "lateral" in out:
+            out["lateral_forward_ratio"] = (
+                out["lateral"] / max(abs(out["xprogress"]), 1.0e-3))
+        reward_components = {
+            name: self._stats(torch.cat(chunks))
+            for name, chunks in self._reward_component_samples.items() if chunks
+        }
+        component_scale = sum(abs(row.get("mean", 0.0))
+                              for row in reward_components.values())
+        for row in reward_components.values():
+            row["absolute_mean_share"] = abs(row.get("mean", 0.0)) / max(
+                component_scale, 1.0e-12)
+        out["reward_components"] = reward_components
+
+        actuator = {}
+        for name, chunks in self._actuator_samples.items():
+            values = torch.cat(chunks)
+            row = {"overall": self._stats(values)}
+            if values.shape[1] >= 12:
+                row["by_actuator"] = [self._stats(values[:, index])
+                                      for index in range(values.shape[1])]
+                servo_values = values[:, :12]
+                row["by_axis"] = {
+                    axis: self._stats(servo_values[:, index::3])
+                    for axis, index in (("yaw", 0), ("pitch", 1), ("lift", 2))
+                }
+                row["by_leg"] = {
+                    leg: self._stats(servo_values[:, index * 3:(index + 1) * 3])
+                    for index, leg in enumerate(self.LEG_NAMES)
+                }
+                if values.shape[1] > 12:
+                    row["extra_actuators"] = [
+                        self._stats(values[:, index])
+                        for index in range(12, values.shape[1])]
+            actuator[name] = row
+        out["actuator_diagnostics"] = actuator
+        out["simulation_diagnostics"] = {
+            name: self._stats(torch.cat(chunks))
+            for name, chunks in self._simulation_samples.items() if chunks
+        }
+
+        world_steps = max(self._termination_world_steps, 1)
+        ledger = {
+            name: {"count": float(count), "rate": float(count) / world_steps}
+            for name, count in self._termination_counts.items()
+        }
+        ledger["world_steps"] = self._termination_world_steps
+        completed_lengths = [value for value in self._episode_lengths if value.numel()]
+        if completed_lengths:
+            ledger["episode_length"] = self._stats(torch.cat(completed_lengths).float())
+        ledger["constraint_violations"] = {}
+        for name, chunks in self._constraint_violation_samples.items():
+            values = torch.cat(chunks)
+            stats = self._stats(values)
+            stats["positive_rate"] = float((values > 0).float().mean())
+            ledger["constraint_violations"][name] = stats
+        out["termination_ledger"] = ledger
+
+        if self._phase_samples:
+            phase = torch.cat(self._phase_samples).remainder(1.0)
+            progress = torch.cat(self._phase_progress)
+            lateral = torch.cat(self._phase_lateral)
+            slip = torch.cat(self._phase_slip)
+            contact = torch.cat(self._phase_contact)
+            bins = []
+            bin_index = torch.clamp((phase * 8).long(), 0, 7)
+            for index in range(8):
+                selected = bin_index == index
+                bins.append({
+                    "phase_start": index / 8.0,
+                    "phase_end": (index + 1) / 8.0,
+                    "count": int(selected.sum()),
+                    "progress": (progress[selected].mean().item()
+                                 if bool(selected.any()) else None),
+                    "xprogress": (progress[selected].mean().item()
+                                  if bool(selected.any()) else None),
+                    "lateral": (lateral[selected].mean().item()
+                                if bool(selected.any()) else None),
+                    "cat_slip": (slip[selected].mean().item()
+                                 if bool(selected.any()) else None),
+                    "contact_by_leg": ([float(value) for value in
+                                        contact[selected].mean(0)]
+                                       if bool(selected.any()) else None),
+                })
+            out["phase_profile"] = {"bins": bins}
         return out
 
 

@@ -174,6 +174,26 @@ Order runs so each one can invalidate everything downstream of it:
   test that HER's goal-tail and RND's feature-slice assumptions match it — today
   those are implicit positional contracts that any obs change silently breaks.
 
+### T8 — Adaptive reward contracts and dependency provenance
+
+- Keep physical thresholds and competence floors fixed; adapt only their
+  normalized enforcement multipliers.
+- Give slip, aggregate duty, per-foot duty, and competence shortfalls separate
+  bounded controllers. Never collapse unrelated failures into one reward weight.
+- Log every controller's metric, target, observed value, multiplier, ceiling, and
+  saturation state. Saturated pressure plus a failed contract is an alert, not a
+  successful self-tuning claim.
+- Compute gait-cycle contracts over the entire cycle. Endpoint EMAs are useful
+  trends but are order-biased pass/fail measurements.
+- Treat demonstrations as temporary scaffolds that automatically yield to
+  physical contact, clearance, safety, and task outcomes.
+- Hash the prerequisite checkpoints used to derive later policies and searched
+  priors. If a prerequisite is relearned, quarantine every unaccepted descendant
+  and derived artifact before resuming.
+
+The current implementation and the evidence that motivated these rules are in
+[`training-ladder-runbook.md`](training-ladder-runbook.md).
+
 ## Part 3 — Pitfall → earliest catching check
 
 | Pitfall (as it happened) | Cost as incurred | Check that catches it | Earliest firing point |

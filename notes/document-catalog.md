@@ -15,6 +15,7 @@ exhaustive inventory and makes every document's resolved lifecycle visible.
 | [Formal Property Verification](../formal/README.md) | subsystem guide | verification engineers | Open-source formal proofs of the RTL's plant-independent safety properties. While the lockstep bench *observes* invariants across finite simulation, the formal flow *proves*… |
 | [Documentation home](README.md) | documentation index | all readers | Start with the question you need answered. This page intentionally favors a small set of maintained entry points over a chronological list of everything ever written. |
 | [Architecture Decision Record: Lockstep Verilator Bench](architecture.md) | architecture decision record | component-simulation developers | Date: 2026-06-12. Status: adopted and **implemented** (same date) — see simulation-checklist for the completed build and its findings. Supersedes the original FMI/OMSimulator… |
+| [Blender and Phobos agent workflow](blender-agent-workflow.md) | runbook | agents and robot-model contributors | This runbook describes the safe interaction pattern established while building the planar slider-crank model. Follow it when inspecting Blender, guiding a new Blender user,… |
 | [Current project status](current-status.md) | status interpretation | all readers | This page answers “what is true now?” It deliberately avoids copying volatile test counts and timing numbers. Follow the evidence links for the latest generated values. |
 | [Documentation guide](documentation-guide.md) | contributor guide | contributors and maintainers | Motorloop documentation is organized by what a reader is trying to do, not by the order in which the project happened. The curated entry point is notes/README.md; the complete… |
 | [Getting started](getting-started.md) | newcomer guide | first-time visitors | Motorloop is a verification and simulation workspace with two main systems: |
@@ -36,6 +37,7 @@ exhaustive inventory and makes every document's resolved lifecycle visible.
 | [Locomotion Bootstrap Teacher Checklist](locomotion-bootstrap-teacher-checklist.md) | execution log | robot-learning contributors | This checklist describes the path from the current CPG/PD scaffold to a less hand-authored locomotion system: |
 | [Locomotion and combat status](locomotion-status.md) | active-work summary | robot-learning contributors | The active work is no longer “can any corrected model walk?” It is whether the current robot design and its learned/teacher stack can satisfy strict, composable navigation… |
 | [SPARC Learning Log](sparc-learning-log.md) | learning log | robot-learning contributors | This is a detailed experiment log. Use the linked summary for the current project-level verdict; entries below retain exact intermediate outcomes. |
+| [Sequential robot-training ladder](training-ladder-runbook.md) | runbook | robot-learning contributors | This is the operational record for the active MuJoCo-Warp/Torch curriculum. The ladder contains thirty-one ordered tasks, promotes only checkpoints that pass a fixed-seed gate… |
 
 ## Reference
 

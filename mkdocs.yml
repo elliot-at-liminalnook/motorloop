@@ -49,7 +49,9 @@ nav:
       - Open questions: notes/open-questions.md
   - Workflows:
       - Reproduce the repository: notes/reproduce.md
+      - Blender and Phobos agent workflow: notes/blender-agent-workflow.md
       - Robot and RL launch gate: notes/pre-gpu-test-entrypoint.md
+      - Sequential training ladder: notes/training-ladder-runbook.md
       - Component simulation: sim/README.md
       - Formal verification: formal/README.md
       - Hardware bring-up: notes/hardware-bringup-notes.md
@@ -62,6 +64,7 @@ nav:
       - RL verification playbook: notes/rl-verification-playbook.md
   - Active work:
       - Locomotion and combat status: notes/locomotion-status.md
+      - Sequential training ladder: notes/training-ladder-runbook.md
       - Historical uplift result: notes/training-uplift-results.md
   - Background:
       - Project ethos: notes/ethos.md

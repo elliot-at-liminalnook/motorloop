@@ -139,11 +139,27 @@ canonical_for = "full repository reproduction"
 header_required = true
 
 [[overrides]]
+path = "notes/blender-agent-workflow.md"
+status = "current"
+kind = "runbook"
+audience = "agents and robot-model contributors"
+canonical_for = "agent-mediated Blender and Phobos interaction"
+header_required = true
+
+[[overrides]]
 path = "notes/pre-gpu-test-entrypoint.md"
 status = "current"
 kind = "runbook"
 audience = "robot-learning developers"
 canonical_for = "robot and RL launch authorization"
+header_required = true
+
+[[overrides]]
+path = "notes/training-ladder-runbook.md"
+status = "active"
+kind = "runbook"
+audience = "robot-learning contributors"
+canonical_for = "31-rung training state, resume, and shutdown handoff"
 header_required = true
 
 [[overrides]]
