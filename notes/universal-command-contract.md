@@ -83,6 +83,21 @@ environment, not the observation.
 | 30 | velocity active | cross-morphology tracking; design identity arrives via morphology tokens, not commands |
 | 31 | (not universal) | co-design search loop, no policy contract |
 
+## Walk-first acquisition order
+
+`--walk-first` (requires this contract) reorders execution to
+`1, 8, 10, 9, 11, 12, 7, 2, 3, 4, 5, 6, 13…`: velocity tracking is acquired
+from scratch at rung 8 — whose command distribution holds a fixed stripe of
+worlds at v=0 so commanded standing is learned *with* locomotion — and the
+stand/pose/step rungs then certify as commanded special cases through the
+zero-shot exam. Rationale: a randomly initialized policy starts with nonzero
+foot-air, so every stepping-adjacent reward has gradient from the first
+update; the classic stand-first order instead builds a standing attractor
+that stepping must later escape across a zero-gradient basin (the rung-6
+failure of 2026-07-24). Rung numbering is invisible to the policy, so
+execution order is pure curriculum; gates are unchanged and warm-start/
+retention/replay follow acceptance order rather than numeric order.
+
 ## Zero-shot certification under v2
 
 The v1 test-out exam copied the predecessor's task-channel conditioning into

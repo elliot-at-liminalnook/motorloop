@@ -316,6 +316,70 @@ def test_power_model_reaches_universal_contract_but_not_combat():
     assert not combat.action_semantics.endswith("shared_bus_v2")
 
 
+def test_walk_first_ordering_certifies_stand_rungs_after_acquisition():
+    from training_ladder import WALK_FIRST_ORDER, ordered_rungs
+    numbers = [rung.number for rung in ordered_rungs(1, 31, walk_first=True)]
+    assert numbers == list(WALK_FIRST_ORDER)
+    assert numbers[1] == 8, "velocity-tracking acquisition must come first"
+    assert numbers.index(8) < numbers.index(2), "stand certifies after walking"
+    assert numbers.index(8) < numbers.index(6), "stepping follows a rhythmic parent"
+    default = [rung.number for rung in ordered_rungs(1, 31, walk_first=False)]
+    assert default == list(range(1, 32))
+    windowed = [rung.number for rung in ordered_rungs(2, 8, walk_first=True)]
+    assert windowed == [8, 7, 2, 3, 4, 5, 6]
+
+
+def test_previous_checkpoint_follows_acceptance_order_not_numbering(tmp_path):
+    """Under walk-first ordering rung 2 certifies AFTER rung 8; its warm/parent
+    checkpoint must be the latest ACCEPTED one, not the largest number below 2."""
+    runner = LadderRunner(make_parser().parse_args(
+        ["run", "--out", str(tmp_path), "--command-observations"]))
+    eight = tmp_path / "rung_08.pt"
+    eight.touch()
+    runner.state["completed"] = [8]
+    runner.state["checkpoints"]["8"] = str(eight)
+    rung2 = next(rung for rung in RUNGS if rung.number == 2)
+    assert runner._previous_checkpoint(rung2) == str(eight)
+    # classic numeric runs are unchanged: latest accepted is still the answer
+    five = tmp_path / "rung_05.pt"
+    five.touch()
+    runner.state["completed"] = [2, 3, 4, 5]
+    runner.state["checkpoints"] = {"5": str(five)}
+    rung6 = next(rung for rung in RUNGS if rung.number == 6)
+    assert runner._previous_checkpoint(rung6) == str(five)
+
+
+def test_walk_first_requires_command_observations(tmp_path):
+    from training_ladder import main
+    with pytest.raises(SystemExit, match="command-observations"):
+        main(["run", "--out", str(tmp_path), "--walk-first", "--dry-run"])
+
+
+def test_walk_first_dry_run_completes_in_acquisition_order(tmp_path):
+    from training_ladder import main
+    rc = main(["run", "--out", str(tmp_path), "--walk-first",
+               "--command-observations", "--dry-run", "--from", "1",
+               "--to", "12"])
+    assert rc == 0
+    state = json.loads((tmp_path / "ladder_state.json").read_text())
+    assert state["completed"] == [1, 8, 10, 9, 11, 12, 7, 2, 3, 4, 5, 6]
+
+
+def test_rung8_command_distribution_includes_standing_stripe():
+    env = LadderLocomotionWarpEnv(16, rung=8, seed=11, device="cpu",
+                                  episode_length=4)
+    env.reset()
+    env._set_task_command(alpha=1.0)
+    speeds = env._velocity_command.clone()
+    # the published command (not the raw sample) is what the policy tracks
+    cmd = env._cmd if hasattr(env, "_cmd") else None
+    obs = env.observe()
+    forward = obs[:, 47]
+    assert float(forward[0].abs()) == 0.0, "stripe world 0 holds at zero"
+    assert float(forward[8].abs()) == 0.0, "stripe world 8 holds at zero"
+    assert float(forward.abs().max()) > 0.0, "non-stripe worlds still move"
+
+
 def test_scenario_seed_changes_physical_model_variant():
     low = LadderLocomotionWarpEnv(
         1, rung=17, seed=1, device="cpu", episode_length=2,

@@ -666,6 +666,11 @@ class LadderLocomotionWarpEnv(WalkerWarpEnv):
         elif self.rung == 8:
             cmd[:, 0] = self._velocity_command[:, :2].norm(dim=-1)
             cmd[:, 1:].zero_()
+            # Walk-first acquisition: a fixed stripe of worlds holds v=0 so
+            # commanded standing is learned WITH locomotion, never as a prior
+            # attractor stepping must later escape. Deterministic (no RNG
+            # draw) to keep replay exactness untouched.
+            cmd[::8, 0] = 0.0
         elif self.rung == 9:
             cmd.zero_(); cmd[:, 2] = self._velocity_command[:, 2].sign() * 0.55
         elif self.rung == 10:

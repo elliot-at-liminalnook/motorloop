@@ -281,6 +281,26 @@ def selected_rungs(first: int, last: int) -> Iterable[Rung]:
     return (rung for rung in RUNGS if first <= rung.number <= last)
 
 
+# Walk-first acquisition: every learning rung already shares one "universal"
+# policy family, and the commands-only contract makes rung numbering invisible
+# to the policy — so acquisition order is a curriculum choice, not an
+# identity.  Velocity tracking (with a standing-hold stripe) is learned from
+# scratch FIRST; the stand/pose/step rungs then certify as commanded special
+# cases of locomotion instead of training a standing attractor that stepping
+# must later escape.
+WALK_FIRST_ORDER = (1, 8, 10, 9, 11, 12, 7, 2, 3, 4, 5, 6) + tuple(range(13, 32))
+
+
+def ordered_rungs(first: int, last: int, walk_first: bool) -> Iterable[Rung]:
+    if not walk_first:
+        yield from selected_rungs(first, last)
+        return
+    by_number = {rung.number: rung for rung in RUNGS}
+    for number in WALK_FIRST_ORDER:
+        if first <= number <= last:
+            yield by_number[number]
+
+
 class LadderRunner:
     def __init__(self, args):
         self.args = args
@@ -582,10 +602,16 @@ class LadderRunner:
         self._save()
 
     def _previous_checkpoint(self, rung: Rung) -> str | None:
-        candidates = [other for other in RUNGS if other.number < rung.number
-                      and other.family == rung.family]
-        for previous in reversed(candidates):
-            value = self.state["checkpoints"].get(str(previous.number))
+        """Latest ACCEPTED lineage checkpoint (acceptance order, not number:
+        walk-first ordering certifies low-numbered rungs after high ones)."""
+        by_number = {other.number: other for other in RUNGS}
+        for number in reversed(self.state.get("completed", [])):
+            other = by_number.get(number)
+            if other is None or other.geometry is None or number == rung.number:
+                continue
+            if other.family != rung.family:
+                continue
+            value = self.state["checkpoints"].get(str(number))
             if value and Path(value).exists():
                 return value
         return None
@@ -721,8 +747,10 @@ class LadderRunner:
         elif opponent:
             argv += ["--opponent", opponent]
         if anchor_policy and a.distill_weight > 0.0:
-            prior = [item for item in RUNGS if item.number in self.state["completed"]
-                     and item.number < rung.number and item.family == rung.family]
+            by_number = {item.number: item for item in RUNGS}
+            prior = [by_number[number] for number in self.state["completed"]
+                     if number != rung.number
+                     and by_number[number].family == rung.family]
             indices = [item.number - 1 for item in prior]
             argv += ["--anchor-policy", anchor_policy,
                      "--distill-weight", str(a.distill_weight)]
@@ -1147,9 +1175,14 @@ class LadderRunner:
                 or str(rung.number) in self.state.get("attempts", {})):
             return False, {"test_out": "existing_training_candidate"}, None
         parent = self._previous_checkpoint(rung)
-        previous = next((item for item in RUNGS if item.number == rung.number - 1), None)
-        if parent is None or previous is None or previous.family != rung.family:
-            return False, {"test_out": "no_immediate_family_predecessor"}, None
+        if parent is None:
+            return False, {"test_out": "no_lineage_predecessor"}, None
+        if not getattr(self.args, "command_observations", False):
+            # rung-ID conditioning transfers by adjacent-channel inheritance
+            previous = next((item for item in RUNGS
+                             if item.number == rung.number - 1), None)
+            if previous is None or previous.family != rung.family:
+                return False, {"test_out": "no_immediate_family_predecessor"}, None
         parent_hash = self._checkpoint_sha256(parent)
         prior = self.state.setdefault("test_out", {}).get(str(rung.number))
         if (isinstance(prior, dict)
@@ -1227,10 +1260,11 @@ class LadderRunner:
         """Replay prior same-family tasks and reject catastrophic forgetting."""
         if self.args.no_gates or self.args.tiny or self.args.dry_run:
             return True, []
-        previous = [item for item in RUNGS
-                    if item.number in self.state["completed"]
-                    and item.number < rung.number and item.family == rung.family
-                    and item.geometry is not None]
+        by_number = {item.number: item for item in RUNGS}
+        previous = [by_number[number] for number in self.state["completed"]
+                    if number != rung.number
+                    and by_number[number].geometry is not None
+                    and by_number[number].family == rung.family]
         if self.args.retention_max > 0:
             previous = previous[-self.args.retention_max:]
         report: list[dict] = []
@@ -1583,7 +1617,8 @@ class LadderRunner:
     def execute(self) -> int:
         self._audit_completed_contracts()
         self._ensure_completed_replay_artifacts()
-        for rung in selected_rungs(self.args.first, self.args.last):
+        for rung in ordered_rungs(self.args.first, self.args.last,
+                                  getattr(self.args, 'walk_first', False)):
             if rung.number in self.state["completed"]:
                 print(f"SKIP rung {rung.number:02d} {rung.name}: already accepted", flush=True)
                 continue
@@ -1706,6 +1741,9 @@ def make_parser() -> argparse.ArgumentParser:
                           "the shared-bus electrical budget (+shared_bus_v2 "
                           "action semantics); the fused combat layer is not "
                           "yet covered and stays on v1")
+    run.add_argument("--walk-first",
+                     action=argparse.BooleanOptionalAction, default=False,
+                     help="acquire locomotion from scratch first (rung 8 with a standing-hold stripe), then certify stand/pose/step rungs as commanded special cases; requires --command-observations")
     run.add_argument("--command-observations",
                      action=argparse.BooleanOptionalAction, default=False,
                      help="train every universal rung on the commands-only v2 "
@@ -1778,6 +1816,11 @@ def main(argv=None) -> int:
         raise SystemExit("--from/--to must satisfy 1 <= from <= to <= 31")
     if args.test_out_margin < 0.0:
         raise SystemExit("--test-out-margin must be non-negative")
+    if getattr(args, "walk_first", False) and not getattr(
+            args, "command_observations", False):
+        raise SystemExit("--walk-first requires --command-observations: the "
+                         "reordered acquisition relies on rung-invisible "
+                         "command conditioning")
     return LadderRunner(args).execute()
 
 
