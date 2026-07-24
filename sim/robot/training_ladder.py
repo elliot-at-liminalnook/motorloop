@@ -601,6 +601,18 @@ class LadderRunner:
         self.state["gate_signature"] = signature
         self._save()
 
+    def _scaffold_rungs(self) -> tuple[int, ...]:
+        """Rungs allowed the retiring walk-prior acquisition scaffold.
+
+        Classic order: rung 7 only. Walk-first: the rung-8 acquisition rung —
+        armed after pressure-only dynamics failed twice (standing attractor,
+        then slip-terminated creep), per the objective contract's provision
+        for temporary, observable, automatically retiring scaffolds.
+        """
+        if getattr(self.args, "walk_first", False):
+            return (7, 8)
+        return (7,)
+
     def _previous_checkpoint(self, rung: Rung) -> str | None:
         """Latest ACCEPTED lineage checkpoint (acceptance order, not number:
         walk-first ordering certifies low-numbered rungs after high ones)."""
@@ -766,7 +778,8 @@ class LadderRunner:
                         str(learned.number), 1.0)
                     argv += ["--replay-artifact", f"{replay},{pressure}"]
         prior = self.out / "priors" / "rung_07_walk_prior.json"
-        if (rung.number == 7 and self.args.walk_prior_mode != "off"
+        if (rung.number in self._scaffold_rungs()
+                and self.args.walk_prior_mode != "off"
                 and LEGACY_WALK_TEACHER.exists() and prior.exists()):
             argv += ["--transfer-policy", str(LEGACY_WALK_TEACHER),
                      "--transfer-obs-dim", "50"]
@@ -1376,7 +1389,8 @@ class LadderRunner:
                  tag_suffix: str = "", warm_override: str | None = None
                  ) -> tuple[bool, dict, str | None]:
         tag = self.out / f"rung_{rung.number:02d}_{rung.slug}{tag_suffix}"
-        if rung.number == 7 and self.args.walk_prior_mode == "always":
+        if (rung.number in self._scaffold_rungs()
+                and self.args.walk_prior_mode == "always"):
             self._ensure_walk_prior()
         log = self.out / "logs" / f"{tag.name}.log"
         warm = warm_override or self._previous_checkpoint(rung)
@@ -1395,7 +1409,8 @@ class LadderRunner:
             # travel from the outcome itself.  Only a failed attempt authorizes
             # the optional gait teacher as an acquisition fallback; it is never
             # a prerequisite or a permanent definition of walking.
-            if (rung.number == 7 and self.args.walk_prior_mode == "fallback"
+            if (rung.number in self._scaffold_rungs()
+                    and self.args.walk_prior_mode == "fallback"
                     and attempt > 1):
                 self._ensure_walk_prior()
             target_steps = base_steps * attempt
@@ -1455,7 +1470,7 @@ class LadderRunner:
                       "earlier skill; continuing the candidate checkpoint", flush=True)
             print(f"RUNG {rung.number:02d} gate failed; continuing its checkpoint "
                   f"toward attempt {attempt + 1}", flush=True)
-            if rung.number == 7 and not passed:
+            if rung.number in self._scaffold_rungs() and not passed:
                 self._retarget_walk_prior(last_metrics)
                 self._refine_walk_prior(last_metrics)
         return False, last_metrics, None
