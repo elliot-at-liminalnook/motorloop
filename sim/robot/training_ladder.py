@@ -777,12 +777,15 @@ class LadderRunner:
                     pressure = self.state.setdefault("replay_pressures", {}).get(
                         str(learned.number), 1.0)
                     argv += ["--replay-artifact", f"{replay},{pressure}"]
-        prior = self.out / "priors" / "rung_07_walk_prior.json"
+        searched = self.out / "priors" / "rung_07_walk_prior.json"
+        neutral = self.out / "priors" / "acquisition_lift_prior.json"
+        prior = searched if searched.exists() else neutral
         if (rung.number in self._scaffold_rungs()
-                and self.args.walk_prior_mode != "off"
-                and LEGACY_WALK_TEACHER.exists() and prior.exists()):
-            argv += ["--transfer-policy", str(LEGACY_WALK_TEACHER),
-                     "--transfer-obs-dim", "50"]
+                and self.args.walk_prior_mode != "off" and prior.exists()):
+            if LEGACY_WALK_TEACHER.exists():
+                # yaw/pitch coordination teacher (rung-7 blend path only)
+                argv += ["--transfer-policy", str(LEGACY_WALK_TEACHER),
+                         "--transfer-obs-dim", "50"]
             argv += ["--action-prior-json", str(prior)]
         return argv
 
@@ -793,6 +796,23 @@ class LadderRunner:
             return None
         rung6 = self.state.get("checkpoints", {}).get("6")
         if not rung6 or not Path(rung6).exists():
+            if getattr(self.args, "walk_first", False):
+                # Walk-first acquisition has no stepping predecessor to seed a
+                # search. The non-rung-7 teacher uses only the phase-locked
+                # lift wave (Fourier coefficients refine yaw/pitch on rung 7
+                # alone), so a NEUTRAL artifact arms the lift scaffold exactly.
+                neutral = self.out / "priors" / "acquisition_lift_prior.json"
+                neutral.parent.mkdir(exist_ok=True)
+                if not neutral.exists():
+                    neutral.write_text(json.dumps({
+                        "best": {"parameters": [0.0] * 24},
+                        "blend": 0.0,
+                        "note": "neutral lift-only scaffold for walk-first "
+                                "acquisition; retires via action-prior pressure",
+                    }, indent=2) + "\n")
+                    print("WALK PRIOR: neutral lift-only scaffold for "
+                          "walk-first acquisition", flush=True)
+                return str(neutral)
             raise RuntimeError("rung 7 requires an accepted rung-6 checkpoint")
         if not LEGACY_WALK_TEACHER.exists():
             if self.args.walk_prior_mode == "always":
