@@ -32,7 +32,7 @@ def dominates(a_obj, a_v, b_obj, b_v):
         return True
     if a_v > 0 and b_v <= 0:
         return False
-    if a_v > 0 and b_v > 0:
+    if a_v > 0:  # b_v > 0 follows: the mixed cases returned above
         return a_v < b_v
     le = np.all(a_obj <= b_obj); lt = np.any(a_obj < b_obj)
     return bool(le and lt)

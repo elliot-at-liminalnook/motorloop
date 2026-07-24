@@ -37,8 +37,6 @@ DRV8301_LIB = (
 # cross-check automatically; absent, they skip (see docs/ti-simulation-models).
 THS4551_LIB = (PROJECT_ROOT / "docs" / "ti-simulation-models" / "ths4551"
                / "THS4551.LIB")
-REF6041_LIB = (PROJECT_ROOT / "docs" / "ti-simulation-models" / "ref6041"
-               / "REF6041.LIB")
 
 
 class SpiceError(RuntimeError):

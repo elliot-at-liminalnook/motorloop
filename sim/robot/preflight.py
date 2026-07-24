@@ -18,9 +18,8 @@ the run directory — "what did this run actually train with" must never again
 require code archaeology.
 
 Modes: strict (default) raises on red lines; warn prints them; off is for
-tooling that reuses trainer mains for non-training purposes. pbt_train passes
-warn to its subprocesses (its per-cycle step slices are legitimately short —
-the cumulative budget is PBT's own concern).
+tooling that reuses trainer mains for non-training purposes and for drivers
+whose per-cycle step slices are legitimately short.
 """
 from __future__ import annotations
 
@@ -35,13 +34,16 @@ from pathlib import Path
 # whole run in `cardinal` mode with yaw commands silently dormant before anyone
 # noticed). The registry of legitimate knobs is SCANNED from the code's actual
 # os.environ.get() calls — a declared list would drift; the scan cannot.
-_ENV_PREFIXES = ("CMD_",)
+# WALKER_*/MESH_* joined CMD_* after an audit found sprint/hop reward modes and
+# fixed-command knobs that no caller had ever set: an unscanned prefix is where
+# dead configuration accumulates unnoticed.
+_ENV_PREFIXES = ("CMD_", "WALKER_", "MESH_")
 _ENV_GET_RE = re.compile(
-    r'os\.environ\.get\(\s*"(CMD_[A-Z0-9_]+)"\s*(?:,\s*"([^"]*)")?')
+    r'os\.environ\.get\(\s*"((?:CMD|WALKER|MESH)_[A-Z0-9_]+)"\s*(?:,\s*"([^"]*)")?')
 
 
 def env_var_contract(strict=True, stream=None, source_dir=None):
-    """Resolve every CMD_* knob the code can read; FAIL on unknown CMD_* in the
+    """Resolve every CMD_*/WALKER_*/MESH_* knob the code can read; FAIL on unknown ones in the
     environment (a typo'd override silently does nothing — the worst failure mode
     a config system can have). Returns {name: (value, is_overridden)}."""
     out = stream or sys.stdout
@@ -59,14 +61,14 @@ def env_var_contract(strict=True, stream=None, source_dir=None):
     resolved = {k: dict(value=os.environ.get(k, d), default=d,
                         overridden=(k in present)) for k, d in sorted(known.items())}
     overrides = {k: v["value"] for k, v in resolved.items() if v["overridden"]}
-    print(f"[preflight] env contract: {len(known)} CMD_* knobs known, "
+    print(f"[preflight] env contract: {len(known)} CMD_/WALKER_/MESH_ knobs known, "
           f"{len(overrides)} overridden" + (f": {overrides}" if overrides else ""),
           file=out)
     for u in unknown:
         print(f"[preflight] FAIL: unknown env var {u}={present[u]!r} — no code reads "
               f"this (typo? the knob it meant to set kept its default)", file=out)
     if unknown and strict:
-        raise PreflightError(f"[preflight] unknown CMD_* env vars: {unknown}")
+        raise PreflightError(f"[preflight] unknown CMD_/WALKER_/MESH_ env vars: {unknown}")
     return resolved
 
 # Task timescales for this robot (50 Hz control):

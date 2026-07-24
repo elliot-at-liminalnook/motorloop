@@ -58,7 +58,6 @@ def test_foc_iq_tracks_load(bldcsim, params):
     target = 80
     no_load = _spin(bldcsim, params, target, load_nm=0.0)
     iq_noload = _tail_mean(no_load, "foc_iq")
-    omega_noload = no_load.omega
 
     loaded = _spin(bldcsim, params, target, load_nm=0.03)
     iq_loaded = _tail_mean(loaded, "foc_iq")
@@ -68,7 +67,6 @@ def test_foc_iq_tracks_load(bldcsim, params):
         f"speed not held under load: {omega_loaded:.1f}")
     assert iq_loaded > iq_noload + 10, (
         f"iq did not rise under load: {iq_noload:.0f} -> {iq_loaded:.0f}")
-    del omega_noload
 
 
 def test_foc_shoot_through_clean_through_transient(bldcsim, params):

@@ -21,7 +21,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from gen_robot_mjcf import load_spec  # noqa: E402
-from match_env import MatchEnv, weapon_spec  # noqa: E402
+from match_env import weapon_spec  # noqa: E402
 
 
 def collect_forces(rollouts, steps, seed=0):

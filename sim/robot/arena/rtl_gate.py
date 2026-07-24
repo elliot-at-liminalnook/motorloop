@@ -80,7 +80,7 @@ def rtl_cosim_gate(joint_vel, action, motor="db42s03", gear=6.0) -> dict:
 
 
 def _selftest():
-    foc = FocActuator.from_motor("db42s03", gear=6.0)
+    _ = FocActuator.from_motor("db42s03", gear=6.0)
     T, J = 50, 12
     high_speed = np.full((T, J), 18.0)        # fast joints -> the FOC envelope is well below 1.0
     low_speed = np.full((T, J), 1.0)

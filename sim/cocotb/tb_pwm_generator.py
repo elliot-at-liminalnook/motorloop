@@ -11,7 +11,6 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
 
-HALF = 625      # default PWM_HALF_PERIOD
 DEAD = 25       # default DEAD_CYCLES
 
 

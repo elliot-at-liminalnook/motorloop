@@ -179,7 +179,6 @@ def report():
     ktil, k, lc, fr, fn = min(results, key=lambda r: r[2]["eig"])   # best-conditioned
     # per-stride energy the motor must inject = losses; for a lossless SLIP it is 0,
     # real losses ~ 10-20% of the stance spring energy. Spring PE at max compression:
-    dv = lc["v"]
     E_spring = 0.5 * k * (0.06 * L0) ** 2          # ~6% compression scale
     E_loss = 0.15 * E_spring                        # 15% loss/stride (estimate)
     stride_t = lc["t_stance"] / 0.35                # stance ~35% of stride

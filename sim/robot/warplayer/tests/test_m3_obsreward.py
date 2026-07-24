@@ -6,7 +6,7 @@ The numpy reference (obsreward.obs_reference / reward_reference) mirrors
 train_adversarial.AdversarialEnv line-by-line (citations in obsreward.py) and
 is ALSO the baseline-mode computation in fused.py — so kernel-vs-reference
 parity here certifies both "kernels are right" and "baseline == fused". Layout
-compatibility is pinned via constants.LOCO_OBS and the obs_schema conventions.
+compatibility is pinned via constants.LOCO_OBS.
 """
 from __future__ import annotations
 

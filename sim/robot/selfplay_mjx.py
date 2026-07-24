@@ -3,7 +3,6 @@
 
 import sys
 
-from combat_warp_env import CombatWarpEnv as SelfPlayEnv
 from warp_train_cli import selfplay
 
 

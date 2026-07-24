@@ -37,13 +37,15 @@ AXIS_INDEX = {"yaw": (0,), "pitch": (1,), "lift": (2,),
 
 
 def _load_raw_policy(path: str | Path, obs_dim: int, act_dim: int, device):
-    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    checkpoint = torch.load(path, map_location=device, weights_only=True)
     saved = checkpoint.get("args", {})
     hidden = tuple(int(value) for value in saved.get("hidden", "512,256,128").split(","))
     architecture = saved.get("architecture", "mlp")
+    prediction_decoder = saved.get("prediction_decoder", "recurrent")
     task_dim = int(saved.get("actor_task_dim", 0))
     actor = Actor(obs_dim, act_dim, hidden, architecture=architecture,
-                  task_dim=task_dim).to(device)
+                  task_dim=task_dim,
+                  prediction_decoder=prediction_decoder).to(device)
     norm = RunningNorm(obs_dim).to(device)
     actor.load_state_dict(checkpoint["actor"])
     norm.load_state_dict(checkpoint["obs_norm"])

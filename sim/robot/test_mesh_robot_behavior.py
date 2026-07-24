@@ -18,8 +18,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from gen_mesh_robot_mjcf import (GEARS, build_mesh_robot, loop_consistent_pose,  # noqa: E402
-                                 slider_crank_s)
+from gen_mesh_robot_mjcf import GEARS, build_mesh_robot, loop_consistent_pose  # noqa: E402
 
 LEGS = ("FL", "FR", "RL", "RR")
 STAND_KNEE = math.radians(-50)

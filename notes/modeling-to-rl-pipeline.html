@@ -288,7 +288,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
       <p class="standfirst">This project turns a single provenance-tracked config into a GPU physics world where thousands of copies of a robot learn to walk — and then to fight. Follow the whole pipeline below, stopping at the <b>decision point</b> that defines each stage. The through-line, learned the hard way: <b>a simulation is only as honest as its cheapest unverified assumption.</b></p>
 
       <div class="gaitwrap">
-        <span class="cap">Central-pattern-generator gait prior · 4 legs, phase-offset oscillators</span>
+        <span class="cap">Possible four-leg rhythm · observed as behavior, never required as choreography</span>
         <canvas id="gait" width="1100" height="120" aria-hidden="true"></canvas>
       </div>
 
@@ -305,7 +305,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           <div class="chip"><div class="cn">01</div><div class="ct">Model</div><div class="cd">Motors → <span class="mono">robot.toml</span> → MJCF</div></div>
           <div class="chip"><div class="cn">03</div><div class="ct">Simulate</div><div class="cd">MuJoCo-Warp, thousands of envs</div></div>
           <div class="chip"><div class="cn">04</div><div class="ct">Task</div><div class="cd">Commands, rewards, observations</div></div>
-          <div class="chip"><div class="cn">05</div><div class="ct">Walk</div><div class="cd">CPG teacher → PPO student</div></div>
+          <div class="chip"><div class="cn">05</div><div class="ct">Walk</div><div class="cd">Temporary hints → PPO discovery</div></div>
           <div class="chip"><div class="cn">06</div><div class="ct">Fight</div><div class="cd">Self-play league + coach</div></div>
           <div class="chip"><div class="cn">07</div><div class="ct">Verify</div><div class="cd">Metrics select, videos confirm</div></div>
         </div>
@@ -470,8 +470,8 @@ footer .big em{color:var(--warm-ink);font-style:italic}
     <!-- ============ 04 TASK ============ -->
     <section id="task" class="reveal">
       <div class="sec-num">Stage 04 — The environment</div>
-      <h2>Define the task: how the robot senses and is scored</h2>
-      <p class="lede">A learning environment is three choices: what the policy controls, what it observes, and what it is paid for. This stack follows the Go2/ANYmal recipe that made quadruped RL reliable — and hardens every reward against being gamed.</p>
+      <h2>Define success without prescribing the motion</h2>
+      <p class="lede">A learning environment is three choices: what the policy controls, what it observes, and what it is paid for. The current contract describes externally visible outcomes and genuine physical limits while leaving gait, timing and coordination patterns for the policy to discover.</p>
 
       <div class="prose">
         <h3>Control: pose targets, not torques <span class="tag">PD servo @ 250 Hz</span></h3>
@@ -491,26 +491,22 @@ footer .big em{color:var(--warm-ink);font-style:italic}
         <p>The <strong>actor</strong> — the network that could someday run on real hardware — sees only what a real robot could: 50 dimensions of joint angles, velocities, orientation, its last action, and the velocity command, all rotated into the body frame. In combat it also gets a deliberately-degraded 144-ray lidar (per-ray noise, dropouts read as max-range, a latency buffer). The <strong>critic</strong> — which only exists during training and never ships — gets 34 extra dimensions of privileged truth: exact contact states, foot penetration, true root velocity.</p>
         <div class="note"><b>The coach sees everything; the player sees only the field.</b> The player’s habits must work under fog, but the critic’s feedback is never confused by it.</div>
 
-        <h3>Reward: many small terms, all adversarially chosen <span class="tag">walk mode</span></h3>
-        <p>The term that actually conjures a gait is <strong>air-time</strong>: each foot is paid for swing phases of roughly the right duration — and the credit saturates, so hopping can’t out-earn a clean cadence. You cannot farm it without lifting feet in rhythm, and lifting feet in rhythm <em>is</em> walking.</p>
+        <h3>Reward contract: four roles that must not blur together <span class="tag">outcome ≠ style</span></h3>
+        <p>The permanent objective says <strong>what happened in the world</strong>: track the requested velocity, reach the target, stop on command, remain balanced or strike with the selected leg. It does not say which foot moves first, demand diagonal pairs, reward agreement with a clock or copy a reference joint trajectory. Those style measurements remain visible for diagnosis without becoming the definition of success.</p>
 
         <div class="tablewrap">
           <table>
-            <thead><tr><th>Reward term</th><th>Weight</th><th>What it buys</th></tr></thead>
+            <thead><tr><th>Signal role</th><th>Lifetime</th><th>Examples and rule</th></tr></thead>
             <tbody>
-              <tr><td>Progress along command</td><td class="num cool">+12.0</td><td>go where told</td></tr>
-              <tr><td>Velocity tracking</td><td class="num cool">+5.0</td><td>match commanded speed</td></tr>
-              <tr><td>Air-time</td><td class="num cool">+1.0</td><td>rhythmic foot swings</td></tr>
-              <tr><td>Command alignment</td><td class="num cool">+1.0</td><td>face the right way</td></tr>
-              <tr><td>Foot clearance</td><td class="num cool">+1.0</td><td>lift the swing foot</td></tr>
-              <tr><td>Uprightness</td><td class="num cool">+0.5</td><td>stay vertical</td></tr>
-              <tr><td>Backward motion</td><td class="num warm">−6.0</td><td>penalize retreat</td></tr>
-              <tr><td>Foot slip</td><td class="num warm">−2.0</td><td>don’t drag a planted foot</td></tr>
-              <tr><td>Vertical velocity</td><td class="num warm">−0.5</td><td>no bouncing</td></tr>
-              <tr><td>Pose / action-rate</td><td class="num warm">−0.15 / −0.05</td><td>smooth, natural posture</td></tr>
+              <tr><td><b>Outcome</b></td><td class="num cool">permanent</td><td>command tracking, reaching, stopping, selected-leg contact; define success, not appearance</td></tr>
+              <tr><td><b>Physical constraint</b></td><td class="num warm">permanent</td><td>fall, planted-foot slip, unsafe orientation, joint speed and violent body motion; separate normalized limits</td></tr>
+              <tr><td><b>Efficiency cost</b></td><td class="num">physical only</td><td>energy, impact, heat and wear; include only when the real robot pays the cost and expose the trade-off</td></tr>
+              <tr><td><b>Scaffold</b></td><td class="num">temporary</td><td>teacher actions, reference gaits and exploration hints; report separately and retire when competence appears</td></tr>
             </tbody>
           </table>
         </div>
+
+        <div class="note"><b>Self-tuning means pressure, not truth.</b> A physical success threshold stays fixed. Its normalized dual pressure may rise while violated and release after success; a temporary scaffold can fade as competence grows. The learner is never allowed to make the acceptance bar easier for itself.</div>
 
         <div class="dp">
           <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Enforce hard limits as terminations, not just penalties</span></div>
@@ -519,7 +515,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
             <div class="vs">vs</div>
             <div class="opt"><span class="ol">Alt</span>Only subtract a reward penalty for the violation</div>
           </div>
-          <p class="dp-why">Why: a penalty can be out-earned; a termination cuts the value bootstrap and makes the behavior structurally unprofitable. Slip, tipping, over-speed joints, and standing-still-when-commanded all trigger a stochastic end — the machinery that stops the reward hacks in <b>Stage 08</b>.</p>
+          <p class="dp-why">Why: a penalty can be out-earned; a termination cuts the value bootstrap and makes a true physical violation structurally unprofitable. Only genuine failures such as planted-foot slip, tipping, over-speed joints and violent body motion may trigger a stochastic end. Poor progress, foot order, phase, duty shape and gait family are outcomes or diagnostics—not catastrophes.</p>
         </div>
 
         <div class="note warmn"><b>The actuator curriculum:</b> a parameter <span class="k">α</span> blends from an <em>ideal</em> actuator (no speed droop) at the start of training to the <em>servo-true</em> torque–speed envelope by 60% through. Learn the gait on an easy motor, then force it to obey the real hardware.</div>
@@ -529,12 +525,12 @@ footer .big em{color:var(--warm-ink);font-style:italic}
     <!-- ============ 05 WALK ============ -->
     <section id="walk" class="reveal">
       <div class="sec-num">Stage 05 — Learning to walk</div>
-      <h2>Teach a gait, then let PPO refine it</h2>
-      <p class="lede">Rather than hope raw reinforcement learning discovers walking from scratch, the stack seeds it with a rhythmic prior, clones a rough policy, then improves it with PPO — the workhorse of robot learning.</p>
+      <h2>Bootstrap movement, then let PPO discover the gait</h2>
+      <p class="lede">Sparse physical outcomes can make initial exploration difficult, so the stack may seed useful motion with a teacher or exploration hint. The hint is temporary: PPO must ultimately earn success from physics, not from resembling the teacher.</p>
 
       <div class="prose">
-        <h3>A central pattern generator as the teacher <span class="tag">cpg_teacher.py</span></h3>
-        <p>Biological spinal cords hold coupled oscillators that produce rhythmic gaits without the brain micromanaging each muscle. The same idea here is a <strong>35-parameter</strong> CPG: base frequency, per-leg phase offsets, duty factor, foot clearance and per-joint sinusoid coefficients, tuned by rollout-grounded search (not by hand). The learned policy outputs a <em>residual</em> on top of this prior, so it starts from a rhythm rather than from noise.</p>
+        <h3>A central pattern generator as a temporary teacher <span class="tag">cpg_teacher.py</span></h3>
+        <p>A <strong>35-parameter</strong> CPG can generate an initial rhythm—base frequency, phase offsets, duty factor, clearance and per-joint sinusoids—tuned by rollout-grounded search rather than by hand. It is an acquisition scaffold, not a permanent gait specification: its optimizer weight anneals, physical safety pressure takes precedence, and the permanent reference-gait reward defaults to zero. The resulting policy may keep, alter or abandon the teacher’s rhythm.</p>
 
         <h3>PPO with the four fixes that mattered <span class="tag">train_mesh_warp.py</span></h3>
         <p>The learner is <strong>PPO</strong> (Proximal Policy Optimization): let the policy play, nudge it toward better-than-expected actions, but <em>clip</em> the nudge so no single batch can overwrite what it already knows. The audit found the historical runs weren’t just under-torqued — they were under-everything. All four were cheap to fix:</p>
@@ -551,7 +547,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           </table>
         </div>
 
-        <p>The old discount factor gave a credit horizon <em>shorter than a single stride</em> — the policy literally could not see far enough ahead to value a footfall. The old network was a 15:1 bottleneck on a 470-dim observation. The current learner uses a squashed-Gaussian policy, GAE (γ=0.99, λ=0.95, clip 0.2), a task-conditioned residual actor and privileged critic. A task embedding modulates shared physical-state blocks, while schedules anneal exploration, the actuator curriculum and imitation weight over the run. The earlier SiLU (512·256·128) MLP remains loadable for existing checkpoints.</p>
+        <p>The old discount factor gave a credit horizon <em>shorter than a single stride</em> — the policy literally could not see far enough ahead to value a footfall. The old network was a 15:1 bottleneck on a 470-dim observation. The current learner uses a squashed-Gaussian policy, GAE (γ=0.99, λ=0.95, clip 0.2), a task-conditioned residual actor and privileged critic. A task embedding modulates shared physical-state blocks, while schedules anneal exploration, the actuator curriculum and any temporary imitation weight. Whole-rollout KL stops further epochs when one batch has moved the policy too far. The earlier SiLU (512·256·128) MLP remains loadable for existing checkpoints.</p>
 
         <div class="dp">
           <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Teacher → student adaptation (RMA-style)</span></div>
@@ -587,24 +583,24 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           <p class="dp-why">Why: chasing one opponent at a time causes <b>cycling</b> — the classic Red-Queen forgetting where a policy peaks then collapses. Keeping the whole archive in support is what stops it.</p>
         </div>
 
-        <h3>Walk-then-fight, and exploration as a search dimension</h3>
-        <p>A curriculum first pays the robot for locomotion toward the opponent, then fades combat reward in while widening the spawn distance — and keeps a fraction of episodes as pure walking drills forever, so the fighter can never forget its legs. Three exploration add-ons ride along, and crucially they aren’t hand-tuned — they’re <strong>population-training hyperparameters</strong> the run discovers per-agent:</p>
+        <h3>Walk-then-fight, with adaptive sampling—not a moving definition of success</h3>
+        <p>A curriculum first establishes locomotion, then adds combat while widening the spawn distance—and keeps replaying accepted walking tasks so the fighter cannot silently forget its legs. Exploration settings may adapt, but held-out outcome and physical-safety contracts remain fixed:</p>
 
         <div class="exgrid">
           <div class="excard"><div class="en">RND</div><h4>Curiosity</h4><p>Pay a bonus for states a predictor network finds surprising — measured over <em>tactical</em> descriptors (engagement geometry, contact events), not raw joint angles.</p></div>
           <div class="excard"><div class="en">HER</div><h4>Hindsight</h4><p>If the robot ended somewhere useless, relabel the episode as if that was the goal — learn from the success that accidentally happened.</p></div>
           <div class="excard"><div class="en">PBT</div><h4>Population training</h4><p>Many runs in parallel; the weak periodically copy the strong and mutate hyperparameters. Tuning happens <em>during</em> training, not between runs.</p></div>
-          <div class="excard"><div class="en">Coach</div><h4>Adaptive weights</h4><p>A control loop reads a held-out benchmark and raises the reward weight on lagging skills — gated by whether that skill is actually <em>learnable</em> right now.</p></div>
+          <div class="excard"><div class="en">Coach</div><h4>Adaptive practice</h4><p>A control loop reads held-out regressions and samples lagging skills or difficult opponents more often; bounded duals adjust constraint pressure without changing the pass bar.</p></div>
         </div>
 
         <div class="dp">
-          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Let a coach move reward weights, don’t hand-tune them</span></div>
+          <div class="dp-h"><span class="dp-tag">Decision point</span><span class="dp-title">Adapt practice and pressure, not the meaning of success</span></div>
           <div class="fork">
-            <div class="opt chosen"><span class="ol">Chosen</span>Feedback loop: weight rises on a lagging-but-tractable competency, decays on a satisfied one</div>
+            <div class="opt chosen"><span class="ol">Chosen</span>Feedback loop: lagging skills get more real replay; violated physical limits get normalized bounded pressure; scaffolds retire</div>
             <div class="vs">vs</div>
-            <div class="opt"><span class="ol">Alt</span>Fix reward weights by hand and re-run on every plateau</div>
+            <div class="opt"><span class="ol">Rejected</span>Move arbitrary reward weights until the reported score improves</div>
           </div>
-          <p class="dp-why">Why: a satisfied objective can be over-optimized into a degenerate one; a lagging objective may be unlearnable right now. Reading a <b>held-out benchmark decomposition</b> lets the coach avoid pouring reward into a hole the body can’t climb out of.</p>
+          <p class="dp-why">Why: changing arbitrary weights can redefine the task and hide infeasibility. Reading a <b>held-out regression decomposition</b> lets the coach allocate experience where it is needed while outcome thresholds, safety limits and evidence remain comparable across runs.</p>
         </div>
       </div>
     </section>
@@ -613,7 +609,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
     <section id="ladder" class="reveal">
       <div class="sec-num">Stage 07 — The training ladder</div>
       <h2>Thirty-one tasks, easiest to hardest</h2>
-      <p class="lede">You do not point reinforcement learning at “win a fight” and wait. The same body climbs an executable ladder of thirty-one tasks whose difficulty rises one axis at a time — hold, then step, then travel, then survive a shove, then kick with a controller-selected leg, then chase an opponent that fights back. Each rung warm-starts within its policy family, clears a fixed-seed pass-check, and replays every earlier skill before it can advance.</p>
+      <p class="lede">You do not point reinforcement learning at “win a fight” and wait. The same body and one universal controller climb an executable ladder of thirty-one tasks whose difficulty rises one axis at a time — hold, then step, then travel, then survive a shove, then kick with a controller-selected leg, then chase an opponent that fights back. Each rung warm-starts the same policy, preserves improving intermediates, clears fresh rotating full-episode pass-checks, and replays every earlier skill before it can advance.</p>
 
       <div class="prose">
         <div class="stats" style="grid-template-columns:repeat(3,1fr)">
@@ -629,10 +625,10 @@ footer .big em{color:var(--warm-ink);font-style:italic}
             <div class="vs">vs</div>
             <div class="opt"><span class="ol">Rejected</span>Point PPO straight at “fight and win” and hope it discovers the whole stack</div>
           </div>
-          <p class="dp-why">Why: a regression stays <b>localized to one rung</b> instead of hiding inside an all-or-nothing run, and difficulty rises along <b>one axis at a time</b> — torque, then perturbation, then goals, then an adversary. After a candidate learns the new task, it is evaluated on every prior same-family rung at fixed seeds. A drop beyond the stored baseline tolerance is treated as forgetting: the candidate is not promoted.</p>
+          <p class="dp-why">Why: a regression stays <b>localized to one rung</b> instead of hiding inside an all-or-nothing run, and difficulty rises along <b>one axis at a time</b> — torque, then perturbation, then goals, then an adversary. After a candidate learns the new task, it is evaluated for a complete episode on every prior rung. A drop beyond the stored baseline tolerance is treated as forgetting: the candidate is not promoted, and that task’s real state/action replay pressure rises automatically.</p>
         </div>
 
-        <div class="note"><b>This ladder is executable.</b> One resume-safe manifest owns all 31 task numbers, physical variants, checkpoint-family boundaries, pass metrics and retry rules. Locomotion uses a shared 234-value contract (including pose, height, goal, heading, 144 lidar rays and a 23-way task command); combat uses the same seven-value attack command plus a six-way combat-task command. The ladder’s default actor is a task-conditioned residual network: a compact task embedding modulates shared physical-state blocks, while frozen-policy behavior replay and fixed-seed retention checks limit skill interference. A failure stops the sequence with the last accepted checkpoint intact.</div>
+        <div class="note"><b>This ladder is executable.</b> One resume-safe manifest owns all 31 task numbers, physical variants, pass metrics and retry rules. Every learned task uses one 256-value observation and 14-value action contract: 211 padded physical channels, a 14-channel actuator-availability mask, and a 31-way global task command. Locomotion uses twelve servo actions; combat enables the same twelve plus two pneumatic actions. The task-conditioned FiLM actor shares all weights. Immutable best-candidate archives prevent a late PPO update from erasing the only good checkpoint; real prior-task state/action replay, adaptive per-skill pressure, rotating promotion seeds, and full 800-step retention checks limit interference. A failure stops the sequence with the last accepted checkpoint intact.</div>
 
         <h3>Tier A · Foundations <span class="tag">posture, no travel</span></h3>
         <p>Can the body even hold itself up? These rungs never leave the spawn tile; they exist to prove torque, balance and joint tracking before a single step is asked for — the tier that would have failed loudly on the 8%-torque body.</p>
@@ -652,13 +648,13 @@ footer .big em{color:var(--warm-ink);font-style:italic}
         <div class="tablewrap"><table>
           <thead><tr><th>#</th><th>Task</th><th>New demand</th><th>Pass signal</th></tr></thead>
           <tbody>
-            <tr><td class="num">06</td><td><b>Step in place</b></td><td>rhythmic foot swings at zero commanded speed</td><td>air-time earned with net displacement ≈ 0; feet leave the ground on video</td></tr>
+            <tr><td class="num">06</td><td><b>Step in place</b></td><td>make every foot physically leave the ground without translating</td><td>worst-foot airborne fraction passes; base stays still, upright and safe; timing and gait style are diagnostics only</td></tr>
             <tr><td class="num">07</td><td><b>Walk forward</b></td><td>the first true gait at one fixed speed</td><td>speed above the 0.3 m/s bar, survives 600 steps, gait confirmed on video</td></tr>
             <tr><td class="num">08</td><td><b>Velocity tracking</b></td><td>match a commanded speed across a range</td><td>low tracking error over the speed sweep, no collapse at the extremes</td></tr>
             <tr><td class="num">09</td><td><b>Turn in place</b></td><td>follow a yaw-rate command at zero linear velocity</td><td>yaw-rate tracked; net translation ≈ 0</td></tr>
             <tr><td class="num">10</td><td><b>Omnidirectional</b></td><td>follow forward, lateral and yaw commands at once</td><td>three-axis command tracked on held-out commands</td></tr>
             <tr><td class="num">11</td><td><b>Heading hold</b></td><td>keep facing a direction while translating or curving</td><td>heading error bounded throughout the commanded travel</td></tr>
-            <tr><td class="num">12</td><td><b>Stop on command</b></td><td>a zero command means stand still, no creep</td><td>stays put when told; the min-progress termination never misfires</td></tr>
+            <tr><td class="num">12</td><td><b>Stop on command</b></td><td>a zero command means stand still, no creep</td><td>held-out stopping error passes while physical terminations remain reserved for physical failures</td></tr>
           </tbody>
         </table></div>
 
@@ -713,7 +709,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           </tbody>
         </table></div>
 
-        <div class="note">Every pass-signal above is an <b>outcome</b>, never an attribute — and the rule from the next stage still governs: <b>metrics select, videos confirm</b>. Promotion requires the current fixed-seed metric, every prior retention replay, and a rendered behavior audit. The tiers map onto the same check stack: Tier A leans on the T0/T1 contract and static-capability tests, Tiers B–D on the preflight and reward red-teaming, Tiers E–F on checkpoint semantics and the cross-engine oracle.</div>
+        <div class="note">Every pass-signal above is an <b>outcome</b>, never an attribute — and the rule from the next stage still governs: <b>metrics select, videos confirm</b>. Promotion requires every fresh rotating seed to pass, every prior full-episode retention replay to hold, and a rendered behavior audit. Commanded-leg attack is gated on the worst of FL/FR/RL/RR plus an uninterrupted live switch test; PFSP must pass against the entire hall. The tiers map onto the same check stack: Tier A leans on the T0/T1 contract and static-capability tests, Tiers B–D on the preflight and reward red-teaming, Tiers E–F on checkpoint semantics and the cross-engine oracle.</div>
       </div>
     </section>
 
@@ -729,7 +725,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
 
         <div class="exgrid">
           <div class="excard"><div class="en">Exploit 01</div><h4>The catapult</h4><p>Launched its own torso 1.5 m into the air at the bell, landed all its damage in the spawn chaos, then idled. Beautiful damage ratio; terrible video.</p><div class="fix"><b>Patched by</b>a torque-ratio band that flags catapult-strength actuation</div></div>
-          <div class="excard"><div class="en">Exploit 02</div><h4>The pacifist statue</h4><p>“Won” by standing perfectly still and letting incidental contact do the scoring.</p><div class="fix"><b>Patched by</b>a stationary penalty + a min-progress termination</div></div>
+          <div class="excard"><div class="en">Exploit 02</div><h4>The pacifist statue</h4><p>“Won” by standing perfectly still and letting incidental contact do the scoring.</p><div class="fix"><b>Patched by</b>crediting sustained approach and selected-leg contact as match outcomes, without calling stillness a physical catastrophe</div></div>
           <div class="excard"><div class="en">Exploit 03</div><h4>The oscillator</h4><p>Farmed a movement-speed reward by vibrating in place — max instantaneous speed, zero displacement.</p><div class="fix"><b>Patched by</b>rewarding net displacement, penalizing wasted energy</div></div>
           <div class="excard"><div class="en">Exploit 04</div><h4>The curiosity junkie</h4><p>RND paid novelty for unseen joint angles, so the policy jittered to manufacture novelty without doing anything.</p><div class="fix"><b>Patched by</b>measuring novelty over tactical descriptors, not proprioception</div></div>
         </div>
@@ -744,9 +740,9 @@ footer .big em{color:var(--warm-ink);font-style:italic}
           <div class="rung"><div class="id">T1</div><div><div class="rt">Static capability</div><div class="rd">Measure torque by outcome; hold the canonical stance (no adaptive bar); a <code>--strip-gear</code> run must fail. <em>Kills spring-propped false stands.</em></div></div></div>
           <div class="rung"><div class="id">T2</div><div><div class="rt">Training-config preflight</div><div class="rd">Fail if PPO iterations &lt; 200, if the credit horizon is shorter than a stride, or if a config flag is silently ignored. <em>Kills the 37-iteration, γ=0.97, tiny-net runs.</em></div></div></div>
           <div class="rung"><div class="id">T3</div><div><div class="rt">Mechanism liveness</div><div class="rd">Resets must differ; every control/obs mode gets a smoke rollout. <em>Kills dead code that exists but never fires.</em></div></div></div>
-          <div class="rung"><div class="id">T4</div><div><div class="rt">Reward red-teaming</div><div class="rd">Pre-registered exploit fixtures (stand-still, oscillate, catapult) must each score less than an honest attempt before any reward change merges. <em>Kills reward hacks pre-GPU.</em></div></div></div>
+          <div class="rung"><div class="id">T4</div><div><div class="rt">Objective-contract red teaming</div><div class="rd">Classify every signal as outcome, physical constraint, efficiency or temporary scaffold; reject style-only gates; run stand-still, oscillate and catapult fixtures before merge. <em>Kills reward hacks and choreography pre-GPU.</em></div></div></div>
           <div class="rung"><div class="id">T5</div><div><div class="rt">Learner health</div><div class="rd">Measure whole-rollout KL, importance-ratio tails, effective sample size, actual parameter movement, optimizer state, and actor/critic gradients separately. <em>Kills silent PPO instability and critic-dominated updates.</em></div></div></div>
-          <div class="rung"><div class="id">T6</div><div><div class="rt">Behavior and retention</div><div class="rd">Slice outcomes by leg and gait phase; compare deterministic and stochastic evaluation across seeds; replay every promoted skill. <em>Kills averages that hide one broken leg and new skills that erase old ones.</em></div></div></div>
+          <div class="rung"><div class="id">T6</div><div><div class="rt">Behavior and retention</div><div class="rd">Slice outcomes by leg; report all 16 contact patterns, contact correlations and reward-role shares; compare evaluation across seeds; replay every promoted skill. <em>Kills collapsed behavior, scaffold domination and forgetting without enforcing a preferred gait.</em></div></div></div>
           <div class="rung"><div class="id">T7</div><div><div class="rt">Checkpoint semantics</div><div class="rd">Every checkpoint carries a model hash + action/obs semantics; a frozen opponent is rejected on semantics, not just shape. <em>Kills silently mis-driven policies.</em></div></div></div>
         </div>
 
@@ -755,17 +751,18 @@ footer .big em{color:var(--warm-ink);font-style:italic}
 
         <div class="exgrid">
           <div class="excard"><div class="en">Lesson 01</div><h4>Prove that every constraint can fire</h4><p>A configured limit is functionally absent if its timer, reset path, or activation mask never lets it become active.</p><div class="fix"><b>Take forward</b>Log activation rate, violation rate, grace age, and termination cause independently.</div></div>
-          <div class="excard"><div class="en">Lesson 02</div><h4>Match windows to physical time</h4><p>A gait-duty rule cannot be judged before one complete gait cycle; a short grace window can punish the policy before success is observable.</p><div class="fix"><b>Take forward</b>Derive horizons, grace periods, and evaluation windows from strides, contacts, and task phases.</div></div>
+          <div class="excard"><div class="en">Lesson 02</div><h4>Match windows to physical time</h4><p>A contact or recovery measurement cannot be judged before the physical response can occur; a short grace window can punish the policy before success is observable.</p><div class="fix"><b>Take forward</b>Derive horizons, grace periods and evaluation windows from actuator lag, contact, recovery and task duration.</div></div>
           <div class="excard"><div class="en">Lesson 03</div><h4>Treat resets as a possible reward source</h4><p>An agent may learn that failing quickly is cheaper than attempting the task, while averages make the repeated resets look harmless.</p><div class="fix"><b>Take forward</b>Track episode length, termination ledger, post-reset reward, and sustained success.</div></div>
           <div class="excard"><div class="en">Lesson 04</div><h4>Measure the update that actually happened</h4><p>PPO clipping is not a hard trust region: repeated epochs can still move the new policy too far from the policy that collected the rollout.</p><div class="fix"><b>Take forward</b>Use whole-rollout KL and parameter deltas to stop stale-data epochs and adapt the next learning rate.</div></div>
           <div class="excard"><div class="en">Lesson 05</div><h4>Audit actor and critic separately</h4><p>A large critic gradient can consume a shared clipping budget and quietly starve the policy of useful learning.</p><div class="fix"><b>Take forward</b>Report separate norms, clipping fractions, updates, explained variance, and objective conflicts.</div></div>
           <div class="excard"><div class="en">Lesson 06</div><h4>Prefer self-tuning physical contracts</h4><p>One hand-picked penalty rarely stays correct as the task changes, and one multiplier cannot faithfully represent several different failure modes.</p><div class="fix"><b>Take forward</b>Normalize each physical violation and give it its own bounded primal-dual multiplier.</div></div>
-          <div class="excard"><div class="en">Lesson 07</div><h4>Never trust the mean alone</h4><p>A good average can conceal one failed leg, a bad gait phase, rare catastrophic actions, seed sensitivity, or evaluation noise.</p><div class="fix"><b>Take forward</b>Keep per-leg and phase bins, tails, multiple seeds, and deterministic/stochastic comparisons.</div></div>
+          <div class="excard"><div class="en">Lesson 07</div><h4>Never trust the mean alone</h4><p>A good average can conceal one failed leg, a collapsed contact strategy, rare catastrophic actions, seed sensitivity or evaluation noise.</p><div class="fix"><b>Take forward</b>Keep per-leg values, pattern distributions, tails, multiple seeds and deterministic/stochastic comparisons.</div></div>
           <div class="excard"><div class="en">Lesson 08</div><h4>Promote evidence, not a checkpoint</h4><p>New competence is not progress if it forgets balance, locomotion, or earlier commands, and a saved file is not trustworthy until it reloads identically.</p><div class="fix"><b>Take forward</b>Require checkpoint replay, provenance, video, and a persistent regression matrix before promotion.</div></div>
           <div class="excard"><div class="en">Lesson 09</div><h4>Validate the diagnostics too</h4><p>A canary reading the wrong buffer can report a healthy system with perfect confidence; observability code is production code.</p><div class="fix"><b>Take forward</b>Inject known failures and prove each alert changes before trusting it on an expensive run.</div></div>
-          <div class="excard"><div class="en">Lesson 10</div><h4>Make cyclic measurements temporally fair</h4><p>An endpoint EMA remembers late events better than early ones, so two feet with identical duty can receive different verdicts solely because one swings first.</p><div class="fix"><b>Take forward</b>Accumulate exact per-leg contact over a complete cycle; use EMAs for live trends, not order-sensitive pass/fail contracts.</div></div>
+          <div class="excard"><div class="en">Lesson 10</div><h4>Make temporal diagnostics fair</h4><p>An endpoint EMA remembers late events better than early ones, so two identical behaviors can look different solely because one event occurs later.</p><div class="fix"><b>Take forward</b>Accumulate exact events over complete physical windows; use EMAs for live trends, not order-sensitive pass/fail contracts.</div></div>
           <div class="excard"><div class="en">Lesson 11</div><h4>Demonstrate intent, credit physical outcomes</h4><p>An action imitation target can punish the anticipatory command a real actuator needs when contact lags command, locking the policy to the teacher's timing error.</p><div class="fix"><b>Take forward</b>Let demonstrations bootstrap motion, then yield automatically to contact, clearance, balance, and task success.</div></div>
           <div class="excard"><div class="en">Lesson 12</div><h4>Invalidate descendants when prerequisites change</h4><p>A later-rung checkpoint still contains behavior learned from its original seed, even if its filename and tensor shapes remain valid after an earlier skill is relearned.</p><div class="fix"><b>Take forward</b>Track dependency provenance, archive stale descendants, and warm-start them again from the newly accepted prerequisite.</div></div>
+          <div class="excard"><div class="en">Lesson 13</div><h4>Describe outcomes, not choreography</h4><p>Clock agreement, symmetry, diagonal pairing and reference trajectories can turn one known solution into the only solution the learner is allowed to find.</p><div class="fix"><b>Take forward</b>Gate external success and physical safety; keep style metrics diagnostic; retire exploration scaffolds with measured competence.</div></div>
         </div>
 
         <div class="dp">
@@ -804,7 +801,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
             <ul>
               <li>First two-sided fight: a walking <b>pursuer opponent</b> vs the stronger body</li>
               <li>A real PFSP league driven by the adaptive coach</li>
-              <li>Whack-a-mole reward hardening: the anti-creep terms revealed a stand-still exploit; a min-progress termination is the next fix</li>
+              <li>Rung 6 accepted on five fresh seeds plus four retention replays; outcome-only rung 7 is now training with no reference gait</li>
             </ul>
           </div>
           <div class="col front">
@@ -871,7 +868,7 @@ footer .big em{color:var(--warm-ink);font-style:italic}
     Array.prototype.forEach.call(document.querySelectorAll(".reveal"), function(el){ rev.observe(el); });
   }
 
-  /* ---- gait canvas: 4 phase-offset oscillators (the CPG) ---- */
+  /* ---- gait canvas: one possible rhythm, displayed as a diagnostic example ---- */
   var cv = document.getElementById("gait");
   if(cv && cv.getContext){
     var ctx = cv.getContext("2d"), W=0, H=0, dpr=Math.min(window.devicePixelRatio||1,2);

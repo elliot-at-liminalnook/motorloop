@@ -55,8 +55,6 @@ if __name__ == "__main__":
 
     true_best = int(np.argmax(truth))
     got = res["finalists"][0]
-    # baseline cost if we had oracle-ranked EVERYTHING:
-    saved = n - res["budget"]["b"]
     print(f"[RS7] tiers spent: fast={res['budget']['a']}  oracle={res['budget']['b']}  "
           f"hardware={res['budget']['c']}  (oracle-ranking-all would cost {n})")
     print(f"[RS7] finalist={got} (truth {truth[got]:.3f}); true best={true_best} "

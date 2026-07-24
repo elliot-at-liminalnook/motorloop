@@ -121,9 +121,6 @@ def test_positive_vq_makes_positive_torque(bldcsim, params):
     """Orientation: +vq drives +iq, and the plant torque tracks 1.5*Ke*iq
     (so iq is genuinely the torque-producing axis in this convention)."""
     Ke = params.value("motor.Ke")
-    pp = int(params.value("motor.pole_pairs"))
-    B = params.value("motor.B")
-    del B
     omega = 90.0
     id_, iq, w, _ = _run_rotor_frame(bldcsim, params, 0.0, 2.0, omega)
     assert iq > 0.0, "positive vq did not produce positive iq"

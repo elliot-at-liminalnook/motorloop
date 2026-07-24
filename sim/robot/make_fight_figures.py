@@ -14,7 +14,7 @@ Saves PNGs to <out>/figures/. CPU-only (matplotlib); run locally on the pulled m
 
 from __future__ import annotations
 
-import argparse, json, os, re
+import argparse, re
 from pathlib import Path
 import numpy as np
 import matplotlib

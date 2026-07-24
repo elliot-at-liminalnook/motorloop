@@ -14,21 +14,33 @@ sys.path.insert(0, str(HERE))
 torch = pytest.importorskip("torch")
 pytest.importorskip("mujoco_warp")
 
+import training_ladder  # noqa: E402
 from ladder_warp_env import (GAIT_PERIOD_STEPS, LadderCombatWarpEnv,
                              LadderLocomotionWarpEnv,
+                             UniversalCommandWarpEnv,
+                             UniversalControlWarpEnv,
                              normalized_duty_costs,
                              swing_clearance_scores)  # noqa: E402
-from train_mesh_warp import (action_prior_weight, adaptive_ppo_learning_rate,
+from train_mesh_warp import (Actor, RunningNorm, action_prior_weight,
+                             adaptive_ppo_learning_rate,
                              clip_actor_critic_gradients,
+                             gate_margin_projection,
+                             partition_policy_and_predictor_parameters,
                              duty_stagnation_tripwire_enabled,
                              early_gates_pass, evaluation_trends, gate_diagnostics,
                              incremental_eval_interval,
+                             inherit_task_conditioning,
                              kl_epoch_should_stop,
+                             load_replay_artifacts,
                              parse_early_gates,
+                             policy_observation,
                              prior_competence_pressure, schedule_progress,
-                             schedules)  # noqa: E402
-from training_ladder import (LadderRunner, RUNGS, Gate, make_parser,
+                             robust_gate_diagnostics,
+                             scale_invariant_value_loss, schedules)  # noqa: E402
+from training_ladder import (DIAGNOSTIC_ONLY_METRICS, LadderRunner, RUNGS, Gate, make_parser,
                              merge_candidate_archives, validate_manifest)  # noqa: E402
+from walker_warp_env import CAT_FOOT_DUTY_MAX  # noqa: E402
+from warp_eval import inherit_policy_checkpoint  # noqa: E402
 
 
 def test_manifest_is_the_complete_html_ladder():
@@ -37,6 +49,31 @@ def test_manifest_is_the_complete_html_ladder():
     assert [r.number for r in RUNGS] == list(range(1, 32))
     assert RUNGS[25].slug == "commanded_leg_kick"
     assert RUNGS[-1].slug == "codesign_loop"
+    assert not any(gate.metric in DIAGNOSTIC_ONLY_METRICS
+                   for rung in RUNGS for gate in rung.gates)
+    assert {gate.role for rung in RUNGS for gate in rung.gates} == {
+        "outcome", "constraint"}
+
+
+def test_walk_teacher_is_an_optional_fallback_not_a_prerequisite(tmp_path):
+    args = make_parser().parse_args(["run", "--out", str(tmp_path)])
+    runner = LadderRunner(args)
+    assert args.walk_prior_mode == "fallback"
+    rung6 = tmp_path / "rung_06_step_in_place.pt"
+    rung6.touch()
+    runner.state["checkpoints"] = {"6": str(rung6)}
+    # The repository-local teacher may or may not exist in a deployment.  The
+    # fallback path must remain safe when it is absent, while the strict opt-in
+    # mode is the only mode allowed to require it.
+    original = training_ladder.LEGACY_WALK_TEACHER
+    try:
+        training_ladder.LEGACY_WALK_TEACHER = tmp_path / "missing_teacher.pt"
+        assert runner._ensure_walk_prior() is None
+        runner.args.walk_prior_mode = "always"
+        with pytest.raises(RuntimeError, match="legacy walk teacher"):
+            runner._ensure_walk_prior()
+    finally:
+        training_ladder.LEGACY_WALK_TEACHER = original
 
 
 def test_gate_directions_are_explicit():
@@ -54,18 +91,15 @@ def test_ladder_promotion_uses_worst_deterministic_seed(tmp_path):
     runner = LadderRunner(args)
     rung = RUNGS[5]
     metrics = {
-        "duty": 0.80,
-        "foot_cycle_duty": 0.86,
+        "foot_air_fraction_min": 0.051,
         "speed": 0.06,
-        "ladder_step_clock": 0.71,
-        "ladder_swing_clearance": 0.63,
         "up": 1.0,
         "catrate": 0.0001,
         "fallrate": 0.0,
         "diagnostics": {"multi_seed_evaluation": {"metrics": {
             # The means pass both contracts, but one held-out seed on each
             # boundary does not.  Promotion must preserve those failures.
-            "ladder_step_clock": {"values": [0.6995, 0.7005, 0.7006]},
+            "foot_air_fraction_min": {"values": [0.0495, 0.0505, 0.0506]},
             "catrate": {"values": [0.0001, 0.0011, 0.0002]},
         }}},
     }
@@ -73,9 +107,9 @@ def test_ladder_promotion_uses_worst_deterministic_seed(tmp_path):
     passed, details = runner._gate(rung, metrics)
 
     assert not passed
-    assert any("FAIL ladder_step_clock" in row and "worst of 3" in row
+    assert any("FAIL [outcome] foot_air_fraction_min" in row and "worst of 3" in row
                for row in details)
-    assert any("FAIL catrate" in row and "worst of 3" in row
+    assert any("FAIL [constraint] catrate" in row and "worst of 3" in row
                for row in details)
 
 
@@ -109,6 +143,189 @@ def test_gate_diagnostics_expose_normalized_headroom_and_learning_slopes():
     assert trend["catrate_per_million"] == pytest.approx(-0.0006)
 
 
+def test_robust_gate_diagnostics_use_adverse_seed_tail():
+    gates = parse_early_gates(["score,>=,0.7", "error,<=,0.1"])
+    report = robust_gate_diagnostics(gates, {"metrics": {
+        "score": {"values": [0.8, 0.69, 0.9]},
+        "error": {"values": [0.02, 0.11, 0.03]},
+    }})
+    assert not report["all_pass"]
+    assert report["adverse_metrics"] == {"score": 0.69, "error": 0.11}
+
+
+def test_retention_defaults_to_one_full_episode():
+    args = make_parser().parse_args(["run"])
+    assert args.retention_steps == args.episode_length == 800
+
+
+def test_real_replay_artifact_validates_and_preserves_pressure(tmp_path):
+    path = tmp_path / "replay.pt"
+    torch.save({"rung": 4, "observations": torch.zeros(3, 256),
+                "actions": torch.zeros(3, 14)}, path)
+    bank = load_replay_artifacts([f"{path},2.5"], 256, 14)
+    assert bank[0]["rung"] == 4
+    assert bank[0]["pressure"] == pytest.approx(2.5)
+
+
+def test_feedforward_command_actor_consumes_time_major_replay(tmp_path):
+    """Real replay is [time, env, feature], even for feed-forward actors."""
+    from train_mesh_warp import build_args, train
+    replay = tmp_path / "replay.pt"
+    torch.save({
+        "rung": 2,
+        "observation_semantics": (
+            "universal256:physical211+actuator_mask14+command31:v2"),
+        "observations": torch.zeros(3, 4, 256),
+        "actions": torch.zeros(3, 4, 14),
+        "dones": torch.zeros(3, 4, dtype=torch.bool),
+    }, replay)
+    args = build_args([
+        "--geometry", "universal_command", "--rung", "6",
+        "--steps", str(8 * 8), "--envs", "8", "--horizon", "8",
+        "--episode-length", "50", "--hidden", "32,32", "--seed", "5",
+        "--device", "cpu", "--evals", "1", "--eval-envs", "4",
+        "--eval-steps", "8", "--diagnostic-eval-seeds", "1",
+        "--checkpoint-replay-steps", "4", "--epochs", "1", "--minibatches", "1",
+        "--architecture", "task_film", "--distill-weight", "0.05",
+        "--replay-artifact", str(replay),
+        "--preflight", "off", "--tag", str(tmp_path / "replay_smoke")])
+    stats = train(args)
+    assert len(stats["updates"]) == 1
+    assert stats["updates"][0]["distill_loss"] >= 0.0
+
+
+@pytest.mark.parametrize("rung,active", ((2, 12), (26, 14), (30, 12)))
+def test_universal_controller_contract_is_stable_across_domains(rung, active):
+    env = UniversalControlWarpEnv(2, rung=rung, seed=17, device="cpu",
+                                  episode_length=2)
+    obs = env.reset()
+    assert obs.shape == (2, 256)
+    assert env.act_dim == 14 and env.priv_dim == 34
+    assert int(env.policy_action_mask.sum()) == active
+    assert bool((obs[:, -31 + rung - 1] == 1.0).all())
+
+
+def test_future_interaction_targets_are_broad_and_leg_conditioned():
+    locomotion = UniversalControlWarpEnv(
+        2, rung=7, seed=17, device="cpu", episode_length=2)
+    locomotion.env._set_task_command(alpha=1.0)
+    walk_target = locomotion.interaction_target(8)
+    assert walk_target.root_delta.shape == (8, 2, 3)
+    assert bool((walk_target.root_delta_mask[..., :2] == 1.0).all())
+    assert float(walk_target.effector_mask.sum()) == 0.0
+
+    combat = UniversalControlWarpEnv(
+        2, rung=26, seed=19, device="cpu", episode_length=2)
+    combat.env.set_attack_command(torch.tensor([0, 3]), True)
+    kick_target = combat.interaction_target(8)
+    torch.testing.assert_close(
+        kick_target.effector_mask,
+        torch.tensor([[1., 0., 0., 0.], [0., 0., 0., 1.]]))
+    torch.testing.assert_close(kick_target.interaction_event,
+                               kick_target.effector_mask)
+    assert bool((kick_target.min_support == 2.0).all())
+
+
+@pytest.mark.parametrize("rung", (2, 6, 11, 20, 24, 26, 30))
+def test_universal_command_block_is_rung_invisible_and_spec_true(rung):
+    """v2 conditioning must be exactly the documented command layout — no
+    channel may encode rung identity."""
+    env = UniversalCommandWarpEnv(2, rung=rung, seed=17, device="cpu",
+                                  episode_length=2)
+    obs = env.reset()
+    assert obs.shape == (2, 256)
+    assert "command31:v2" in env.observation_semantics
+    physical, block = obs[:, :225], obs[:, 225:]
+    assert float(block[:, 30].abs().max()) == 0.0  # reserved stays zero
+    if rung in (2, 6, 11, 30):
+        torch.testing.assert_close(block[:, 0:3], physical[:, 47:50])
+        assert bool((block[:, 3] == 1.0).all())
+    if rung == 11:
+        torch.testing.assert_close(block[:, 4:6], physical[:, 65:67])
+        assert bool((block[:, 6] == 1.0).all())
+    else:
+        assert float(block[:, 4:7].abs().max()) == 0.0
+    if rung == 6:
+        assert bool((block[:, 28] == 1.0).all())
+        assert bool((block[:, 29] == 1.0).all())
+    else:
+        assert float(block[:, 28:30].abs().max()) == 0.0
+    if rung == 30:
+        assert float(block[:, 8:20].abs().max()) == 0.0  # no pose in codesign
+    if rung == 20:
+        torch.testing.assert_close(block[:, 20:22], physical[:, 63:65])
+        assert bool((block[:, 22] == 1.0).all())
+        assert float(block[:, 3].abs().max()) == 0.0
+    if rung == 24:
+        torch.testing.assert_close(block[:, 20:22], physical[:, 38:40])
+        assert bool((block[:, 22] == 1.0).all())
+        assert float(block[:, 27].abs().max()) == 0.0  # attack disarmed on 24
+    if rung == 26:
+        engage = physical[:, 44]
+        torch.testing.assert_close(block[:, 27], engage)
+        torch.testing.assert_close(
+            block[:, 23:27], engage[:, None] * physical[:, 45:49])
+        assert float(block[:, 20:23].abs().max()) == 0.0
+
+
+def test_hold_rungs_share_one_command_signature():
+    """Rungs 2 and 12 at a zero command must be observationally compatible:
+    same activity flags, so they assert the same demanded behavior."""
+    stand = UniversalCommandWarpEnv(1, rung=2, seed=5, device="cpu",
+                                    episode_length=2)
+    stop = UniversalCommandWarpEnv(1, rung=12, seed=5, device="cpu",
+                                   episode_length=2)
+    activity = (3, 6, 22, 29)  # velocity, heading, goal, cadence actives
+    stand_flags = stand.reset()[:, 225:][:, activity]
+    stop_flags = stop.reset()[:, 225:][:, activity]
+    torch.testing.assert_close(stand_flags, stop_flags)
+
+
+def test_command_contract_semantics_and_ladder_geometry_swap(tmp_path):
+    from train_mesh_warp import build_args, checkpoint_contract
+    env = UniversalCommandWarpEnv(1, rung=2, seed=3, device="cpu",
+                                  episode_length=2)
+    args = build_args(["--geometry", "universal_command", "--rung", "2",
+                       "--architecture", "task_film_gru", "--tag", "x"])
+    contract = checkpoint_contract(env, args)
+    assert contract["task_conditioning_semantics"] == "command_film_v2"
+    assert contract["observation_semantics"].endswith("command31:v2")
+
+    commanded = LadderRunner(make_parser().parse_args(
+        ["run", "--out", str(tmp_path / "a"), "--command-observations"]))
+    legacy = LadderRunner(make_parser().parse_args(
+        ["run", "--out", str(tmp_path / "b")]))
+    rung = RUNGS[5]
+    assert rung.geometry == "universal_control"
+    assert commanded._geometry(rung) == "universal_command"
+    assert legacy._geometry(rung) == "universal_control"
+
+
+def test_power_model_reaches_universal_contract_but_not_combat():
+    """Enabling the shared bus must show up in the universal action-semantics
+    contract for locomotion rungs, and combat rungs must stay on v1 (the fused
+    combat layer does not yet model the bus) without crashing."""
+    powered = UniversalCommandWarpEnv(1, rung=2, seed=3, device="cpu",
+                                      episode_length=2,
+                                      power_model="shared_bus")
+    assert powered.action_semantics.endswith("shared_bus_v2")
+    assert powered.power_model_record["model"] == "shared_bus_v2"
+    combat = UniversalCommandWarpEnv(1, rung=26, seed=3, device="cpu",
+                                     episode_length=2,
+                                     power_model="shared_bus")
+    assert not combat.action_semantics.endswith("shared_bus_v2")
+
+
+def test_scenario_seed_changes_physical_model_variant():
+    low = LadderLocomotionWarpEnv(
+        1, rung=17, seed=1, device="cpu", episode_length=2,
+        scenario_variant=0.0)
+    high = LadderLocomotionWarpEnv(
+        1, rung=17, seed=1, device="cpu", episode_length=2,
+        scenario_variant=1.0)
+    assert low.model_hash != high.model_hash
+
+
 def test_resumed_eval_schedule_covers_only_new_experience():
     rollout = 128 * 64
     interval = incremental_eval_interval(12_001_280, 14_000_000, 4, rollout)
@@ -139,18 +356,476 @@ def test_resume_retries_recorded_attempt_when_legacy_stats_are_missing(tmp_path)
     assert completed == 5
 
 
+def test_resume_extends_past_durable_checkpoint_without_terminal_failure(
+        tmp_path, monkeypatch):
+    args = make_parser().parse_args([
+        "run", "--out", str(tmp_path), "--resume", "--attempts", "1",
+        "--steps-per-rung", "2000000",
+    ])
+    runner = LadderRunner(args)
+    rung = RUNGS[5]
+    tag = tmp_path / "rung_06_step_in_place"
+    Path(str(tag) + ".pt").touch()
+    Path(str(tag) + ".stats.json").write_text(json.dumps({"evals": [
+        {"step": 4_005_888},
+    ]}))
+    runner.state["attempts"]["6"] = 2
+    anchor = tmp_path / "rung_05_height_control.pt"
+    anchor.touch()
+    commands = []
+    monkeypatch.setattr(
+        runner, "_run",
+        lambda argv, log, dry_run=False: commands.append(argv) or 0)
+    monkeypatch.setattr(runner, "_metrics", lambda _: {
+        "duty": 0.8, "foot_cycle_duty": 0.8, "speed": 0.1,
+        "ladder_step_clock": 0.8, "ladder_swing_clearance": 0.5,
+        "up": 1.0, "catrate": 0.0, "fallrate": 0.0,
+    })
+    monkeypatch.setattr(runner, "_candidate_paths", lambda _: [])
+
+    runner._run_ppo(rung, warm_override=str(anchor))
+
+    command = commands[0]
+    assert command[command.index("--steps") + 1] == "6000000"
+    assert command[command.index("--resume") + 1] == str(tag) + ".pt"
+
+
+def test_gate_margin_projection_strikes_only_doomed_attempts():
+    total = 10_000_000
+    # Healthy improvement crossing well within budget: no strike.
+    improving = [(1_000_000 * i, -0.5 + 0.1 * i) for i in range(1, 5)]
+    assert not gate_margin_projection(
+        improving, total, slack=2.0, window=4)["strike"]
+    # Failing and flat: never crosses, strike.
+    flat = [(1_000_000 * i, -0.4) for i in range(1, 5)]
+    assert gate_margin_projection(flat, total, slack=2.0, window=4)["strike"]
+    # Failing and worsening: strike.
+    worsening = [(1_000_000 * i, -0.2 - 0.05 * i) for i in range(1, 5)]
+    assert gate_margin_projection(
+        worsening, total, slack=2.0, window=4)["strike"]
+    # Failing but improving too slowly: crossing far beyond slack * remaining.
+    crawling = [(1_000_000 * i, -1.0 + 1.0e-9 * i) for i in range(1, 5)]
+    projection = gate_margin_projection(crawling, total, slack=2.0, window=4)
+    assert projection["strike"]
+    assert projection["projected_crossing_step"] > total
+    # Already passing: the early-gate stop owns this case.
+    passing = [(1_000_000 * i, 0.05) for i in range(1, 5)]
+    assert not gate_margin_projection(
+        passing, total, slack=2.0, window=4)["strike"]
+    # Too little history: no verdict.
+    assert not gate_margin_projection(
+        flat[:2], total, slack=2.0, window=4)["strike"]
+
+
+def test_entropy_boost_rewinds_but_never_exceeds_start():
+    from train_mesh_warp import ENT_END, ENT_START, build_args, schedules
+    base = ["--geometry", "walker", "--steps", "1000000", "--tag", "x"]
+    plain = build_args(base)
+    boosted = build_args(base + ["--entropy-boost", "1.5"])
+    huge = build_args(base + ["--entropy-boost", "100.0"])
+    step = 500_000
+    ent_plain, _, _ = schedules(step, plain)
+    ent_boosted, _, _ = schedules(step, boosted)
+    ent_huge, _, _ = schedules(step, huge)
+    assert ent_boosted == pytest.approx(1.5 * ent_plain)
+    assert ent_huge == pytest.approx(ENT_START)
+    assert ENT_END < ent_plain < ENT_START
+
+
+def test_plateau_aborted_retry_gets_exploration_intervention(tmp_path, monkeypatch):
+    args = make_parser().parse_args([
+        "run", "--out", str(tmp_path), "--resume", "--attempts", "1",
+        "--steps-per-rung", "2000000",
+    ])
+    runner = LadderRunner(args)
+    rung = RUNGS[5]
+    tag = tmp_path / "rung_06_step_in_place"
+    Path(str(tag) + ".pt").touch()
+    Path(str(tag) + ".stats.json").write_text(json.dumps({
+        "evals": [{"step": 4_005_888}],
+        "plateau_abort": {"step": 4_005_888, "consecutive_strikes": 3,
+                          "worst_relative_margin": -0.2},
+    }))
+    runner.state["attempts"]["6"] = 2
+    anchor = tmp_path / "rung_05_height_control.pt"
+    anchor.touch()
+    commands = []
+    monkeypatch.setattr(
+        runner, "_run",
+        lambda argv, log, dry_run=False: commands.append(argv) or 0)
+    monkeypatch.setattr(runner, "_metrics", lambda _: {
+        "duty": 0.8, "foot_cycle_duty": 0.8, "speed": 0.1,
+        "ladder_step_clock": 0.8, "ladder_swing_clearance": 0.5,
+        "up": 1.0, "catrate": 0.0, "fallrate": 0.0,
+    })
+    monkeypatch.setattr(runner, "_candidate_paths", lambda _: [])
+
+    runner._run_ppo(rung, warm_override=str(anchor))
+
+    command = commands[0]
+    assert command[command.index("--entropy-boost") + 1] == "1.5"
+    assert "--learning-rate-restart" in command
+    # Without a plateau record the same retry stays untouched.
+    Path(str(tag) + ".stats.json").write_text(json.dumps({
+        "evals": [{"step": 4_005_888}]}))
+    commands.clear()
+    runner._run_ppo(rung, warm_override=str(anchor))
+    assert "--entropy-boost" not in commands[0]
+    assert "--learning-rate-restart" not in commands[0]
+
+
 def test_actor_and_critic_gradient_clipping_are_disjoint():
     actor = torch.nn.Linear(2, 1, bias=False)
     critic = torch.nn.Linear(2, 1, bias=False)
     actor.weight.grad = torch.ones_like(actor.weight)
     critic.weight.grad = torch.full_like(critic.weight, 1_000.0)
 
-    actor_norm, critic_norm = clip_actor_critic_gradients(actor, critic)
+    actor_norm, critic_norm, predictor_norm = clip_actor_critic_gradients(actor, critic)
 
     assert float(actor_norm) == pytest.approx(2.0 ** 0.5)
     assert float(critic_norm) == pytest.approx(2.0 ** 0.5 * 1_000.0)
+    assert float(predictor_norm) == 0.0
     assert float(actor.weight.grad.norm()) == pytest.approx(1.0)
     assert float(critic.weight.grad.norm()) == pytest.approx(1.0)
+
+
+def _predictive_actor() -> Actor:
+    return Actor(24, 14, (32,), architecture="predictive_token_gru", task_dim=8)
+
+
+def test_predictor_parameters_form_their_own_optimizer_subspace():
+    """The trajectory decoder must never share the adaptive PPO optimizer."""
+    actor = _predictive_actor()
+    policy, predictor = partition_policy_and_predictor_parameters(actor)
+    decoder_ids = {id(p) for p in actor.trajectory_decoder.parameters()}
+    assert {id(p) for p in predictor} == decoder_ids
+    assert decoder_ids.isdisjoint({id(p) for p in policy})
+    assert len(policy) + len(predictor) == len(list(actor.parameters()))
+
+    plain = Actor(11, 3, (16, 8), architecture="task_film_gru", task_dim=4)
+    plain_policy, plain_predictor = partition_policy_and_predictor_parameters(plain)
+    assert plain_predictor == []
+    assert len(plain_policy) == len(list(plain.parameters()))
+
+
+def test_heldout_calibration_degradation_freezes_and_recovery_unfreezes():
+    actor = _predictive_actor()
+    actor.prediction_freeze_tolerance = 0.15
+    actor.prediction_freeze_patience = 3
+    # Warmup: the first ten observations may never freeze, mirroring authority.
+    for _ in range(10):
+        actor.observe_prediction_calibration(torch.tensor(0.10))
+    assert actor.prediction_training_enabled
+    best = float(actor.prediction_best_calibration)
+    assert best == pytest.approx(float(actor.prediction_calibration_ema))
+    # Sustained degradation beyond tolerance freezes after patience runs out.
+    for _ in range(40):
+        actor.observe_prediction_calibration(torch.tensor(1.0))
+        if not actor.prediction_training_enabled:
+            break
+    assert not actor.prediction_training_enabled
+    assert float(actor.prediction_best_calibration) == pytest.approx(best)
+    # Calibration keeps being observed while frozen; recovery reopens training.
+    for _ in range(60):
+        actor.observe_prediction_calibration(torch.tensor(0.05))
+        if actor.prediction_training_enabled:
+            break
+    assert actor.prediction_training_enabled
+
+
+def test_freeze_disabled_by_nonpositive_tolerance():
+    actor = _predictive_actor()
+    actor.prediction_freeze_tolerance = 0.0
+    for _ in range(30):
+        actor.observe_prediction_calibration(torch.tensor(0.10))
+    for _ in range(30):
+        actor.observe_prediction_calibration(torch.tensor(5.0))
+    assert actor.prediction_training_enabled
+
+
+def test_predictive_actor_loads_pre_freeze_checkpoints():
+    torch.manual_seed(3)
+    old = _predictive_actor()
+    state = old.state_dict()
+    for name in ("prediction_best_calibration", "prediction_degraded_streak",
+                 "prediction_frozen"):
+        state.pop(name)
+    fresh = _predictive_actor()
+    fresh.load_state_dict(state)
+    for a, b in zip(old.parameters(), fresh.parameters()):
+        torch.testing.assert_close(a, b)
+    assert fresh.prediction_training_enabled
+
+
+def test_predictive_smoke_separate_optimizer_and_unseen_eval_calibration(tmp_path):
+    """CPU proof: decoder Adam is separate and constant, its state checkpoints,
+    and evaluation measures held-out predictor calibration on the eval env."""
+    from train_mesh_warp import build_args, train
+    torch.set_num_threads(1)
+    args = build_args([
+        "--geometry", "universal_control", "--rung", "2",
+        "--steps", str(2 * 8 * 8), "--envs", "8", "--horizon", "8",
+        "--episode-length", "50", "--hidden", "32,32", "--seed", "5",
+        "--device", "cpu", "--evals", "1", "--eval-envs", "4",
+        "--eval-steps", "8", "--diagnostic-eval-seeds", "1",
+        "--checkpoint-replay-steps", "4", "--epochs", "1", "--minibatches", "1",
+        "--architecture", "predictive_token_gru",
+        "--prediction-horizon", "4", "--prediction-anchors", "2",
+        "--prediction-lr", "1e-3", "--guidance-horizon", "4",
+        "--preflight", "off", "--tag", str(tmp_path / "pred_smoke")])
+    stats = train(args)
+
+    update = stats["updates"][0]
+    assert update["trajectory_prediction_loss"] > 0.0
+    assert update["predictor_learning_rate"] == pytest.approx(1e-3)
+    assert update["predictor_gradient_norm_before_clip"] > 0.0
+    assert update["trajectory_prediction_frozen"] is False
+
+    eval_record = stats["evals"][-1]
+    calibration = eval_record["eval_predictor_calibration"]
+    assert calibration["overall"] > 0.0
+    assert "body_position" in calibration
+
+    ck = torch.load(stats["ckpt"], map_location="cpu", weights_only=True)
+    assert ck["prediction_opt"] is not None
+    from train_mesh_warp import Critic
+    actor = Actor(256, 14, (32, 32), architecture="predictive_token_gru",
+                  task_dim=31)
+    critic = Critic(256 + UniversalControlWarpEnv.priv_dim, (32, 32))
+    policy, predictor = partition_policy_and_predictor_parameters(actor)
+    decoder_parameters = sum(
+        len(group["params"]) for group in ck["prediction_opt"]["param_groups"])
+    assert decoder_parameters == len(predictor)
+    # The main optimizer holds policy + critic only: no decoder overlap.
+    main_parameters = sum(
+        len(group["params"]) for group in ck["opt"]["param_groups"])
+    assert main_parameters == len(policy) + len(list(critic.parameters()))
+
+
+def test_predictive_family_trains_on_command_observations(tmp_path):
+    """The commands-only v2 contract must train end-to-end with the predictive
+    family and record the command conditioning in its checkpoint contract."""
+    from train_mesh_warp import build_args, train
+    torch.set_num_threads(1)
+    args = build_args([
+        "--geometry", "universal_command", "--rung", "2",
+        "--steps", str(2 * 8 * 8), "--envs", "8", "--horizon", "8",
+        "--episode-length", "50", "--hidden", "32,32", "--seed", "5",
+        "--device", "cpu", "--evals", "1", "--eval-envs", "4",
+        "--eval-steps", "8", "--diagnostic-eval-seeds", "1",
+        "--checkpoint-replay-steps", "4", "--epochs", "1", "--minibatches", "1",
+        "--architecture", "predictive_token_gru",
+        "--prediction-horizon", "4", "--prediction-anchors", "2",
+        "--guidance-horizon", "4",
+        "--preflight", "off", "--tag", str(tmp_path / "cmd_smoke")])
+    stats = train(args)
+    assert stats["updates"][0]["trajectory_prediction_loss"] > 0.0
+    ck = torch.load(stats["ckpt"], map_location="cpu", weights_only=True)
+    assert ck["contract"]["task_conditioning_semantics"] == "command_film_v2"
+    assert ck["contract"]["observation_semantics"].endswith("command31:v2")
+
+
+def test_width_blocks_are_the_honest_architecture_parameters():
+    from train_mesh_warp import build_args, resolved_architecture, Critic
+    base = ["--geometry", "walker", "--tag", "x"]
+    args = build_args(base + ["--width", "256", "--blocks", "2"])
+    assert args.hidden == "256,256"
+    args = build_args(base + ["--width", "128"])
+    assert args.hidden == "128,128,128"
+    with pytest.raises(SystemExit):
+        build_args(base + ["--blocks", "2"])
+
+    # The audit's core finding, now provable from the recorded shapes: a
+    # tapering --hidden constructs the SAME FiLM network as the honest
+    # constant-width spelling.
+    torch.manual_seed(0)
+    tapered = Actor(24, 14, (32, 16, 8), architecture="task_film_gru", task_dim=8)
+    torch.manual_seed(0)
+    honest = Actor(24, 14, (32, 32, 32), architecture="task_film_gru", task_dim=8)
+    critic = Critic(30, (32, 32))
+    tapered_record = resolved_architecture(tapered, critic)
+    honest_record = resolved_architecture(honest, critic)
+    assert tapered_record == honest_record
+    assert tapered_record["actor"]["parameters"] == sum(
+        parameter.numel() for parameter in tapered.parameters())
+    predictive = _predictive_actor()
+    record = resolved_architecture(predictive, critic)
+    assert record["trajectory_decoder"]["parameters"] == sum(
+        parameter.numel()
+        for parameter in predictive.trajectory_decoder.parameters())
+
+
+def test_task_inheritance_exactly_preserves_predecessor_behavior():
+    torch.manual_seed(17)
+    actor = Actor(11, 3, (16, 8), architecture="task_film", task_dim=4)
+    norm = RunningNorm(11)
+    norm.mean[-4:].copy_(torch.tensor((0.20, 0.55, 0.0, 0.0)))
+    norm.var[-4:].copy_(torch.tensor((0.16, 0.24, 1.0e-12, 1.0e-12)))
+    physical = torch.randn(9, 7)
+
+    def output(task_index: int):
+        task = torch.zeros((len(physical), 4))
+        task[:, task_index] = 1.0
+        return actor(norm(torch.cat((physical, task), dim=-1)))
+
+    source_before = output(1).detach()
+    unrelated_before = output(0).detach()
+    assert not torch.allclose(output(2), source_before)
+    residual = inherit_task_conditioning(actor, norm, 1, 2)
+    assert residual < 1.0e-5
+    assert torch.allclose(output(2), source_before, atol=2.0e-6, rtol=2.0e-6)
+    assert torch.equal(output(0), unrelated_before)
+
+
+def test_recurrent_actor_sequence_matches_step_loop_and_real_resets():
+    torch.manual_seed(23)
+    actor = Actor(11, 3, (16, 8), architecture="task_film_gru", task_dim=4)
+    observations = torch.randn(7, 5, 11)
+    reset_before = torch.zeros((7, 5), dtype=torch.bool)
+    reset_before[3, 1] = True
+    reset_before[5, 4] = True
+    initial = torch.randn(5, actor.recurrent_state_dim)
+
+    sequence_mean, sequence_state = actor.sequence(
+        observations, initial.clone(), reset_before)
+    state = initial.clone()
+    manual = []
+    for time_index in range(len(observations)):
+        state *= (~reset_before[time_index]).float().unsqueeze(-1)
+        mean, state = actor.step(observations[time_index], state)
+        manual.append(mean)
+
+    assert torch.allclose(sequence_mean, torch.stack(manual), atol=1.0e-6)
+    assert torch.allclose(sequence_state, state, atol=1.0e-6)
+
+
+def test_recurrent_actor_builds_internal_phase_without_external_clock():
+    torch.manual_seed(29)
+    actor = Actor(11, 3, (16, 8), architecture="task_film_gru", task_dim=4)
+    observation = torch.randn(4, 11)
+    first, state = actor.step(observation, actor.initial_state(4))
+    second, state = actor.step(observation, state)
+
+    assert not torch.allclose(first, second)
+    assert float(state.detach().norm()) > 0.0
+    raw = torch.randn(2, 11)
+    masked = policy_observation(raw, (3, 4))
+    assert torch.equal(masked[:, 3:5], torch.zeros_like(masked[:, 3:5]))
+    assert torch.equal(masked[:, :3], raw[:, :3])
+    assert torch.equal(masked[:, 5:], raw[:, 5:])
+    morphology_masked = policy_observation(raw, (), (5, 6, 7))
+    assert torch.equal(morphology_masked[:, 5:8], torch.zeros_like(raw[:, 5:8]))
+    assert torch.equal(morphology_masked[:, :5], raw[:, :5])
+
+
+def test_inherited_checkpoint_exactly_clones_predecessor_task(tmp_path):
+    torch.manual_seed(31)
+    actor = Actor(11, 3, (16, 8), architecture="task_film_gru", task_dim=4)
+    norm = RunningNorm(11)
+    source = tmp_path / "source.pt"
+    output = tmp_path / "inherited.pt"
+    torch.save({
+        "actor": actor.state_dict(),
+        "obs_norm": norm.state_dict(),
+        "args": {"hidden": "16,8", "architecture": "task_film_gru",
+                 "actor_task_dim": 4},
+        # candidate manufacture refuses contract-less sources by design
+        "contract": {"geometry": "test", "observation_semantics": "test:v1"},
+    }, source)
+
+    metadata = inherit_policy_checkpoint(source, output, 1, 2)
+    inherited = Actor(11, 3, (16, 8), architecture="task_film_gru", task_dim=4)
+    inherited.load_state_dict(torch.load(
+        output, map_location="cpu", weights_only=True)["actor"])
+    physical = torch.randn(6, 7)
+    source_task = torch.zeros(6, 4); source_task[:, 1] = 1.0
+    target_task = torch.zeros(6, 4); target_task[:, 2] = 1.0
+
+    source_mean = inherited(norm(torch.cat((physical, source_task), dim=-1)))
+    target_mean = inherited(norm(torch.cat((physical, target_task), dim=-1)))
+    assert torch.allclose(source_mean, target_mean, atol=2.0e-6, rtol=2.0e-6)
+    assert metadata["max_pre_activation_error"] < 1.0e-5
+
+
+def test_zero_shot_exam_accepts_only_with_margin_and_retention(tmp_path, monkeypatch):
+    args = make_parser().parse_args([
+        "run", "--out", str(tmp_path), "--architecture", "task_film_gru"])
+    runner = LadderRunner(args)
+    parent = tmp_path / "rung_02.pt"; parent.write_bytes(b"parent")
+    candidate = tmp_path / "test_out.pt"; candidate.write_bytes(b"candidate")
+    runner.state["completed"] = [2]
+    runner.state["checkpoints"] = {"2": str(parent)}
+    rung = RUNGS[2]
+    promotion = {"up": 0.99, "catrate": 0.0, "fallrate": 0.0}
+    monkeypatch.setattr(runner, "_prepare_test_out_checkpoint",
+                        lambda *_: (str(candidate), {"kind": "test"}))
+    monkeypatch.setattr(runner, "_promotion_gate",
+                        lambda *_: (True, promotion, ["all fresh seeds passed"]))
+    monkeypatch.setattr(runner, "_retention_gate", lambda *_: (True, [{"pass": True}]))
+    monkeypatch.setattr(runner, "_record_regression_task", lambda *_: None)
+
+    passed, metrics, checkpoint = runner._test_out(rung)
+
+    assert passed
+    assert checkpoint == str(candidate)
+    assert metrics["test_out_pass"]
+    assert metrics["retention_pass"]
+    assert runner.state["test_out"]["3"]["decision"] == "accept"
+
+
+def test_zero_shot_exam_falls_back_to_training_without_extra_margin(
+        tmp_path, monkeypatch):
+    args = make_parser().parse_args([
+        "run", "--out", str(tmp_path), "--architecture", "task_film_gru",
+        "--test-out-margin", "0.10"])
+    runner = LadderRunner(args)
+    parent = tmp_path / "rung_02.pt"; parent.write_bytes(b"parent")
+    candidate = tmp_path / "test_out.pt"; candidate.write_bytes(b"candidate")
+    runner.state["completed"] = [2]
+    runner.state["checkpoints"] = {"2": str(parent)}
+    rung = RUNGS[2]
+    # The ordinary up gate passes at 0.72, but this is only 4.2% above it.
+    promotion = {"up": 0.75, "catrate": 0.0, "fallrate": 0.0}
+    monkeypatch.setattr(runner, "_prepare_test_out_checkpoint",
+                        lambda *_: (str(candidate), {"kind": "test"}))
+    monkeypatch.setattr(runner, "_promotion_gate",
+                        lambda *_: (True, promotion, ["ordinary gate passed"]))
+    retention_called = []
+    monkeypatch.setattr(runner, "_retention_gate",
+                        lambda *_: retention_called.append(True) or (True, []))
+    monkeypatch.setattr(runner, "_record_regression_task", lambda *_: None)
+
+    passed, metrics, checkpoint = runner._test_out(rung)
+
+    assert not passed
+    assert checkpoint is None
+    assert not retention_called
+    assert metrics["test_out_worst_relative_margin"] < 0.10
+    assert runner.state["test_out"]["3"]["decision"] == "train"
+
+
+def test_running_norm_can_freeze_categorical_task_suffix():
+    norm = RunningNorm(5)
+    norm.mean.copy_(torch.tensor((0.0, 0.0, 0.0, 0.3, 0.7)))
+    norm.var.copy_(torch.tensor((1.0, 1.0, 1.0, 0.2, 0.2)))
+    task_mean = norm.mean[-2:].clone()
+    task_var = norm.var[-2:].clone()
+    batch = torch.tensor(((4.0, 3.0, 2.0, 1.0, 0.0),
+                          (2.0, 1.0, 0.0, 1.0, 0.0)))
+    norm.update(batch, frozen_suffix=2)
+    assert not torch.equal(norm.mean[:3], torch.zeros(3))
+    assert torch.equal(norm.mean[-2:], task_mean)
+    assert torch.equal(norm.var[-2:], task_var)
+
+
+def test_value_loss_is_invariant_to_raw_reward_units():
+    prediction = torch.tensor([1.0, 3.0])
+    target = torch.tensor([2.0, 5.0])
+    scale = target.std(unbiased=False)
+    original = scale_invariant_value_loss(prediction, target, scale)
+    rescaled = scale_invariant_value_loss(
+        prediction * 100.0, target * 100.0, scale * 100.0)
+    assert float(rescaled) == pytest.approx(float(original))
 
 
 def test_kl_controller_stops_oversized_epochs_and_self_tunes_lr():
@@ -296,12 +971,14 @@ def test_static_ladder_rungs_do_not_trigger_the_locomotion_duty_tripwire():
     for rung in range(2, 24):
         assert not duty_stagnation_tripwire_enabled("ladder_locomotion", rung)
     assert duty_stagnation_tripwire_enabled("walker", None)
+    assert not duty_stagnation_tripwire_enabled("universal_control", 2)
 
 
 @pytest.mark.parametrize("rung,period,fire", ((3, 140, 60), (15, 100, 45),
                                                (22, 160, 80)))
 def test_scripted_push_has_a_narrow_slip_constraint_grace(rung, period, fire):
     env = LadderLocomotionWarpEnv(2, rung=rung, seed=5, device="cpu", episode_length=3)
+    env._disturbance_fire.fill_(fire)
     ones = torch.ones(2)
     contacts = torch.ones((2, 4))
     fast_feet = torch.ones((2, 4))
@@ -322,13 +999,9 @@ def test_scripted_push_has_a_narrow_slip_constraint_grace(rung, period, fire):
     assert bool((slip_at(fire + 4) > 0.0).all())
 
 
-def test_step_rung_exposes_only_verified_lift_action_prior(tmp_path):
+def test_step_rung_is_phase_free_and_walk_prior_is_temporary(tmp_path):
     env = LadderLocomotionWarpEnv(2, rung=6, seed=7, device="cpu", episode_length=3)
-    target, mask = env.policy_mean_prior(env.observe())
-    assert target.shape == mask.shape == (2, 12)
-    assert torch.equal(mask[:, 2::3], torch.ones((2, 4)))
-    assert torch.count_nonzero(mask[:, [0, 1, 3, 4, 6, 7, 9, 10]]) == 0
-    assert torch.allclose(target[:, 2::3].abs(), torch.full((2, 4), 1.85))
+    assert env.policy_mean_prior(env.observe()) is None
     standing = LadderLocomotionWarpEnv(1, rung=5, seed=7, device="cpu", episode_length=3)
     assert standing.policy_mean_prior(standing.observe()) is None
 
@@ -342,16 +1015,20 @@ def test_step_rung_exposes_only_verified_lift_action_prior(tmp_path):
     assert torch.allclose(moving._cmd[:, 0], torch.full((2,), 0.155))
     moving._constraint_duals.zero_()
     moving_obs = moving.observe()
+    assert moving.action_prior_scale == 0.0
+    assert moving.policy_mean_prior(
+        moving_obs, torch.zeros((2, moving.act_dim))) is None
+    prior = tmp_path / "walk_prior.json"
+    prior.write_text(json.dumps({"blend": 0.55, "best": {
+        "parameters": [0.1] + [0.0] * 23}}))
+    moving.configure_action_prior(prior)
+    assert moving.action_prior_scale == 10.0
     moving_target, moving_mask = moving.policy_mean_prior(
         moving_obs, torch.zeros((2, moving.act_dim)))
     assert torch.equal(moving_mask[:, 2::3], torch.ones((2, 4)))
     assert torch.equal(moving_mask[:, 0::3], torch.ones((2, 4)))
     assert torch.equal(moving_mask[:, 1::3], torch.ones((2, 4)))
     assert torch.isfinite(moving_target).all()
-    prior = tmp_path / "walk_prior.json"
-    prior.write_text(json.dumps({"blend": 0.55, "best": {
-        "parameters": [0.1] + [0.0] * 23}}))
-    moving.configure_action_prior(prior)
     transfer = torch.full((2, moving.act_dim), 0.4)
     transferred_target, _ = moving.policy_mean_prior(
         moving_obs, torch.zeros((2, moving.act_dim)), transfer_action=transfer)
@@ -373,20 +1050,12 @@ def test_step_rung_exposes_only_verified_lift_action_prior(tmp_path):
     after = torch.tanh(moving.policy_mean_prior(
         moving.observe(), torch.zeros((2, moving.act_dim)), transfer_action=transfer)[0])
     assert float((after[:, 2::3] - before[:, 2::3]).abs().max()) < 0.25
-    moving._constraint_duals.copy_(torch.tensor([0.0, 0.0, 3.0]))
-    _, pressure_mask = moving.policy_mean_prior(
-        moving.observe(), torch.zeros((2, moving.act_dim)), transfer_action=transfer)
-    # Physical duty pressure must not make a possibly lagging open-loop clock
-    # increasingly rigid; the robust contact objective owns final timing.
-    assert torch.allclose(pressure_mask[:, 2::3], torch.ones((2, 4)))
-    assert bool((pressure_mask[:, 2::3] > pressure_mask[:, 0::3]).all())
-    assert float(moving.action_prior_suppression_pressure) == 0.0
-    moving._constraint_duals.copy_(torch.tensor([3.0, 0.0, 0.0]))
+    moving._constraint_duals.copy_(torch.tensor([3.0]))
     _, slip_pressure_mask = moving.policy_mean_prior(
         moving.observe(), torch.zeros((2, moving.act_dim)), transfer_action=transfer)
     assert torch.allclose(slip_pressure_mask[:, 2::3], torch.ones((2, 4)))
     assert float(moving.action_prior_suppression_pressure) == 3.0
-    moving.update_constraint_duals(torch.tensor([0.002, 0.0, 0.0]))
+    moving.update_constraint_duals(torch.tensor([0.002]))
     assert float(moving.constraint_duals[0]) > 0.0
 
 
@@ -397,7 +1066,7 @@ def test_constraint_dual_controller_is_scale_normalized():
         env._constraint_duals.zero_()
         env._constraint_error_square.zero_()
         for _ in range(100):
-            env.update_constraint_duals(torch.tensor([observed, 0.0, 0.0]))
+            env.update_constraint_duals(torch.tensor([observed]))
         return float(env.constraint_duals[0])
 
     small_violation = response(0.002)
@@ -408,13 +1077,8 @@ def test_constraint_dual_controller_is_scale_normalized():
 
     before_recovery = float(env.constraint_duals[0])
     for _ in range(100):
-        env.update_constraint_duals(torch.tensor([0.0, 0.0, 0.0]))
+        env.update_constraint_duals(torch.tensor([0.0]))
     assert float(env.constraint_duals[0]) < 0.01 * before_recovery
-
-    env._constraint_duals.zero_()
-    for _ in range(20):
-        env.update_constraint_duals(torch.tensor([0.0, 0.02, 0.02]))
-    assert bool((env.constraint_duals[1:] > 0.0).all())
 
     for _ in range(100):
         env.update_competence_duals(torch.tensor([0.02]))
@@ -425,19 +1089,54 @@ def test_constraint_dual_controller_is_scale_normalized():
     assert float(env.competence_duals[0]) < 0.01 * competence_pressure
 
 
-def test_step_clock_competence_pressure_self_tunes_to_rung_six_gate():
+def test_foot_activity_competence_pressure_self_tunes_to_rung_six_gate():
     env = LadderLocomotionWarpEnv(1, rung=6, seed=9, device="cpu", episode_length=3)
-    assert env.adaptive_competence_names == ("ladder_step_clock",)
-    assert float(env._competence_targets[0]) == pytest.approx(0.70)
+    assert env.adaptive_competence_names == ("ladder_foot_activity",)
+    assert float(env._competence_targets[0]) == pytest.approx(0.40)
 
     for _ in range(100):
-        env.update_competence_duals(torch.tensor([0.60]))
+        env.update_competence_duals(torch.tensor([0.30]))
     shortfall_pressure = float(env.competence_duals[0])
     assert shortfall_pressure > 0.0
 
     for _ in range(100):
-        env.update_competence_duals(torch.tensor([0.75]))
+        env.update_competence_duals(torch.tensor([0.45]))
     assert float(env.competence_duals[0]) < 0.01 * shortfall_pressure
+
+
+def test_rung_six_has_no_hidden_phase_curriculum():
+    env = LadderLocomotionWarpEnv(
+        128, rung=6, seed=31, device="cpu", episode_length=3)
+    mask = torch.ones(env.nworld, dtype=torch.bool)
+    assert float(env.reset_phase_randomization_probability) == 0.0
+    assert int(torch.count_nonzero(env._task_t)) == 0
+
+    # Neither safety nor competence pressure invents a target phase.
+    env._constraint_duals.copy_(torch.tensor([10.0]))
+    env._competence_duals.copy_(torch.tensor([10.0]))
+    env.reset(mask)
+    assert int(torch.count_nonzero(env._task_t)) == 0
+
+    moving = LadderLocomotionWarpEnv(
+        128, rung=7, seed=31, device="cpu", episode_length=3)
+    assert float(moving.reset_phase_randomization_probability) == 1.0
+    moving.reset(mask)
+    assert int(torch.count_nonzero(moving._task_t)) > moving.nworld // 2
+
+
+def test_ladder_disables_hidden_base_reference_gait_reward():
+    env = LadderLocomotionWarpEnv(
+        2, rung=7, seed=32, device="cpu", episode_length=3)
+    _, _, _, info = env.step(
+        torch.zeros((2, env.act_dim)), imit_anneal=1.0)
+    components = info["reward_components"]
+    prior = components.get("motion_prior")
+    assert prior is None or not bool(torch.count_nonzero(prior))
+    # gait_clock was deleted outright (a permanently zero-weight style term);
+    # its absence is the strongest form of "disabled".
+    assert "gait_clock" not in components
+    for name in ("airtime", "pose_penalty", "clearance", "tracking"):
+        assert not bool(torch.count_nonzero(components[name]))
 
 
 def test_per_foot_duty_cost_credits_each_successful_lift():
@@ -514,10 +1213,10 @@ def test_ladder_constraint_grace_uses_episode_age_not_command_timer():
     assert int(env._constraint_age.item()) == 0
 
 
-def test_step_in_place_enforces_duty_without_translation_command():
+def test_step_in_place_reports_duty_without_treating_style_as_catastrophe():
     env = LadderLocomotionWarpEnv(1, rung=6, seed=11, device="cpu", episode_length=100)
-    assert env.adaptive_constraint_names == (
-        "cat_slip", "cat_duty", "cat_foot_duty")
+    assert env.adaptive_constraint_names == ("cat_slip",)
+    assert env.cat_term_keys == ("cat_slip", "cat_orient", "cat_qvel", "cat_body")
     env._constraint_age.fill_(env.duty_constraint_grace_steps)
     cf = torch.ones((1, 4))
     scalar = torch.ones(1)
@@ -528,6 +1227,8 @@ def test_step_in_place_enforces_duty_without_translation_command():
     assert float(terms["cat_progress"]) == 0.0
     assert float(terms["cat_duty"]) == pytest.approx(1.0)
     assert float(terms["cat_foot_duty"]) == pytest.approx(1.0)
+    assert "cat_duty" not in env.cat_term_keys
+    assert "cat_foot_duty" not in env.cat_term_keys
 
 
 def test_cycle_duty_treats_early_and_late_swing_pairs_equally():
@@ -597,10 +1298,20 @@ def test_locomotion_rungs_have_one_warm_start_contract(rung):
     assert info["ladder_step_clock"].shape == (2,)
     assert info["ladder_swing_clearance"].shape == (2,)
     assert info["ladder_step_action_score"].shape == (2,)
+    assert info["ladder_foot_activity"].shape == (2,)
+    assert info["ladder_foot_activity_mean"].shape == (2,)
+    assert info["ladder_foot_activity_ema"].shape == (2,)
     assert info["ladder_safe_progress"].shape == (2,)
     assert info["ladder_stance_slip_ratio"].shape == (2,)
     assert info["ladder_move_progress"].shape == (2,)
     assert info["fallrate"].shape == (2,)
+    expected_activity = ((1.0 - info["cycle_duty_by_leg"])
+                         / (1.0 - CAT_FOOT_DUTY_MAX)).clamp(0.0, 1.0).amin(-1)
+    assert torch.allclose(info["ladder_foot_activity"], expected_activity)
+    components = info["reward_components"]
+    ladder_sum = sum(components[name] for name in (
+        "ladder_task_outcome", "ladder_task_constraint", "ladder_task_scaffold"))
+    assert torch.allclose(ladder_sum, info["ladder_task_reward"])
 
 
 @pytest.mark.parametrize("rung", range(24, 30))

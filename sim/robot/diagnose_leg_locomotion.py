@@ -72,9 +72,7 @@ def _stance_target():
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--probe", default="all")
-    args = ap.parse_args()
+    argparse.ArgumentParser().parse_args()
     print("See module docstring for the full findings table and the verdict in "
           "notes/gait-feasibility-verdict.md. This script reproduces each probe.")
     # (probe bodies live in the git history of this session's diagnostic run;

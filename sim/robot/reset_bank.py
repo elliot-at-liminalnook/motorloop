@@ -46,7 +46,7 @@ class BankedAutoResetWrapper:
 
     def reset(self):
         self._cursor = (self._cursor + self._stride) % self._K
-        obs = self.env.reset()
+        _ = self.env.reset()
         self._apply(torch.ones(self.env.nworld, dtype=torch.bool, device=self.env.device))
         return self.env.observe()
 

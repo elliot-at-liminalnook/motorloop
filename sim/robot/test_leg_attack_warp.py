@@ -52,6 +52,22 @@ def test_reward_prefers_selected_hit_and_three_leg_support():
     assert metrics["attack_support"].eq(1).all()
 
 
+def test_attack_credit_is_invariant_to_prescribed_phase():
+    cfg = LegAttackConfig()
+    hit = torch.tensor(((0.02, 0.0, 0.0, 0.0),) * 2)
+    support = torch.tensor(((0.0, 1.0, 1.0, 1.0),) * 2)
+    extension = torch.tensor(((0.01, 0.0, 0.0, 0.0),) * 2)
+    selected = torch.zeros(2, dtype=torch.long)
+    active = torch.ones(2)
+    action = torch.zeros((2, 14))
+    reward, metrics = leg_attack_reward(
+        hit, support, extension, selected, active,
+        torch.tensor((0.05, 0.80)), action, 0.02, cfg)
+    torch.testing.assert_close(reward[0], reward[1])
+    torch.testing.assert_close(
+        metrics["attack_kick_speed"][0], metrics["attack_kick_speed"][1])
+
+
 def test_controller_switch_changes_command_not_physical_state():
     env = LegAttackWarpEnv(4, seed=7, device="cpu", episode_length=8)
     env.set_attack_command(torch.arange(4), True)

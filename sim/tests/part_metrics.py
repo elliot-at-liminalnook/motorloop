@@ -18,7 +18,6 @@ import numpy as np
 # pushes the rotor the wrong way. 30 deg is the "degraded but still driving"
 # mark. Both are used as break thresholds.
 COMMUTATION_INVERT_DEG = 90.0
-COMMUTATION_DEGRADED_DEG = 30.0
 
 
 def wrap_pi(x):

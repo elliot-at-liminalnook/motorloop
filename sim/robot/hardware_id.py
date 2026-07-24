@@ -26,7 +26,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from reality_gap import (default_uncertainty, sample_domain_params, actuator_scale,  # noqa: E402
-                         score_trace_mismatch, log_parity_trace)
+                         log_parity_trace)
 import domain_model as dm  # noqa: E402
 
 SPEEDS = np.linspace(0.0, 160.0, 24)      # wide enough to enter the back-EMF droop region

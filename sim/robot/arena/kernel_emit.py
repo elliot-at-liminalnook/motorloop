@@ -15,7 +15,7 @@ from __future__ import annotations
 import os, sys
 from pathlib import Path
 
-from arena.trace import Tracer, classify  # noqa: E402
+from arena.trace import Tracer  # noqa: E402
 
 _TRACER = None
 _BUILT = False

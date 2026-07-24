@@ -27,11 +27,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 # ----- FAST design (3-D model-field edits) -----
-FAST_NAMES = ("mass_scale", "joint_stiffness", "damping_scale")
 DESIGN_DIM = 3
 # (lo, hi) of the REAL quantity each normalized [0,1] coord maps to.
-FAST_RANGE = {"mass_scale": (0.6, 1.0), "joint_stiffness": (0.0, 25.0),
-              "damping_scale": (0.5, 2.0)}
 
 
 def fast_denorm(d) -> dict:
@@ -100,7 +97,7 @@ def _xp(x):
         if isinstance(x, torch.Tensor):
             return torch
     except ImportError:
-        pass
+        pass  # torch optional: without it x cannot be a Tensor, so numpy is correct
     return np
 
 

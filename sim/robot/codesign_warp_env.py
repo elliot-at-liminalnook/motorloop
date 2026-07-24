@@ -10,6 +10,7 @@ import torch
 
 from design_codec import DESIGN_DIM, apply_fast_mujoco
 from walker_warp_env import WalkerWarpEnv
+from predictive_control import InteractionTrajectoryTarget
 
 
 DEFAULT_DESIGN_BANK = np.asarray([
@@ -60,16 +61,20 @@ class DesignEnsembleWarpEnv:
     architecture_task_dim = DESIGN_DIM
 
     def __init__(self, nworld: int, seed: int = 0, device: str | None = None,
-                 episode_length: int | None = 800, designs=DEFAULT_DESIGN_BANK):
+                 episode_length: int | None = 800, designs=DEFAULT_DESIGN_BANK,
+                 **kwargs):
         designs = np.asarray(designs, dtype=np.float32).reshape(-1, DESIGN_DIM)
         if nworld < len(designs):
             designs = designs[:nworld]
         counts = np.full(len(designs), nworld // len(designs), dtype=int)
         counts[:nworld % len(designs)] += 1
         self.envs = [CodesignWarpEnv(int(count), seed=seed + i, device=device,
-                                     episode_length=episode_length, design=design)
+                                     episode_length=episode_length, design=design,
+                                     **kwargs)
                      for i, (count, design) in enumerate(zip(counts, designs)) if count]
         first = self.envs[0]
+        self.action_semantics = getattr(
+            first, "action_semantics", self.action_semantics)
         self.nworld = nworld
         self.device = first.device
         self.obs_dim, self.priv_dim, self.act_dim = first.obs_dim, first.priv_dim, first.act_dim
@@ -79,15 +84,55 @@ class DesignEnsembleWarpEnv:
         self.model_hash = hashlib.sha256(
             "|".join(env.model_hash for env in self.envs).encode()).hexdigest()[:16]
         self._gen = first._gen
+        self.morphology_token_count = max(env.morphology_token_count for env in self.envs)
+        numeric, kinds, masks = [], [], []
+        for env in self.envs:
+            padding = self.morphology_token_count - env.morphology_token_count
+            numeric.append(torch.nn.functional.pad(
+                env.morphology_tokens, (0, 0, 0, padding)))
+            kinds.append(torch.nn.functional.pad(
+                env.morphology_token_types, (0, padding)))
+            masks.append(torch.nn.functional.pad(
+                env.morphology_token_mask, (0, padding)))
+        self.morphology_tokens = torch.cat(numeric, dim=0)
+        self.morphology_token_types = torch.cat(kinds, dim=0)
+        self.morphology_token_mask = torch.cat(masks, dim=0)
 
     def observe(self):
         return torch.cat([env.observe() for env in self.envs], dim=0)
 
+    @property
+    def qpos(self):
+        return torch.cat([env.qpos for env in self.envs], dim=0)
+
     def privileged(self):
         return torch.cat([env.privileged() for env in self.envs], dim=0)
 
+    def trajectory_state(self):
+        return torch.cat([env.trajectory_state() for env in self.envs], dim=0)
+
+    def interaction_target(self, horizon: int):
+        return InteractionTrajectoryTarget.cat([
+            env.interaction_target(horizon) for env in self.envs])
+
     def reset(self):
+        seed = int(self._gen.initial_seed())
+        for index, env in enumerate(self.envs):
+            env._gen.manual_seed(seed + index)
         return torch.cat([env.reset() for env in self.envs], dim=0)
+
+    @staticmethod
+    def _merge_info(values):
+        first = values[0]
+        if isinstance(first, torch.Tensor):
+            return torch.cat(values, dim=0)
+        if isinstance(first, dict):
+            shared = set(first)
+            for value in values[1:]:
+                shared &= set(value)
+            return {key: DesignEnsembleWarpEnv._merge_info(
+                [value[key] for value in values]) for key in shared}
+        return first
 
     def step(self, action, alpha=1.0, imit_anneal=0.0):
         chunks = action.split([env.nworld for env in self.envs], dim=0)
@@ -96,7 +141,5 @@ class DesignEnsembleWarpEnv:
         obs = torch.cat([result[0] for result in results], dim=0)
         reward = torch.cat([result[1] for result in results], dim=0)
         done = torch.cat([result[2] for result in results], dim=0)
-        keys = results[0][3].keys()
-        info = {key: torch.cat([result[3][key] for result in results], dim=0)
-                for key in keys}
+        info = self._merge_info([result[3] for result in results])
         return obs, reward, done, info

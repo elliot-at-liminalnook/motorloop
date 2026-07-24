@@ -7,7 +7,6 @@ from train_mesh_warp import Actor, Critic, RunningNorm
 
 POLICY_HIDDEN = (512, 256, 128)
 VALUE_HIDDEN = (512, 256, 128)
-FINAL_LAYER_SCALE = 0.01
 
 
 @dataclass

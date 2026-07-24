@@ -29,6 +29,7 @@ import warp as wp
 import mujoco_warp as mjwp
 
 from combat_warp_env import CombatWarpEnv
+from predictive_control import TRAJECTORY_RAW_INTERACTION
 from warplayer.obsreward import RewardConfig
 
 
@@ -58,7 +59,6 @@ class LegAttackConfig:
     strike_speed_weight: float = 1.5
     recovery_speed_weight: float = 0.75
     support_weight: float = 1.5
-    selected_ground_penalty: float = 0.50
     idle_support_weight: float = 0.75
     idle_action_weight: float = 0.02
 
@@ -152,12 +152,15 @@ def leg_attack_reward(
     all_support = support_by_leg.mean(dim=-1)
 
     extension_speed = extension_delta_m[row, leg] / float(control_dt)
-    strike_gate = ((phase >= 0.20) & (phase < 0.65)).to(hit_by_leg.dtype)
-    recovery_gate = 1.0 - strike_gate
+    # Phase remains an optional high-level timing cue and a diagnostic, but it
+    # does not decide when a physically useful motion receives credit.  A hit,
+    # extension, or recovery has the same meaning whenever the controller finds
+    # it effective.
+    del phase
     strike_speed = (extension_speed.clamp_min(0.0) /
-                    cfg.max_extension_speed_m_s).clamp(0.0, 1.0) * strike_gate
+                    cfg.max_extension_speed_m_s).clamp(0.0, 1.0)
     recovery_speed = ((-extension_speed).clamp_min(0.0) /
-                      cfg.max_extension_speed_m_s).clamp(0.0, 1.0) * recovery_gate
+                      cfg.max_extension_speed_m_s).clamp(0.0, 1.0)
     selected_hit_score = (selected_hit / cfg.hit_scale_m).clamp(0.0, 1.0)
     wrong_hit_score = (wrong_hit / cfg.hit_scale_m).clamp(0.0, 1.0)
     active = attack_active.to(hit_by_leg.dtype).clamp(0.0, 1.0)
@@ -169,7 +172,6 @@ def leg_attack_reward(
         + cfg.strike_speed_weight * strike_speed
         + cfg.recovery_speed_weight * recovery_speed
         + cfg.support_weight * support_other
-        - cfg.selected_ground_penalty * selected_support * strike_gate
     )
     idle = cfg.idle_support_weight * all_support - cfg.idle_action_weight * hinge_effort
     reward = active * attacking + (1.0 - active) * idle
@@ -191,7 +193,7 @@ class LegAttackWarpEnv(CombatWarpEnv):
     gait_loaded = False
     action_semantics = "direct_actuator:A12_servos+2_pneumatic:v1"
     observation_semantics = "combat44+attack(active1+leg4+phase_sincos2):v1"
-    reward_semantics = "leg_attack:selected_foot_hit+three_leg_support:v1"
+    reward_semantics = "leg_attack:selected_foot_hit+three_leg_support:phase_free:v2"
 
     def __init__(
         self,
@@ -437,6 +439,13 @@ class LegAttackWarpEnv(CombatWarpEnv):
             self.nworld,
         )
 
+    def trajectory_state(self) -> torch.Tensor:
+        """Add real per-leg opponent contact to the predictive state target."""
+        state = super().trajectory_state()
+        hit_by_leg, _ = self._contact_metrics()
+        state[:, TRAJECTORY_RAW_INTERACTION] = (hit_by_leg > 0.0).to(state.dtype)
+        return state
+
     def step(self, action: torch.Tensor, alpha: float = 1.0,
              imit_anneal: float = 0.0):
         del alpha, imit_anneal
@@ -483,7 +492,6 @@ class LegAttackWarpEnv(CombatWarpEnv):
             if self._episode_length is not None else torch.zeros_like(terminated)
         done = terminated | truncated
         i = self.layer.idx
-        rel = self.xpos[:, i.Bt] - self.xpos[:, i.At]
         selected_foot = self._geom_xpos[
             torch.arange(self.nworld, device=self.device), self._foot_gids[leg_before]]
         target_distance = torch.linalg.vector_norm(
@@ -546,6 +554,10 @@ class LegAttackWarpEnv(CombatWarpEnv):
         resample = done | ((self._attack_timer <= 0) & curriculum_owned)
         self._sample_commands(resample)
         self._randomize_target_layout(done)
+        if bool(done.any()):
+            self._reset_opponent_state(done)
+        if bool(done.any()):
+            self._reset_opponent_state(done)
         self._reset_worlds(done)
         with wp.ScopedDevice(self._wp_device):
             mjwp.forward(self._wm, self._wd)

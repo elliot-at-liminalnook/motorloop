@@ -43,7 +43,8 @@ def build_runner(args):
         return LocalRunner(kernel=args.kernel, out=os.environ.get("CODESIGN_OUT", "."),
                            lean=args.lean, envs=args.envs, batch=args.batch, tiny=args.tiny)
     return PodRunner(Pod(), out="/root/proj/out", lean=args.lean, envs=args.envs,
-                     batch=args.batch, tiny=args.tiny)      # pod provision/teardown handled by Run.go (Phase 8)
+                     batch=args.batch, tiny=args.tiny,
+                     budget=args.budget)  # pod provision/teardown handled by Run.go (Phase 8)
 
 
 def make_parser():

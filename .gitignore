@@ -47,3 +47,6 @@ sim/cocotb/build/
 sim/cocotb/sim_build/
 sim/cocotb/*.result.xml
 *.vcd
+
+# third-party paper PDFs: keep out of git history (see audit: committed-binary class)
+references/

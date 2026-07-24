@@ -33,11 +33,6 @@ import numpy as np
 import part_metrics as M
 from bench_factory import expected_init_time, foc, platform
 
-FRAME = (
-    "Simulation vs the device models (not silicon); relative comparison with a "
-    "fixed FOC controller and placeholder motor gains (Q1) - orderings/ratios "
-    "are meaningful, absolute thresholds are illustrative."
-)
 
 # The clean isolated-variable angle pair (verified: differ only in angle_name).
 SENSOR_A = "zonri_drv8301"   # AS5600 (PWM, ~90 us latency)
@@ -51,8 +46,6 @@ SCHEME_LABEL = {SCHEME_SIMULTANEOUS: "ADS9224R (simultaneous)",
                 SCHEME_SEQUENTIAL: "MCP3208 (sequential skew)"}
 
 # The whole-BOM pair, for the system snapshot (T5).
-BOM_DEFAULT = "zonri_drv8301"      # DRV8301 + MCP3208 + AS5600
-BOM_HP = "ti_reference_hp"          # DRV8323RS + ADS9224R + AS5047P
 
 
 # --------------------------------------------------------------------------- #

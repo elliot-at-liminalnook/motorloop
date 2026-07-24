@@ -26,8 +26,12 @@ def main():
     parser.add_argument("--alpha", type=float, required=True)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
-    base = torch.load(args.base, map_location="cpu", weights_only=False)
-    other = torch.load(args.other, map_location="cpu", weights_only=False)
+    base = torch.load(args.base, map_location="cpu", weights_only=True)
+    other = torch.load(args.other, map_location="cpu", weights_only=True)
+    if base.get("contract") != other.get("contract"):
+        raise SystemExit(
+            "refusing to interpolate checkpoints with different contracts: "
+            f"{base.get('contract')} vs {other.get('contract')}")
     torch.save(_blend_tree(base, other, args.alpha), args.out)
     print(f"saved {args.out} alpha={args.alpha}")
 

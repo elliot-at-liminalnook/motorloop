@@ -37,6 +37,8 @@ SITE_DOCUMENTS = (
     "notes/blender-agent-workflow.md",
     "notes/pre-gpu-test-entrypoint.md",
     "notes/training-ladder-runbook.md",
+    "notes/predictive-universal-controller.md",
+    "notes/predictive-transformer-proof-2026-07-15.md",
     "notes/architecture.md",
     "notes/verification-plan.md",
     "notes/status-matrix-generated.md",

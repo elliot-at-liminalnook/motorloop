@@ -38,8 +38,9 @@ LEG_GEOMS = FOOT_GEOMS + ["aux_1_geom", "aux_2_geom", "aux_3_geom", "aux_4_geom"
 
 def _ant_xml() -> str:
     import gymnasium
-    return open(glob.glob(os.path.dirname(gymnasium.__file__)
-                          + "/envs/mujoco/assets/ant.xml")[0]).read()
+    with open(glob.glob(os.path.dirname(gymnasium.__file__)
+                        + "/envs/mujoco/assets/ant.xml")[0]) as f:
+        return f.read()
 
 
 def build_scene() -> str:
@@ -238,5 +239,5 @@ try:
     from gymnasium.envs.registration import register
     register(id="MotorloopDodge-v0", entry_point="dodge_env:make_dodge_env",
              max_episode_steps=1000)
-except Exception:
-    pass
+except ImportError:
+    pass  # gymnasium not installed: registration is optional; direct construction still works

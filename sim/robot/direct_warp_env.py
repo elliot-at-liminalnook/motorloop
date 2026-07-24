@@ -7,7 +7,6 @@ import hashlib
 
 import mujoco
 import mujoco_warp as mjwp
-import numpy as np
 import torch
 import warp as wp
 

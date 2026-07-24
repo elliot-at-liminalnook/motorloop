@@ -31,7 +31,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from gen_mesh_robot_mjcf import GEARS, WFREE, SERVO_STALL_NM, SERVO_FREE_RAD_S  # noqa: E402
+from gen_mesh_robot_mjcf import GEARS, WFREE, SERVO_FREE_RAD_S  # noqa: E402
 from robot_design import LEG_MASS, SERVO_MASS, TARGET, TORSO_MASS  # noqa: E402
 
 LEGS = ("FL", "FR", "RL", "RR")
@@ -47,7 +47,6 @@ def build_walker(stance_len=0.20, stance_width=0.162, lift_range=0.0, floor=True
     """4-leg walker. stance_len/width = full mount spacing (m). lift_range=0
     disables the ankle-lift (reproduces the no-lift combat limitation)."""
     hx, hy = stance_len / 2, stance_width / 2
-    thigh = 0.16          # yaw-mount to pitch axis (matches housing span)
     shin = STANCE_Z - 0.02  # pitch axis down to foot at nominal
     raw_parts = (0.30, 0.655, 0.655, 0.05)
     yaw_structure, upper_structure, lower_structure, foot_structure = [
@@ -159,9 +158,6 @@ def _feasibility(stance_len, stance_width, lift_range, verbose=False):
     target = {}
 
     def servo():
-        tau = np.zeros(nu)
-        for name, a in aid.items():
-            jn = name.rsplit("_", 1)[0]           # FL_yaw_m -> FL_yaw... fix below
         for L in LEGS:
             for kind, kp in (("hip_yaw", 40.0), ("pitch", 40.0), ("lift", 300.0)):
                 jn = f"{L}_{kind}" if kind != "pitch" else f"{L}_pitch"
@@ -225,7 +221,6 @@ def _feasibility(stance_len, stance_width, lift_range, verbose=False):
         target["FL_lift"] = 0.0
     run(0.6)
     planted = contact("FL")
-    dx = d.qpos[0]
 
     ok = bool(cleared and others_down and stable and planted)
     return dict(ok=ok, fl_z=fl_z, cleared=cleared, others_down=others_down,

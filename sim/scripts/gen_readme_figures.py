@@ -520,7 +520,6 @@ def fig_thermal(params, bldcsim, out):
 # ---------------------------------------------------------------------------
 
 def fig_cogging(params, bldcsim, out):
-    t_init = expected_init_time(params)
     clean = steady_bench(params, bldcsim, target=60, seconds=1.2)
     rough = steady_bench(params, bldcsim,
                          cfg=realism(params, "mechanical"),

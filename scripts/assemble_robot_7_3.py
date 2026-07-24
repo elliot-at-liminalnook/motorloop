@@ -823,8 +823,8 @@ def annotate_frames(legs: list[dict], dims: dict) -> None:
                 "-annotate", f"+{ax + 8}+{ay + 5}", f" {name} "]
     cmd += ["-pointsize", "13", "-undercolor", "#000000cc", "-fill", "#cfe2ff",
             "-annotate", f"+14+{RES_Y - 12}",
-            " parts map: FL leg labeled; FR/RR mirrored across the sagittal plane; "
-            "rear legs face aft  |  frame 1 (stand) "]
+            (" parts map: FL leg labeled; FR/RR mirrored across the sagittal plane; "
+             "rear legs face aft  |  frame 1 (stand) ")]
     cmd += [str(PARTS_MAP_OUT)]
     subprocess.run(cmd, check=True, capture_output=True)
 
@@ -1123,27 +1123,27 @@ def physics_json(legs: list[dict], dims: dict) -> dict:
             },
         },
         "assembly_notes": [
-            "Mounting per task spec: leg-local -Y = world down, swing axis (leg-local Z) = "
-            "body lateral (fore-aft stepping), yaw axis vertical at the attachment.",
-            "AMBIGUITY (arm direction): the spec fixes axes but not the sign of the leg's +X "
-            "arm; front legs point the arm forward, rear legs are rotated 180 about vertical "
-            "(arm aft) for fore/aft symmetry -- rear blades guard the rear.",
-            "AMBIGUITY (stride-via-yaw): with the prescribed mounting the yaw arm points "
-            "fore-aft, so a symmetric yaw sweep at neutral moves the foot mostly LATERALLY; "
-            "fore-aft stride in this animation comes from the +/-15 pitch swing while the "
-            "+/-25 yaw sweep provides the design-intent workspace cone. TRUE stride-via-yaw "
-            "would mount the arm laterally (outboard) instead -- flagged for the design pass.",
-            "AMBIGUITY (task brief said 'worm along X'): the worm SPIN AXIS is leg-local +Y "
-            "(rig + json authoritative); the worm/housing assembly is OFFSET along -X from "
-            "the knee. Interpreted as the latter.",
-            "MIRRORING: FR/RR are mirrored by negating leg-local z in the mesh data (+ normal "
-            "flip). Valid because the mechanism is PLANAR (all axes +/-Z, all pivots at z=0): "
-            "mirrored legs run identical joint values; only cosmetic lateral asymmetries flip.",
-            "Sign conventions (swing forward / yaw outboard) were verified NUMERICALLY at "
-            "build time by perturbing each joint and checking the foot displacement.",
+            ("Mounting per task spec: leg-local -Y = world down, swing axis (leg-local Z) = "
+             "body lateral (fore-aft stepping), yaw axis vertical at the attachment."),
+            ("AMBIGUITY (arm direction): the spec fixes axes but not the sign of the leg's +X "
+             "arm; front legs point the arm forward, rear legs are rotated 180 about vertical "
+             "(arm aft) for fore/aft symmetry -- rear blades guard the rear."),
+            ("AMBIGUITY (stride-via-yaw): with the prescribed mounting the yaw arm points "
+             "fore-aft, so a symmetric yaw sweep at neutral moves the foot mostly LATERALLY; "
+             "fore-aft stride in this animation comes from the +/-15 pitch swing while the "
+             "+/-25 yaw sweep provides the design-intent workspace cone. TRUE stride-via-yaw "
+             "would mount the arm laterally (outboard) instead -- flagged for the design pass."),
+            ("AMBIGUITY (task brief said 'worm along X'): the worm SPIN AXIS is leg-local +Y "
+             "(rig + json authoritative); the worm/housing assembly is OFFSET along -X from "
+             "the knee. Interpreted as the latter."),
+            ("MIRRORING: FR/RR are mirrored by negating leg-local z in the mesh data (+ normal "
+             "flip). Valid because the mechanism is PLANAR (all axes +/-Z, all pivots at z=0): "
+             "mirrored legs run identical joint values; only cosmetic lateral asymmetries flip."),
+            ("Sign conventions (swing forward / yaw outboard) were verified NUMERICALLY at "
+             "build time by perturbing each joint and checking the foot displacement."),
             "Masses are the 7-1 leg-json placeholders; torso mass TODO.",
-            "The animation is keyframed kinematics (frame_set + empties), NOT a physics sim; "
-            "feet skim up to ~30 mm above the floor mid-gait since body height is fixed.",
+            ("The animation is keyframed kinematics (frame_set + empties), NOT a physics sim; "
+             "feet skim up to ~30 mm above the floor mid-gait since body height is fixed."),
         ],
     }
 

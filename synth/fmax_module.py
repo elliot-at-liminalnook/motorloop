@@ -124,7 +124,7 @@ synth_ecp5 -top ring_{module} -json {json_out}
                             stderr=subprocess.STDOUT)
         if ry.returncode != 0 or not json_out.exists():
             return {"module": module, "fmax": None, "err": "yosys"}
-        rp = subprocess.run(
+        _ = subprocess.run(
             ["nextpnr-ecp5", DEVICE, "--package", PACKAGE, "--json",
              str(json_out), "--lpf-allow-unconstrained", "--freq", "300"],
             cwd=ROOT, stdout=f, stderr=subprocess.STDOUT)

@@ -45,8 +45,6 @@ def _run_reference(bldcsim, params, target, steps=8000):
     """Python FOC controller driving the averaged plant; ideal angle/speed
     (the executable spec does not model sensor imperfections)."""
     pp = int(params.value("motor.pole_pairs"))
-    half = int(round(params.value("rtl.clock_frequency")
-                     / (2 * params.value("pwm.frequency"))))
     align = int(params.value("foc.align_offset"))
     lpa = _lpa(params)
     dt = 1.0 / params.value("pwm.frequency")
@@ -74,7 +72,7 @@ def _run_reference(bldcsim, params, target, steps=8000):
         ia, ib, _ = plant.currents_a
         theta16 = (((int(round(plant.theta_rad * pp * 4096 / (2 * math.pi)))
                      + align) & 0xFFF) << 4) & 0xFFFF
-        (da, db, dc), _id, _iq = ctl.step(
+        (da, db, dc), _, _ = ctl.step(
             int(ia * lpa), int(ib * lpa), theta16,
             int(round(plant.omega_rad_s)), target)
         plant.set_averaged_phase([da / ctl.half, db / ctl.half,

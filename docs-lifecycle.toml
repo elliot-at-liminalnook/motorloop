@@ -163,6 +163,38 @@ canonical_for = "31-rung training state, resume, and shutdown handoff"
 header_required = true
 
 [[overrides]]
+path = "notes/training-objective-contract.md"
+status = "current"
+kind = "training objective contract"
+audience = "robot-learning contributors"
+canonical_for = "reward roles, physical constraints, scaffolds, diagnostics, and promotion-gate eligibility"
+header_required = true
+
+[[overrides]]
+path = "notes/universal-command-contract.md"
+status = "active"
+kind = "observation contract"
+audience = "robot-learning contributors"
+canonical_for = "commands-only policy observations, per-rung command signatures, and rung invisibility"
+header_required = true
+
+[[overrides]]
+path = "notes/predictive-universal-controller.md"
+status = "active"
+kind = "architecture and training contract"
+audience = "robot-learning contributors"
+canonical_for = "morphology-token conditioning, self-supervised trajectory prediction, and prediction-gradient control"
+header_required = true
+
+[[overrides]]
+path = "notes/predictive-transformer-proof-2026-07-15.md"
+status = "historical"
+kind = "dated result"
+audience = "robot-learning contributors"
+canonical_for = "first recurrent-versus-Transformer future-predictor ablation"
+header_required = true
+
+[[overrides]]
 path = "notes/robot-hardware-contract.md"
 status = "current"
 kind = "hardware contract"

@@ -41,8 +41,8 @@ def pytest_configure(config):
         print(f"  Default platform (active unless a scenario overrides): "
               f"{DEFAULT_PLATFORM}")
         print("=" * 78)
-    except Exception:
-        pass
+    except ImportError:
+        pass  # bench_factory optional (pre-stage-3.2 checkout): banner extras only, tests unaffected
 
 
 @pytest.fixture(scope="session")
@@ -59,6 +59,9 @@ def bldcsim():
             cwd=PROJECT_ROOT,
             capture_output=True,
             text=True,
+            # build against THIS interpreter: a bench built for the system
+            # python is unimportable from a venv with a different ABI
+            env={**os.environ, "PYTHON": sys.executable},
         )
     elif not any(BUILD_DIR.glob("bldcsim*.so")):
         pytest.fail(

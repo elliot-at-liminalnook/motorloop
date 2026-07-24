@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: MIT
 """Standalone plain-MuJoCo versus MuJoCo-Warp trajectory parity gate."""
 
-import sys
 from pathlib import Path
 
 import pytest

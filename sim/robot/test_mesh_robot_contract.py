@@ -12,7 +12,6 @@ joints/leg + 2 couplings/leg, asserted exactly.
 """
 from __future__ import annotations
 
-import copy
 import math
 import re
 import sys
@@ -64,11 +63,12 @@ def test_timestep_is_fleet_standard():
 def test_quartic_fit_matches_closed_form():
     """Gate (a): the emitted polynomials track the analytic slider-crank over the
     full knee ROM — independently re-derived here from the closed forms."""
-    import gen_mesh_robot_mjcf as g
-    lo, hi = g.KNEE_ROM
+    from gen_mesh_robot_mjcf import (KNEE_ROM, POLY_SLIDE, POLY_TOE, conrod_psi,
+                                     poly_eval)
+    lo, hi = KNEE_ROM
     phis = np.linspace(lo, hi, 1001)
-    rs = max(abs(g.poly_eval(g.POLY_SLIDE, p) - g.slider_crank_s(p)) for p in phis)
-    rp = max(abs(g.poly_eval(g.POLY_TOE, p) - g.conrod_psi(p)) for p in phis)
+    rs = max(abs(poly_eval(POLY_SLIDE, p) - slider_crank_s(p)) for p in phis)
+    rp = max(abs(poly_eval(POLY_TOE, p) - conrod_psi(p)) for p in phis)
     assert rs < 5e-4, f"slide fit residual {rs * 1e3:.3f} mm"
     assert rp < math.radians(0.3), f"toe fit residual {math.degrees(rp):.3f} deg"
 

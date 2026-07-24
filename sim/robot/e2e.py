@@ -50,8 +50,8 @@ class GpuSampler(threading.Thread):
                 mem, util = (int(x) for x in o.stdout.strip().splitlines()[0].split(","))
                 self.available = True
                 self.max_mem = max(self.max_mem, mem); self.max_util = max(self.max_util, util)
-            except Exception:
-                pass
+            except (OSError, subprocess.TimeoutExpired, ValueError, IndexError):
+                pass  # no nvidia-smi / no GPU / odd output: sampler is best-effort, polls again in 0.5 s
             time.sleep(0.5)
 
 
@@ -69,8 +69,9 @@ def run_stage(name, cmd, env):
             try:
                 d = dict(kv.split("=", 1) for kv in line[len("METRIC "):].split())
                 metrics[d.pop("stage", "?")] = d
-            except Exception:
-                pass
+            except ValueError:
+                print(f"[e2e] WARNING: unparseable METRIC line dropped: {line}",
+                      file=sys.stderr, flush=True)
     proc.wait(); samp.stop = True; samp.join(timeout=2)
     wall = time.time() - t
     rec = {"name": name, "cmd": " ".join(cmd), "wall_s": round(wall, 1),

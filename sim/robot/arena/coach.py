@@ -20,7 +20,7 @@ true objective (winning the exchange).
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 from arena.schedule import Schedule  # noqa: E402

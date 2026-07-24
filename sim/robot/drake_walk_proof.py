@@ -30,10 +30,6 @@ def _build_model(params: dict) -> mujoco.MjModel:
     return mujoco.MjModel.from_xml_string(build_walker(params, floor=False, sea=False))
 
 
-# Compatibility for the old private API used by older notebooks.
-_build_plant = _build_model
-
-
 def footholds_for(params: dict) -> dict[str, np.ndarray]:
     return {
         leg: np.array(

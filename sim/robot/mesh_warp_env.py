@@ -93,6 +93,151 @@ def _pd_ctrl(
     ctrl[w, i] = wp.clamp(tau / gear[i], -lim, lim)
 
 
+# --- shared-bus electrical model (opt-in, "+shared_bus_v2" action semantics) --
+# Twelve independent stall envelopes are not simultaneously deliverable through
+# one battery and distribution: per-servo currents sum on the bus, the supply
+# sags under load, and available torque scales with voltage. Datasheet anchors
+# (ST3215-HS at 12 V): 2.4 A locked rotor, 0.24 A no-load, per servo. Supply
+# parameters are deliberately CONSERVATIVE RANDOMIZED RANGES until the battery
+# and distribution are bench-identified (robot-hardware-contract.md).
+SERVO_STALL_CURRENT = 2.4      # A per servo at locked rotor, 12 V point
+SERVO_NO_LOAD_CURRENT = 0.24   # A per servo unloaded, 12 V point
+BUS_NOMINAL_VOLTAGE = 12.0     # modeled datasheet operating point
+BUS_VOLTAGE_RANGE = (10.8, 12.6)        # V, sagged-to-fresh pack window
+BUS_RESISTANCE_RANGE = (0.04, 0.15)     # ohm, source + wiring + connectors
+BUS_CURRENT_LIMIT_RANGE = (15.0, 30.0)  # A, protection/BEC budget ceiling
+
+
+def adopt_warp_device(env, device: str | None) -> None:
+    """One home for the device/stream discipline shared by every warp env:
+    torch adopts warp's stream so eager torch ops and graph launches are
+    totally ordered on ONE stream — no cross-stream syncs anywhere."""
+    wp.init()
+    use_cuda = (torch.cuda.is_available() if device is None
+                else str(device).startswith("cuda"))
+    env.device = torch.device("cuda:0" if use_cuda else "cpu")
+    env._wp_device = wp.get_device("cuda:0" if use_cuda else "cpu")
+    if env._wp_device.is_cuda:
+        torch.cuda.set_stream(torch.cuda.ExternalStream(
+            wp.get_stream(env._wp_device).cuda_stream, device=env.device))
+
+
+def capture_substep_graph(env) -> None:
+    """CUDA-graph-capture env._substep x frame_skip (eager on CPU)."""
+    env._graph = None
+    if env._wp_device.is_cuda:
+        with wp.ScopedDevice(env._wp_device):
+            env._substep()                     # load modules before capture
+            wp.synchronize_device(env._wp_device)
+            with wp.ScopedCapture() as capture:
+                for _ in range(env._fs):
+                    env._substep()
+            env._graph = capture.graph
+
+
+def sample_bus_parameters(nworld: int, gen: torch.Generator, device,
+                          overrides: dict | None = None) -> dict:
+    """Per-world conservative supply draw; overridable once bench-measured."""
+    def draw(low: float, high: float) -> torch.Tensor:
+        return low + (high - low) * torch.rand(
+            nworld, generator=gen, device=device)
+
+    record = {
+        "voltage": draw(*BUS_VOLTAGE_RANGE),
+        "resistance": draw(*BUS_RESISTANCE_RANGE),
+        "current_limit": draw(*BUS_CURRENT_LIMIT_RANGE),
+    }
+    for name, value in (overrides or {}).items():
+        if name not in record:
+            raise ValueError(f"unknown bus parameter override {name!r}")
+        record[name] = torch.as_tensor(
+            value, dtype=torch.float32, device=device).expand(nworld).clone()
+    return record
+
+
+@wp.kernel
+def _bus_limit(
+    ctrl: wp.array2d(dtype=wp.float32),
+    nu: wp.int32,
+    stall_current: wp.float32,
+    no_load_current: wp.float32,
+    nominal_voltage: wp.float32,
+    voltage: wp.array(dtype=wp.float32),
+    resistance: wp.array(dtype=wp.float32),
+    current_limit: wp.array(dtype=wp.float32),
+    alpha: wp.array(dtype=wp.float32),
+):
+    """Robot-wide electrical budget applied after per-joint PD torque.
+
+    A per-joint current proxy (linear in torque fraction between no-load and
+    locked rotor) sums across the bus; the supply droops V = V0 - I*R and
+    torque authority scales with voltage, never above the nominal point; a
+    hard bus current limit rescales all joints together. Gated by the same
+    alpha curriculum as the torque-speed derate.
+    """
+    w = wp.tid()
+    floor = no_load_current * wp.float32(nu)
+    torque_current = wp.float32(0.0)
+    for i in range(nu):
+        torque_current += (stall_current - no_load_current) * wp.abs(ctrl[w, i])
+    total = floor + torque_current
+    volts = voltage[w] - total * resistance[w]
+    scale = wp.clamp(volts / nominal_voltage, 0.0, 1.0)
+    if total > current_limit[w]:
+        # Only the torque-producing current above the no-load floor responds
+        # to torque scaling, so the budget applies to that headroom.
+        headroom = wp.max(current_limit[w] - floor, wp.float32(0.0))
+        scale = wp.min(scale, headroom / wp.max(torque_current, wp.float32(1.0e-6)))
+    scale = 1.0 - alpha[0] * (1.0 - scale)
+    for i in range(nu):
+        ctrl[w, i] = ctrl[w, i] * scale
+
+
+ACTION_SEMANTICS_V1 = "pd_target@50hz:lowpass+torque_speed_v1"
+ACTION_SEMANTICS_SHARED_BUS = (
+    "pd_target@50hz:lowpass+torque_speed+shared_bus_v2")
+
+
+def attach_shared_bus(env, power_model: str, params: dict | None) -> None:
+    """Wire the opt-in shared-bus model into a PD-kernel environment.
+
+    Must run after the env's torch generator exists and before CUDA graph
+    capture.  Enabling changes the action-semantics contract, so v1
+    checkpoints correctly refuse to resume into the new physics.
+    """
+    if power_model not in ("off", "shared_bus"):
+        raise ValueError(f"unknown power model {power_model!r}")
+    env._power_model = power_model
+    env._bus_wp = None
+    if power_model == "off":
+        return
+    # A dedicated generator: supply sampling must not consume draws from the
+    # env's main stream, or enabling the bus would silently change every
+    # reset/command draw relative to an identically seeded plain env.
+    bus_generator = torch.Generator(device=env.device)
+    bus_generator.manual_seed(int(env._gen.initial_seed()) + 977_351)
+    record = sample_bus_parameters(env.nworld, bus_generator, env.device, params)
+    env.power_model_record = {
+        "model": "shared_bus_v2",
+        **{name: {"min": float(value.min()), "max": float(value.max())}
+           for name, value in record.items()},
+    }
+    with wp.ScopedDevice(env._wp_device):
+        env._bus_wp = tuple(
+            wp.array(record[name].detach().cpu().numpy(), dtype=wp.float32)
+            for name in ("voltage", "resistance", "current_limit"))
+    env.action_semantics = ACTION_SEMANTICS_SHARED_BUS
+
+
+def launch_bus_limit(env) -> None:
+    voltage, resistance, current_limit = env._bus_wp
+    wp.launch(_bus_limit, dim=env.nworld,
+              inputs=[env._wd.ctrl, env._nu, SERVO_STALL_CURRENT,
+                      SERVO_NO_LOAD_CURRENT, BUS_NOMINAL_VOLTAGE,
+                      voltage, resistance, current_limit, env._alpha_wp],
+              device=env._wp_device)
+
+
 def _poly(c, x):
     """Horner eval of ascending polycoef c0..c4 (mesh_commanded_env lines 249-253)."""
     return (((c[4] * x + c[3]) * x + c[2]) * x + c[1]) * x + c[0]
@@ -130,16 +275,10 @@ class MeshWarpEnv:
     def __init__(self, nworld: int, seed: int = 0, device: str | None = None,
                  frame_skip: int = FRAME_SKIP, episode_length: int | None = None,
                  nconmax: int | None = None, njmax: int | None = 128,
-                 gait_path: Path | str = REFERENCE_GAIT):
-        wp.init()
-        use_cuda = torch.cuda.is_available() if device is None else str(device).startswith("cuda")
-        self.device = torch.device("cuda:0" if use_cuda else "cpu")
-        self._wp_device = wp.get_device("cuda:0" if use_cuda else "cpu")
-        if self._wp_device.is_cuda:
-            # torch adopts warp's stream: eager torch ops and graph launches are
-            # totally ordered on ONE stream — no cross-stream syncs anywhere.
-            torch.cuda.set_stream(torch.cuda.ExternalStream(
-                wp.get_stream(self._wp_device).cuda_stream, device=self.device))
+                 gait_path: Path | str = REFERENCE_GAIT,
+                 power_model: str = "off",
+                 power_model_params: dict | None = None):
+        adopt_warp_device(self, device)
 
         model_xml = build_mesh_robot()
         self.model_hash = hashlib.sha256(model_xml.encode()).hexdigest()[:16]
@@ -212,6 +351,8 @@ class MeshWarpEnv:
         # --- per-world state buffers (torch-owned) ------------------------------
         self._gen = torch.Generator(device=dev)
         self._gen.manual_seed(seed)
+        self.action_semantics = ACTION_SEMANTICS_V1
+        attach_shared_bus(self, power_model, power_model_params)
         self._cmd = torch.zeros((nworld, 3), device=dev)
         self._timer = torch.zeros(nworld, dtype=torch.long, device=dev)
         self._t = torch.zeros(nworld, dtype=torch.long, device=dev)
@@ -222,16 +363,7 @@ class MeshWarpEnv:
         self._pair_b = ft([0.0, 1.0, 1.0, 0.0])            # diagonal pair B = (FR, RL)
         self._gait = load_reference_gait(gait_path, self.joint_names, dev)
 
-        # --- CUDA graph capture (CPU runs the same sequence eagerly) ------------
-        self._graph = None
-        if self._wp_device.is_cuda:
-            with wp.ScopedDevice(self._wp_device):
-                self._substep()                            # load modules before capture
-                wp.synchronize_device(self._wp_device)
-                with wp.ScopedCapture() as cap:
-                    for _ in range(self._fs):
-                        self._substep()
-                self._graph = cap.graph
+        capture_substep_graph(self)
         self.reset()                                       # also repairs the warmup step above
 
     # ------------------------------------------------------------------ plumbing
@@ -261,6 +393,8 @@ class MeshWarpEnv:
                           self._qa_wp, self._da_wp, self._kp_wp, self._wfree_wp,
                           self._gear_wp, self._alpha_wp, self._wd.ctrl],
                   device=self._wp_device)
+        if self._bus_wp is not None:
+            launch_bus_limit(self)
         mjwp.step(self._wm, self._wd)
 
     def _run_physics(self):
@@ -399,15 +533,11 @@ class MeshWarpEnv:
         pose_dev = ((q[:, self._qa] - self._stand) ** 2).sum(-1)
         progress_c = progress.clamp(-cmd_norm, cmd_norm) / SPEC.MESH_VMAX
         phase = (self._t.float() * dt * SPEC.CLOCK_HZ) % 1.0
-        swing_a = (phase < 0.5).float().unsqueeze(-1)
-        want = self._pair_a * swing_a + self._pair_b * (1.0 - swing_a)
         cf = contact.float()
-        clock_bonus = (want * (1.0 - cf) + (1.0 - want) * cf).mean(-1)
         reward_components = {
             "tracking": SPEC.TRACK_W * track,
             "upright": SPEC.UPRIGHT_W * up,
             "alive": torch.full_like(track, 0.1),
-            "gait_clock": SPEC.CLOCK_W * active * clock_bonus,
             "alignment": SPEC.ALIGN_W * active * align.clamp(-1.0, 1.0),
             "progress": SPEC.PROGRESS_W * active * progress_c,
             "airtime": SPEC.AIRTIME_W * air_rwd
@@ -522,8 +652,6 @@ class EvalTelemetry:
                      "foot_duty_ema", "cycle_duty", "foot_cycle_duty",
                      "motion_prior",
                      "fallrate",
-                     "hop_peak", "hop_peak_delta", "hop_airborne", "hop_landed",
-                     "hop_stable_landing",
                      "cat_slip", "cat_orient", "cat_qvel", "cat_progress",
                      "cat_duty", "cat_foot_duty", "cat_support", "cat_body",
                      "attack_selected_hit", "attack_wrong_hit", "attack_support",
@@ -535,6 +663,8 @@ class EvalTelemetry:
                      "ladder_heading_error", "ladder_heading_score",
                      "ladder_step_clock", "ladder_swing_clearance",
                      "ladder_worst_swing_clearance", "ladder_step_action_score",
+                     "ladder_foot_activity", "ladder_foot_activity_mean",
+                     "ladder_foot_activity_ema",
                      "ladder_safe_progress", "ladder_stance_slip_ratio",
                      "ladder_goal_distance", "ladder_goal_progress", "ladder_goal_hit",
                      "ladder_stop_speed", "ladder_stop_score", "ladder_move_progress",
@@ -572,6 +702,9 @@ class EvalTelemetry:
         self._pa = [z() for _ in range(5)]
         self._pb = [z() for _ in range(5)]
         self._pn = 0
+        self._contact_pattern_counts = torch.zeros(16, device=device)
+        self._contact_sum = torch.zeros(4, device=device)
+        self._contact_outer = torch.zeros((4, 4), device=device)
         self._reward_component_samples: dict[str, list[torch.Tensor]] = {}
         self._actuator_samples: dict[str, list[torch.Tensor]] = {}
         self._simulation_samples: dict[str, list[torch.Tensor]] = {}
@@ -623,6 +756,11 @@ class EvalTelemetry:
             sums[0] += x.sum(); sums[1] += y.sum(); sums[2] += (x * y).sum()
             sums[3] += (x * x).sum(); sums[4] += (y * y).sum()
         self._pn += n
+        contact_binary = (cf > 0.5).to(torch.long)
+        pattern = (contact_binary * contact_binary.new_tensor((1, 2, 4, 8))).sum(-1)
+        self._contact_pattern_counts.add_(torch.bincount(pattern, minlength=16))
+        self._contact_sum.add_(cf.sum(dim=0))
+        self._contact_outer.add_(cf.T @ cf)
         for name, value in info.get("reward_components", {}).items():
             self._reward_component_samples.setdefault(name, []).append(
                 value.detach().reshape(-1))
@@ -712,6 +850,13 @@ class EvalTelemetry:
             means = self._vector_sums[source] / cnt
             for leg, value in zip(self.LEG_NAMES, means):
                 out[f"{prefix}_{leg}"] = value.item()
+        per_leg_air = [1.0 - out[f"duty_{leg}"] for leg in self.LEG_NAMES
+                       if f"duty_{leg}" in out]
+        if len(per_leg_air) == len(self.LEG_NAMES):
+            out["foot_air_fraction_min"] = min(per_leg_air)
+            out["foot_air_fraction_max"] = max(per_leg_air)
+            out["foot_air_fraction_balance"] = (
+                min(per_leg_air) / max(max(per_leg_air), 1.0e-9))
         out["reward"] = (self._reward / n).item()
         out["duty"] = (self._duty / n).item()
         out["catrate"] = (self._catrate / n).item()
@@ -719,6 +864,26 @@ class EvalTelemetry:
         out["air"] = (self._td_air.item() / cnt) if cnt > 0 else 0.0
         pn = max(self._pn, 1)
         out["diagsync"] = 0.5 * (self._corr(self._pa, pn) + self._corr(self._pb, pn))
+        pattern_total = self._contact_pattern_counts.sum().clamp_min(1.0)
+        pattern_probability = self._contact_pattern_counts / pattern_total
+        nonzero = pattern_probability > 0.0
+        entropy = -(pattern_probability[nonzero]
+                    * pattern_probability[nonzero].log()).sum()
+        out["contact_pattern_entropy"] = (
+            entropy / float(np.log(len(self._contact_pattern_counts)))).item()
+        out["contact_pattern_count"] = int((self._contact_pattern_counts > 0).sum())
+        out["contact_pattern_distribution"] = {
+            f"{index:04b}": float(probability)
+            for index, probability in enumerate(pattern_probability)
+            if probability > 0.0
+        }
+        contact_mean = self._contact_sum / pn
+        contact_covariance = self._contact_outer / pn - contact_mean[:, None] * contact_mean[None, :]
+        contact_scale = torch.sqrt(
+            contact_mean * (1.0 - contact_mean)).clamp_min(1.0e-8)
+        contact_correlation = contact_covariance / (
+            contact_scale[:, None] * contact_scale[None, :])
+        out["contact_correlation_matrix"] = contact_correlation.cpu().tolist()
         if "xprogress" in out and "speed" in out:
             out["forward_speed_fraction"] = (
                 out["xprogress"] / max(abs(out["speed"]), 1.0e-6))
@@ -735,6 +900,30 @@ class EvalTelemetry:
             row["absolute_mean_share"] = abs(row.get("mean", 0.0)) / max(
                 component_scale, 1.0e-12)
         out["reward_components"] = reward_components
+        role_totals = {role: 0.0 for role in ("outcome", "constraint", "efficiency", "scaffold")}
+        scaffold_names = {
+            "airtime", "clearance", "gait_clock", "imitation", "motion_prior",
+            "pose_penalty", "ladder_task_scaffold",
+        }
+        constraint_names = {
+            "alive", "upright", "fall_penalty", "bad_landing_penalty",
+            "ladder_task_constraint",
+        }
+        for name, row in reward_components.items():
+            mean = abs(float(row.get("mean", 0.0)))
+            if name in scaffold_names:
+                role = "scaffold"
+            elif name in constraint_names:
+                role = "constraint"
+            elif "penalty" in name or name in {"slip_penalty", "time_penalty"}:
+                role = "efficiency"
+            else:
+                role = "outcome"
+            role_totals[role] += mean
+        role_scale = max(sum(role_totals.values()), 1.0e-12)
+        out["reward_role_shares"] = {
+            role: value / role_scale for role, value in role_totals.items()
+        }
 
         actuator = {}
         for name, chunks in self._actuator_samples.items():

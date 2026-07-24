@@ -25,7 +25,7 @@ Resume-safe (`selfplay_state.json`) → continue a short league into a longer on
 
 from __future__ import annotations
 
-import argparse, json, math, os, shutil, subprocess, sys, time
+import argparse, json, os, shutil, subprocess, sys, time
 from pathlib import Path
 import numpy as np
 
@@ -81,7 +81,7 @@ def run_round(py, rd, train_opp, bench_opp, warm, steps, cum_base, lean, tiny, e
         try:
             stale.unlink()
         except FileNotFoundError:
-            pass
+            pass  # already absent — exactly the state we want
     cmd = [py, "-u", str(HERE / "train_adversarial.py"),
            "--tag", tag, "--steps", str(steps), "--cum-base", str(cum_base),
            "--opponent", "frozen", "--opp-ckpt", str(train_opp), "--bench-opp-ckpt", str(bench_opp),
@@ -130,7 +130,7 @@ def eval_seed_benchmark(py, seed, lean, frame_skip, bench_epis, bench_steps, ben
         try:
             out.unlink()
         except FileNotFoundError:
-            pass
+            pass  # already absent — exactly the state we want
         cmd = [py, "-u", str(HERE / "eval_fighter_benchmark.py"),
                "--tag", f"selfplay_seed_{bench_seed}",
                "--ckpt", str(seed),

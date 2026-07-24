@@ -22,7 +22,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 # foot column order contract (matches commanded_env/train_adversarial feet order)
-FEET = ("FL", "FR", "RL", "RR")
 
 
 def _corr(a: np.ndarray, b: np.ndarray) -> float:

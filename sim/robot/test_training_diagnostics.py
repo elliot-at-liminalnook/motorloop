@@ -11,6 +11,7 @@ torch = pytest.importorskip("torch")
 
 from training_diagnostics import (  # noqa: E402
     checkpoint_replay_comparison,
+    checkpoint_replay_tolerances,
     critic_calibration,
     diagnostic_alerts,
     gradient_clip_diagnostics,
@@ -46,6 +47,14 @@ def test_checkpoint_replay_comparison_is_scale_aware():
     assert comparison["failed_metrics"] == ["clock"]
     assert comparison["metric_tolerance_ratios"]["reward"] < 1.0
     assert comparison["metric_tolerance_ratios"]["clock"] > 1.0
+
+
+def test_checkpoint_replay_tolerance_tracks_contact_solver_family():
+    mesh = checkpoint_replay_tolerances("mesh")
+    ground = checkpoint_replay_tolerances("walker")
+    combat = checkpoint_replay_tolerances("combat")
+    assert mesh[0] < ground[0] < combat[0]
+    assert checkpoint_replay_tolerances("ladder_combat") == combat
 
 
 class _Norm(torch.nn.Module):
@@ -162,20 +171,65 @@ def test_saturated_adaptive_contracts_are_not_silently_treated_as_self_tuning():
         "adaptive_contracts": {
             "dual_max": 10.0,
             "constraints": [{
-                "name": "cat_foot_duty", "observed": 0.02,
+                "name": "cat_slip", "observed": 0.02,
                 "target": 0.001, "comparison": "<=", "dual": 10.0,
             }],
             "competence": [{
-                "name": "ladder_step_clock", "observed": 0.55,
-                "target": 0.70, "comparison": ">=", "dual": 10.0,
+                "name": "ladder_foot_activity", "observed": 0.20,
+                "target": 0.40, "comparison": ">=", "dual": 10.0,
             }],
         },
     })
     by_code = {row["code"]: row for row in alerts}
     assert by_code["adaptive_constraint_saturated"]["value"]["name"] \
-        == "cat_foot_duty"
+        == "cat_slip"
     assert by_code["adaptive_competence_saturated"]["value"]["name"] \
-        == "ladder_step_clock"
+        == "ladder_foot_activity"
+
+
+def test_adaptive_metric_window_disagreement_is_not_hidden():
+    alerts = diagnostic_alerts({
+        "integrity": {}, "trust_region": {}, "gradient_clipping": {},
+        "adaptive_contracts": {
+            "dual_max": 10.0,
+            "constraints": [],
+            "competence": [{
+                "name": "ladder_foot_activity", "observed": 0.18,
+                "target": 0.40, "comparison": ">=", "dual": 1.0,
+            }],
+        },
+    }, evaluation={"ladder_foot_activity": 0.42})
+    row = next(row for row in alerts
+               if row["code"] == "adaptive_metric_window_mismatch")
+    assert row["value"]["training"] == pytest.approx(0.18)
+    assert row["value"]["evaluation"] == pytest.approx(0.42)
+
+
+def test_scaffold_dominance_is_reported_as_an_objective_design_problem():
+    alerts = diagnostic_alerts({
+        "integrity": {}, "trust_region": {}, "gradient_clipping": {},
+    }, evaluation={
+        "reward_role_shares": {
+            "outcome": 0.20, "constraint": 0.10,
+            "efficiency": 0.05, "scaffold": 0.65,
+        },
+    })
+    assert "scaffold_reward_dominance" in {row["code"] for row in alerts}
+
+
+def test_failed_gate_lowers_reward_component_dominance_tripwire():
+    alerts = diagnostic_alerts({
+        "integrity": {}, "trust_region": {}, "gradient_clipping": {},
+    }, gates={"all_pass": False, "worst_metric": "xprogress"}, evaluation={
+        "reward_components": {
+            "tracking": {"absolute_mean_share": 0.78},
+            "direct_progress": {"absolute_mean_share": 0.22},
+        },
+    })
+    row = next(row for row in alerts
+               if row["code"] == "reward_component_dominance")
+    assert row["value"] == pytest.approx(0.78)
+    assert "60%" in row["message"]
 
 
 def test_physics_actuator_and_per_leg_alerts_surface_real_world_failures():

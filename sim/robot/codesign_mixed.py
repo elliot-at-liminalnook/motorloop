@@ -31,7 +31,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from codesign import static_margin, DEFAULTS  # noqa: E402  reuse geometry+static
+from codesign import static_margin  # noqa: E402  reuse geometry+static
 from walker_improved import LEG_MASS, TORSO_MASS  # noqa: E402
 
 G = 9.81

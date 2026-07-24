@@ -25,5 +25,4 @@ RESET_NOISE = 0.03
 KP = (2.0, 40.0, 6.0)
 AUTHORITY_FRAC = 0.6
 YAW_AUTHORITY = float(os.environ.get("MESH_YAW_AUTH", str(AUTHORITY_FRAC)))
-CLOCK_W = float(os.environ.get("MESH_CLOCK_W", "0.0"))
 CLOCK_HZ = float(os.environ.get("MESH_CLOCK_HZ", "0.26"))

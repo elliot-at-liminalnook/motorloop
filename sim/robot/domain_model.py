@@ -27,7 +27,6 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from reality_gap import default_uncertainty  # noqa: E402
 
 # ranking-relevant world axes and their REAL ranges (lo, hi); normalized coord in [0,1].
 WORLD_AXES = {

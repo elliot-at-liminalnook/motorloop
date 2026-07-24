@@ -45,7 +45,8 @@ def main():
     args = ap.parse_args()
 
     ckpt = Path(args.ckpt)
-    params = pickle.load(open(ckpt, "rb"))
+    with open(ckpt, "rb") as f:
+        params = pickle.load(f)
     striker = False if args.no_striker else None
     opp = None
     if args.opponent == "frozen":

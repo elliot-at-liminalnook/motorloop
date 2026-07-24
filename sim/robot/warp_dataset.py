@@ -21,7 +21,8 @@ ENVIRONMENTS = {"walker": WalkerWarpEnv, "mesh": MeshWarpEnv, "combat": CombatWa
 def collect(geometry="walker", checkpoint=None, steps=1000, nworld=16,
             seed=0, device=None):
     env = ENVIRONMENTS[geometry](nworld, seed=seed, device=device, episode_length=800)
-    policy = (load_policy(checkpoint, env.obs_dim, env.act_dim, env.device)
+    policy = (load_policy(checkpoint, env.obs_dim, env.act_dim, env.device,
+                          morphology_source=env)
               if checkpoint else lambda obs: torch.zeros((len(obs), env.act_dim), device=env.device))
     obs = env.reset()
     data = {key: [] for key in ("obs", "action", "next_obs", "reward", "done")}
@@ -68,7 +69,7 @@ def main(argv=None):
     parser.add_argument("--dataset")
     parser.add_argument("--out", required=True)
     parser.add_argument("--epochs", type=int, default=50)
-    args, _ = parser.parse_known_args(argv)
+    args = parser.parse_args(argv)
     if args.mode == "collect":
         np.savez_compressed(args.out, **collect(args.geometry, args.checkpoint, args.steps,
                                                 args.envs, args.seed, args.device))

@@ -23,15 +23,13 @@ sys.path.insert(0, str(HERE))
 import mujoco
 import torch
 
-import walker_improved as WALK
-from walker_improved import build_walker, DEFAULTS, LEGS
+from walker_improved import build_walker, DEFAULTS, LEGS, _DESIGN
 from walker_warp_env import WALKER_KP
-import mesh_commanded_env as SPEC
 
 
 def _actor_from_ckpt(path, obs_dim, act_dim, priv_dim):
     from train_mesh_warp import Actor          # the exact trained architecture
-    ck = torch.load(path, map_location="cpu", weights_only=False)
+    ck = torch.load(path, map_location="cpu", weights_only=True)
     actor = Actor(obs_dim, act_dim, (512, 256, 128))
     actor.load_state_dict(ck["actor"])         # strict: must match exactly
     actor.eval()
@@ -59,7 +57,7 @@ def main():
     kp = np.array(list(WALKER_KP) * 4)
     # Match WalkerWarpEnv exactly: no-load speeds come from robot_design.TARGET,
     # not from the older mesh robot constants.
-    wfree = np.array(WALK._DESIGN.wfrees())
+    wfree = np.array(_DESIGN.wfrees())
     jr = np.array([m.jnt_range[j] for j in aj])
     frac = np.array([0.6, 0.6, 1.0] * 4)
     authority = frac * 0.5 * (jr[:, 1] - jr[:, 0])
@@ -68,7 +66,6 @@ def main():
         stand[3 * k + 2] = DEFAULTS["lift_nom"]
     feet = [mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, f"{L}_foot") for L in LEGS]
     floor = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_GEOM, "floor")
-    torso = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, "torso")
 
     obs_dim, priv_dim = 50, 34
     actor, norm, ck = _actor_from_ckpt(args.ckpt, obs_dim, 12, priv_dim)

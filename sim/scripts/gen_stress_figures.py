@@ -317,7 +317,6 @@ def fig_D1_numeric_rails(out):
         o = fm.eval(16384, int(m), int(-m), int(m), int(m), int(m), int(-m))
         da.append(o["duty_a"]); db.append(o["duty_b"]); dc.append(o["duty_c"])
         idv.append(o["id"]); iqv.append(o["iq"])
-    half = int(P.value("pwm.frequency") and 625)  # PWM_HALF_PERIOD
     fig, (a0, a1) = plt.subplots(1, 2, figsize=(11.0, 4.6),
                                  constrained_layout=True)
     a0.plot(mags, da, label="duty_a"); a0.plot(mags, db, label="duty_b")

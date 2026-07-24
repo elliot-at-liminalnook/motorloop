@@ -99,17 +99,17 @@ def pack(cfg):
 def write_report(util, fmax, timing_met, bit):
     lines = ["# ECP5 synthesis report",
              "",
-             "Open flow (yosys -> nextpnr-ecp5 -> ecppack), board wrapper "
-             "`synth/board_top.v` on the ULX3S (LFE5U-85F, CABGA381). Regenerate "
-             "with `synth/run_synth.py`.",
+             ("Open flow (yosys -> nextpnr-ecp5 -> ecppack), board wrapper "
+              "`synth/board_top.v` on the ULX3S (LFE5U-85F, CABGA381). Regenerate "
+              "with `synth/run_synth.py`."),
              "",
              "## Utilization (synth_ecp5, raw cell counts)"]
     for k, v in util.items():
         lines.append(f"- {k}: {v}")
     lines += ["",
-              "The design fits the -85F with wide margin (the parsed counts "
-              "above are indicative; see `synth/work/stat.txt` and "
-              "`nextpnr.log` for the authoritative post-pack utilisation).",
+              ("The design fits the -85F with wide margin (the parsed counts "
+               "above are indicative; see `synth/work/stat.txt` and "
+               "`nextpnr.log` for the authoritative post-pack utilisation)."),
               "",
               "## Timing",
               f"- Post-route Fmax estimate: **{fmax if fmax else 'n/a'} MHz** "

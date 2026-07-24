@@ -123,7 +123,7 @@ def main():
             name = Path(path).stem or f"candidate{i}"
         ckpts.append((name, str(Path(path))))
 
-    params = {name: pickle.load(open(path, "rb")) for name, path in ckpts}
+    params = {name: pickle.loads(Path(path).read_bytes()) for name, path in ckpts}
     opp = load_opponent(opponent)
     rows_by_name = {name: [] for name, _ in ckpts}
 

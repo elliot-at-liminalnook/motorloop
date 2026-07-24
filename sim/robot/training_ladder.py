@@ -43,6 +43,7 @@ GAIT_SEARCH = ROOT / "sim/robot/search_ladder_gait.py"
 EVALUATOR = ROOT / "sim/robot/warp_eval.py"
 VERIFY_BODY = ROOT / "sim/robot/validate_body.py"
 LEGACY_WALK_TEACHER = ROOT / "sim/build/gpu/out/walker/walker_step.pt"
+CONTROLLER_CONTRACT = "universal256x14:v1"
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,7 @@ class Gate:
     metric: str
     comparison: str
     threshold: float
+    role: str = "outcome"
 
     def passes(self, metrics: dict) -> bool:
         if self.metric not in metrics:
@@ -58,7 +60,7 @@ class Gate:
         return bool(fn(float(metrics[self.metric]), self.threshold))
 
     def describe(self) -> str:
-        return f"{self.metric} {self.comparison} {self.threshold:g}"
+        return f"[{self.role}] {self.metric} {self.comparison} {self.threshold:g}"
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,24 @@ class Rung:
 
 def g(metric: str, comparison: str, threshold: float) -> Gate:
     return Gate(metric, comparison, threshold)
+
+
+def c(metric: str, comparison: str, threshold: float) -> Gate:
+    """A non-negotiable physical/safety boundary, not a preferred behavior."""
+    return Gate(metric, comparison, threshold, role="constraint")
+
+
+# These remain valuable telemetry, but using them as acceptance criteria would
+# define *how* a skill must look instead of whether its external outcome works.
+DIAGNOSTIC_ONLY_METRICS = frozenset({
+    "diagsync",
+    "duty",
+    "foot_cycle_duty",
+    "ladder_step_action_score",
+    "ladder_step_clock",
+    "ladder_swing_clearance",
+    "ladder_worst_swing_clearance",
+})
 
 
 def merge_candidate_archives(*artifacts: dict) -> list[dict]:
@@ -103,152 +123,138 @@ RUNGS: tuple[Rung, ...] = (
     Rung(1, "A", "hold_torque", "Hold torque", "deliver derived torque at a loaded joint",
          "verify", "hardware", None, ()),
     Rung(2, "A", "stand_settle", "Stand and settle", "settle from a noisy stance",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("up", ">=", 0.85), g("speed", "<=", 0.15),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(3, "A", "balance_push", "Balance under push", "reject alternating lateral impulses",
-         "ppo", "locomotion", "ladder_locomotion",
-         (g("up", ">=", 0.72), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+         "ppo", "universal", "universal_control",
+         (g("up", ">=", 0.72), c("catrate", "<=", 0.001),
+          c("fallrate", "<=", 0.0001))),
     Rung(4, "A", "pose_vector", "Track a pose vector", "track randomized 12-joint targets",
-         "ppo", "locomotion", "ladder_locomotion",
-         (g("ladder_pose_score", ">=", 0.45), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+         "ppo", "universal", "universal_control",
+         (g("ladder_pose_score", ">=", 0.45), c("catrate", "<=", 0.001),
+          c("fallrate", "<=", 0.0001))),
     Rung(5, "A", "height_control", "Height control", "track randomized crouch/stand height",
-         "ppo", "locomotion", "ladder_locomotion",
-         (g("ladder_height_score", ">=", 0.45), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+         "ppo", "universal", "universal_control",
+         (g("ladder_height_score", ">=", 0.45), c("catrate", "<=", 0.001),
+          c("fallrate", "<=", 0.0001))),
     Rung(6, "B", "step_in_place", "Step in place", "lift and replace feet without translating",
-         "ppo", "locomotion", "ladder_locomotion",
-         (g("duty", "<=", 0.95), g("foot_cycle_duty", "<=", 0.95),
-          g("speed", "<=", 0.20),
-          g("ladder_step_clock", ">=", 0.70),
-          g("ladder_swing_clearance", ">=", 0.30),
-          g("up", ">=", 0.85), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+         "ppo", "universal", "universal_control",
+         (g("foot_air_fraction_min", ">=", 0.05),
+          g("speed", "<=", 0.20), g("up", ">=", 0.85),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(7, "B", "walk_forward", "Walk forward", "first fixed-speed traveling gait",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.10), g("lateral", "<=", 0.15),
-          g("duty", "<=", 0.95), g("up", ">=", 0.85),
-          g("ladder_step_clock", ">=", 0.65),
-          g("ladder_swing_clearance", ">=", 0.25),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001))),
+          g("up", ">=", 0.85), c("catrate", "<=", 0.001),
+          c("fallrate", "<=", 0.0001))),
     Rung(8, "B", "velocity_tracking", "Velocity tracking", "track a forward speed range",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("track", ">=", 0.40), g("xprogress", ">=", 0.06),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(9, "B", "turn_in_place", "Turn in place", "track yaw rate at zero translation",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_yaw_score", ">=", 0.35), g("speed", "<=", 0.20),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(10, "B", "omnidirectional", "Omnidirectional", "track planar and yaw commands together",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("track", ">=", 0.30), g("xprogress", ">=", 0.05),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(11, "B", "heading_hold", "Heading hold", "translate while regulating heading",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_heading_score", ">=", 0.40), g("xprogress", ">=", 0.05),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(12, "B", "stop_command", "Stop on command", "switch between travel and a true hold",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_stop_score", ">=", 0.30),
           g("ladder_move_progress", ">=", 0.035),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001))),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001))),
     Rung(13, "C", "servo_true", "Servo-true motors", "restore the measured torque-speed droop",
-         "ppo", "locomotion", "ladder_locomotion",
-         (g("xprogress", ">=", 0.08), g("duty", "<=", 0.95),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001))),
+         "ppo", "universal", "universal_control",
+         (g("xprogress", ">=", 0.08), c("catrate", "<=", 0.001),
+          c("fallrate", "<=", 0.0001))),
     Rung(14, "C", "stumble", "Stumble recovery", "cross a physical trip bar",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.08), g("up", ">=", 0.72),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 1.25),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.25),
     Rung(15, "C", "push_recovery", "Push recovery", "resume gait after stronger mid-stride pushes",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.07), g("up", ">=", 0.72),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 1.25),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.25),
     Rung(16, "C", "rough_terrain", "Rough terrain", "cross raised tiles with varied friction",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.06), g("up", ">=", 0.68),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 1.5),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.5),
     Rung(17, "C", "slope", "Slope walking", "travel on a nine-degree physical incline",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.04), g("up", ">=", 0.68),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 1.25),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.25),
     Rung(18, "C", "payload", "Payload carry", "walk with 30 percent extra torso mass",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("xprogress", ">=", 0.06), g("up", ">=", 0.68),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 1.25),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.25),
     Rung(19, "D", "return_origin", "Return to origin", "recover from randomized displaced starts",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_goal_hit", ">=", 0.02), g("xprogress", ">=", 0.04),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001)), 1.5),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.5),
     Rung(20, "D", "waypoint", "Go to waypoint", "reach one commanded planar goal",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_goal_hit", ">=", 0.02), g("xprogress", ">=", 0.04),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001)), 1.5),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.5),
     Rung(21, "D", "route", "Route following", "hit an ordered four-waypoint route",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_goal_hit", ">=", 0.015), g("xprogress", ">=", 0.04),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001)), 1.75),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.75),
     Rung(22, "D", "route_correction", "Route correction", "reacquire route after a forced detour",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_goal_hit", ">=", 0.010), g("xprogress", ">=", 0.035),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001)), 1.75),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 1.75),
     Rung(23, "D", "degraded_lidar", "Degraded-lidar nav",
          "avoid physical obstacles with noisy, dropped, one-step-late 144-ray sensing",
-         "ppo", "locomotion", "ladder_locomotion",
+         "ppo", "universal", "universal_control",
          (g("ladder_goal_hit", ">=", 0.010), g("xprogress", ">=", 0.03),
           g("ladder_obstacle_clearance", ">=", 0.02),
-          g("catrate", "<=", 0.001), g("fallrate", "<=", 0.0001)), 2.0),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 2.0),
     Rung(24, "E", "approach_dummy", "Approach a dummy", "close on a passive target",
-         "ppo", "combat", "ladder_combat",
+         "ppo", "universal", "universal_control",
          (g("ladder_approach", ">=", 0.0002),
           g("ladder_target_distance", "<=", 0.45),
-          g("fallrate", "<=", 0.001)), 1.5),
+          c("fallrate", "<=", 0.001)), 1.5),
     Rung(25, "E", "strike_target", "Strike a target", "close and fire the pneumatic striker",
-         "ppo", "combat", "ladder_combat",
+         "ppo", "universal", "universal_control",
          (g("ladder_rod_hit", ">=", 0.0001),
           g("ladder_target_distance", "<=", 0.50),
-          g("fallrate", "<=", 0.001)), 1.75),
+          c("fallrate", "<=", 0.001)), 1.75),
     Rung(26, "E", "commanded_leg_kick", "Commanded leg kick",
          "switch FL/FR/RL/RR at runtime; selected foot attacks while three legs support",
-         "ppo", "combat", "ladder_combat",
-         (g("attack_selected_hit", ">=", 0.0001),
-          g("attack_kick_speed", ">=", 0.03),
-          g("attack_support", ">=", 0.50),
-          g("attack_wrong_hit", "<=", 0.10),
-          g("fallrate", "<=", 0.001)), 2.0),
+         "ppo", "universal", "universal_control",
+         (g("attack_selected_hit_worst_leg", ">=", 0.0001),
+          g("attack_kick_speed_worst_leg", ">=", 0.03),
+          g("attack_support_worst_leg", ">=", 0.50),
+          g("attack_wrong_hit_worst_leg", "<=", 0.10),
+          c("attack_switch_fallrate", "<=", 0.001)), 2.0),
     Rung(27, "E", "pursue_evader", "Pursue an evader", "close on a scripted moving target",
-         "ppo", "combat", "ladder_combat",
+         "ppo", "universal", "universal_control",
          (g("ladder_approach", ">=", 0.0001),
           g("ladder_target_distance", "<=", 0.50),
-          g("fallrate", "<=", 0.001)), 1.75),
+          c("fallrate", "<=", 0.001)), 1.75),
     Rung(28, "E", "frozen_self", "Beat a frozen self", "fight one frozen prior policy",
-         "ppo", "combat", "ladder_combat",
+         "ppo", "universal", "universal_control",
          (g("ladder_combat_margin", ">=", 0.00005),
           g("ladder_rod_hit", ">=", 0.0001),
-          g("fallrate", "<=", 0.002)), 2.0),
+          c("fallrate", "<=", 0.002)), 2.0),
     Rung(29, "E", "pfsp", "PFSP league", "train against a growing hall of frozen snapshots",
-         "pfsp", "combat", "ladder_combat",
+         "pfsp", "universal", "universal_control",
          (g("ladder_combat_margin", ">=", 0.00005),
           g("ladder_rod_hit", ">=", 0.0001),
-          g("fallrate", "<=", 0.002)), 3.0),
+          c("fallrate", "<=", 0.002)), 3.0),
     Rung(30, "F", "cross_morphology", "Cross-morphology",
          "one design-conditioned policy across actual compiled bodies",
-         "ppo", "codesign", "universal",
+         "ppo", "universal", "universal_control",
          (g("track", ">=", 0.40), g("xprogress", ">=", 0.05),
-          g("duty", "<=", 0.95), g("catrate", "<=", 0.001),
-          g("fallrate", "<=", 0.0001)), 2.0),
+          c("catrate", "<=", 0.001), c("fallrate", "<=", 0.0001)), 2.0),
     Rung(31, "F", "codesign_loop", "Co-design loop", "CEM-search body parameters using policy return",
-         "search", "codesign", None, (g("improvement", ">=", 0.001),), 1.0),
+         "search", "universal", None, (g("improvement", ">=", 0.001),), 1.0),
 )
 
 
@@ -259,6 +265,16 @@ def validate_manifest() -> None:
     slugs = [r.slug for r in RUNGS]
     if len(slugs) != len(set(slugs)):
         raise ValueError("training ladder slugs must be unique")
+    invalid_roles = [(rung.number, gate.role) for rung in RUNGS for gate in rung.gates
+                     if gate.role not in {"outcome", "constraint"}]
+    if invalid_roles:
+        raise ValueError(f"training ladder has invalid gate roles: {invalid_roles}")
+    prescriptive = [(rung.number, gate.metric) for rung in RUNGS for gate in rung.gates
+                    if gate.metric in DIAGNOSTIC_ONLY_METRICS]
+    if prescriptive:
+        raise ValueError(
+            "diagnostic/style metrics cannot be promotion gates: "
+            f"{prescriptive}")
 
 
 def selected_rungs(first: int, last: int) -> Iterable[Rung]:
@@ -283,13 +299,27 @@ class LadderRunner:
         # exact baselines remain untouched.
         self.state["version"] = max(int(self.state.get("version", 1)), 2)
         self.state["regression_matrix_path"] = str(self.regression_matrix_path)
+        if not isinstance(self.state.get("test_out"), dict):
+            self.state["test_out"] = {}
         self.regression_matrix = self._load_regression_matrix()
+        if self.state.get("controller_contract") != CONTROLLER_CONTRACT:
+            archived = self._quarantine_stale_successor_candidates(0)
+            self.state["controller_contract"] = CONTROLLER_CONTRACT
+            self.state.setdefault("controller_migrations", []).append({
+                "time": time.time(), "contract": CONTROLLER_CONTRACT,
+                "archived": archived,
+            })
+            self.state.pop("failed", None)
+            self._save()
         self._failed_on_entry = self.state.get("failed", {}).get("rung")
 
     @staticmethod
     def _fresh_state() -> dict:
         return {"version": 2, "completed": [], "checkpoints": {}, "metrics": {},
                 "attempts": {}, "retention_baselines": {}, "retention_history": [],
+                "replay_pressures": {},
+                "retention_opponents": {},
+                "test_out": {},
                 "started": time.time(), "updated": time.time()}
 
     @staticmethod
@@ -411,6 +441,11 @@ class LadderRunner:
                 f"contract_invalidated_rung_{number:02d}_{stamp}_{suffix}.pt")
             suffix += 1
         path.replace(destination)
+        replay = self.out / "replay" / f"rung_{number:02d}.pt"
+        for dependency in (replay, replay.with_suffix(replay.suffix + ".json")):
+            if dependency.exists():
+                dependency.replace(diagnostics / (
+                    f"contract_invalidated_rung_{number:02d}_{stamp}_{dependency.name}"))
 
     def _quarantine_stale_successor_candidates(self, accepted_number: int) -> list[str]:
         """Archive unaccepted candidates whose learned prerequisite just changed.
@@ -441,9 +476,27 @@ class LadderRunner:
                     suffix += 1
                 path.replace(destination)
                 archived.append(str(destination))
+            candidate_dir = self.out / f"{prefix}.candidates"
+            if candidate_dir.exists():
+                diagnostics.mkdir(exist_ok=True)
+                destination = diagnostics / (
+                    f"stale_dependency_after_{accepted_number:02d}_{candidate_dir.name}")
+                if destination.exists():
+                    destination = diagnostics / f"{destination.name}_{stamp}"
+                candidate_dir.replace(destination)
+                archived.append(str(destination))
+            replay = self.out / "replay" / f"rung_{successor.number:02d}.pt"
+            for dependency in (replay, replay.with_suffix(replay.suffix + ".json")):
+                if dependency.exists():
+                    diagnostics.mkdir(exist_ok=True)
+                    destination = diagnostics / (
+                        f"stale_dependency_after_{accepted_number:02d}_{dependency.name}")
+                    dependency.replace(destination)
+                    archived.append(str(destination))
             key = str(successor.number)
             for collection in ("attempts", "metrics", "retention_baselines",
-                               "checkpoints"):
+                               "checkpoints", "replay_pressures",
+                               "retention_opponents"):
                 self.state.setdefault(collection, {}).pop(key, None)
         if accepted_number <= 6 and 7 not in self.state["completed"]:
             prior = self.out / "priors" / "rung_07_walk_prior.json"
@@ -548,22 +601,73 @@ class LadderRunner:
             return subprocess.run(argv, cwd=ROOT, stdout=stream,
                                   stderr=subprocess.STDOUT).returncode
 
+    def _replay_path(self, rung: Rung) -> Path:
+        return self.out / "replay" / f"rung_{rung.number:02d}.pt"
+
+    def _ensure_replay_artifact(self, rung: Rung, checkpoint: str) -> str | None:
+        """Build real accepted-task state/action replay with source provenance."""
+        if self.args.dry_run or self.args.tiny or rung.geometry is None:
+            return None
+        output = self._replay_path(rung)
+        metadata_path = output.with_suffix(output.suffix + ".json")
+        expected_hash = self._checkpoint_sha256(checkpoint)
+        opponents = self.state.setdefault("retention_opponents", {}).get(
+            str(rung.number), [])
+        expected_opponent = opponents[0] if opponents else None
+        expected_opponent_hash = (self._checkpoint_sha256(expected_opponent)
+                                  if expected_opponent else None)
+        if output.exists() and metadata_path.exists():
+            metadata = json.loads(metadata_path.read_text())
+            if (metadata.get("checkpoint_sha256") == expected_hash
+                    and metadata.get("opponent_sha256") == expected_opponent_hash):
+                return str(output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        log = self.out / "logs" / f"replay_rung_{rung.number:02d}.log"
+        argv = [self.args.python, "-u", str(EVALUATOR), "collect-replay",
+                *(("--power-model", self.args.power_model)
+                  if getattr(self.args, "power_model", "off") != "off" else ()),
+                "--geometry", self._geometry(rung), "--rung", str(rung.number),
+                "--checkpoint", checkpoint, "--steps", str(self.args.replay_steps),
+                "--envs", str(self.args.replay_envs),
+                "--seed", str(self.args.retention_seed + 5000 + rung.number),
+                "--out", str(output)]
+        if opponents:
+            argv += ["--opponent", opponents[0]]
+        if self.args.device:
+            argv += ["--device", self.args.device]
+        rc = self._run(argv, log)
+        if rc != 0 or not output.exists():
+            raise RuntimeError(f"failed to build retention replay for rung {rung.number}")
+        self.state.setdefault("replay_pressures", {}).setdefault(str(rung.number), 1.0)
+        self._save()
+        return str(output)
+
+    def _ensure_completed_replay_artifacts(self) -> None:
+        for rung in RUNGS:
+            checkpoint = self.state.get("checkpoints", {}).get(str(rung.number))
+            if rung.number in self.state["completed"] and checkpoint:
+                self._ensure_replay_artifact(rung, checkpoint)
+
     def _trainer_argv(self, rung: Rung, tag: Path, target_steps: int,
                       *, init_policy: str | None, resume: bool,
-                      opponent: str | None, anchor_policy: str | None) -> list[str]:
+                      opponent: str | list[str] | None,
+                      anchor_policy: str | None) -> list[str]:
         a = self.args
         if a.tiny:
             envs, horizon, steps = 2, 2, 4
             eval_envs, eval_steps = 2, 2
             diagnostic_eval_seeds, checkpoint_replay_steps = 1, 1
             hidden, epochs, minibatches, preflight = "16,16", 1, 1, "off"
+            prediction_horizon, prediction_anchors = 1, 1
         else:
             envs, horizon, steps = a.envs, a.horizon, target_steps
             eval_envs, eval_steps = a.eval_envs, a.eval_steps
             diagnostic_eval_seeds = a.diagnostic_eval_seeds
             checkpoint_replay_steps = a.checkpoint_replay_steps
             hidden, epochs, minibatches, preflight = a.hidden, a.epochs, a.minibatches, "strict"
-        argv = [a.python, "-u", str(TRAINER), "--geometry", str(rung.geometry),
+            prediction_horizon, prediction_anchors = (
+                a.prediction_horizon, a.prediction_anchors)
+        argv = [a.python, "-u", str(TRAINER), "--geometry", self._geometry(rung),
                 "--steps", str(steps), "--envs", str(envs), "--horizon", str(horizon),
                 "--episode-length", str(a.episode_length), "--tag", str(tag),
                 "--evals", str(a.evals), "--eval-envs", str(eval_envs),
@@ -571,14 +675,36 @@ class LadderRunner:
                 "--diagnostic-eval-seeds", str(diagnostic_eval_seeds),
                 "--checkpoint-replay-steps", str(checkpoint_replay_steps),
                 "--architecture", a.architecture,
+                "--prediction-horizon", str(prediction_horizon),
+                "--prediction-decoder", a.prediction_decoder,
+                "--prediction-anchors", str(prediction_anchors),
+                "--prediction-loss-weight", str(a.prediction_loss_weight),
+                "--guidance-horizon", str(a.guidance_horizon),
+                "--guidance-steps", str(a.guidance_steps),
+                "--guidance-interval", str(a.guidance_interval),
+                *(("--prediction-lr", str(a.prediction_lr))
+                  if a.prediction_lr is not None else ()),
+                *(("--power-model", a.power_model)
+                  if getattr(a, "power_model", "off") != "off" else ()),
                 "--epochs", str(epochs), "--minibatches", str(minibatches),
                 "--target-kl", str(a.target_kl),
                 "--kl-stop-multiplier", str(a.kl_stop_multiplier),
                 "--seed", str(a.seed + rung.number), "--preflight", preflight]
-        if rung.geometry in ("ladder_locomotion", "ladder_combat"):
+        if rung.geometry in ("ladder_locomotion", "ladder_combat", "universal_control"):
             argv += ["--rung", str(rung.number)]
         if not (a.tiny or a.no_gates):
-            for gate in rung.gates:
+            trainer_gates = rung.gates
+            if rung.number == 26:
+                # PPO sees randomized leg commands. Promotion below separately
+                # locks every leg and performs an uninterrupted switch test.
+                trainer_gates = (
+                    Gate("attack_selected_hit", ">=", 0.0001),
+                    Gate("attack_kick_speed", ">=", 0.03),
+                    Gate("attack_support", ">=", 0.50),
+                    Gate("attack_wrong_hit", "<=", 0.10),
+                    Gate("fallrate", "<=", 0.001),
+                )
+            for gate in trainer_gates:
                 argv += ["--early-gate",
                          f"{gate.metric},{gate.comparison},{gate.threshold}"]
         if a.device:
@@ -589,27 +715,31 @@ class LadderRunner:
                 argv += ["--allow-reward-migration"]
         elif init_policy:
             argv += ["--init-policy", init_policy]
-        if opponent:
+        if isinstance(opponent, list):
+            for path in opponent:
+                argv += ["--opponent-pool", path]
+        elif opponent:
             argv += ["--opponent", opponent]
         if anchor_policy and a.distill_weight > 0.0:
             prior = [item for item in RUNGS if item.number in self.state["completed"]
                      and item.number < rung.number and item.family == rung.family]
-            if rung.family == "locomotion":
-                indices = [item.number - 1 for item in prior]
-            elif rung.family == "combat":
-                indices = [item.number - 24 for item in prior]
-            else:
-                indices = []
+            indices = [item.number - 1 for item in prior]
             argv += ["--anchor-policy", anchor_policy,
                      "--distill-weight", str(a.distill_weight)]
             if indices:
                 argv += ["--anchor-task-indices", ",".join(map(str, indices))]
-        if rung.number == 7 and LEGACY_WALK_TEACHER.exists():
+            for learned in prior:
+                replay = self._replay_path(learned)
+                if replay.exists():
+                    pressure = self.state.setdefault("replay_pressures", {}).get(
+                        str(learned.number), 1.0)
+                    argv += ["--replay-artifact", f"{replay},{pressure}"]
+        prior = self.out / "priors" / "rung_07_walk_prior.json"
+        if (rung.number == 7 and self.args.walk_prior_mode != "off"
+                and LEGACY_WALK_TEACHER.exists() and prior.exists()):
             argv += ["--transfer-policy", str(LEGACY_WALK_TEACHER),
                      "--transfer-obs-dim", "50"]
-            prior = self.out / "priors" / "rung_07_walk_prior.json"
-            if prior.exists():
-                argv += ["--action-prior-json", str(prior)]
+            argv += ["--action-prior-json", str(prior)]
         return argv
 
     def _ensure_walk_prior(self) -> str | None:
@@ -618,8 +748,15 @@ class LadderRunner:
         if self.args.tiny or self.args.dry_run:
             return None
         rung6 = self.state.get("checkpoints", {}).get("6")
-        if not rung6 or not Path(rung6).exists() or not LEGACY_WALK_TEACHER.exists():
-            raise RuntimeError("rung 7 requires accepted rung-6 and legacy walk teachers")
+        if not rung6 or not Path(rung6).exists():
+            raise RuntimeError("rung 7 requires an accepted rung-6 checkpoint")
+        if not LEGACY_WALK_TEACHER.exists():
+            if self.args.walk_prior_mode == "always":
+                raise RuntimeError(
+                    "--walk-prior-mode=always requires the legacy walk teacher")
+            print("WALK PRIOR unavailable: continuing outcome-only from accepted "
+                  "rung 6", flush=True)
+            return None
         if prior.exists():
             artifact = json.loads(prior.read_text())
             sources = artifact.get("source_checkpoints", {})
@@ -753,6 +890,23 @@ class LadderRunner:
             raise ValueError(f"no evaluation metrics in {path}")
         return raw["evals"][-1]
 
+    def _geometry(self, rung: Rung) -> str:
+        """Resolve a rung's trainer geometry under the observation contract."""
+        if (getattr(self.args, "command_observations", False)
+                and rung.geometry == "universal_control"):
+            return "universal_command"
+        return str(rung.geometry)
+
+    @staticmethod
+    def _plateau_aborted(tag: Path) -> dict | None:
+        """Return the previous attempt's plateau-abort record, if it ended on one."""
+        try:
+            raw = json.loads(Path(str(tag) + ".stats.json").read_text())
+        except (OSError, ValueError, json.JSONDecodeError):
+            return None
+        record = raw.get("plateau_abort")
+        return record if isinstance(record, dict) else None
+
     @staticmethod
     def _durable_completed_attempts(tag: Path, base_steps: int,
                                     recorded_attempts: int) -> int:
@@ -775,7 +929,8 @@ class LadderRunner:
                 durable = max(evaluated_steps) // max(1, int(base_steps))
                 return min(max(0, int(recorded_attempts)), durable)
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
-            pass
+            # unreadable or legacy stats: same conservative retry as below
+            return max(0, int(recorded_attempts) - 1)
         return max(0, int(recorded_attempts) - 1)
 
     @staticmethod
@@ -820,22 +975,253 @@ class LadderRunner:
         return passed, details
 
     def _evaluate_checkpoint(self, rung: Rung, checkpoint: str,
-                             label: str) -> tuple[int, dict]:
+                             label: str, *, seed: int | None = None,
+                             steps: int | None = None,
+                             opponent: str | None = None) -> tuple[int, dict]:
         output = self.out / "logs" / f"{label}.json"
         log = self.out / "logs" / f"{label}.log"
-        argv = [self.args.python, "-u", str(EVALUATOR), "eval",
-                "--geometry", str(rung.geometry), "--checkpoint", checkpoint,
-                "--episodes", "1", "--steps", str(self.args.retention_steps),
-                "--envs", str(self.args.retention_envs),
-                "--seed", str(self.args.retention_seed + rung.number),
-                "--out", str(output)]
-        if rung.geometry in ("ladder_locomotion", "ladder_combat"):
-            argv += ["--rung", str(rung.number)]
-        if self.args.device:
-            argv += ["--device", self.args.device]
-        rc = self._run(argv, log)
-        metrics = json.loads(output.read_text()) if rc == 0 and output.exists() else {}
-        return rc, metrics
+        base_seed = seed if seed is not None else self.args.retention_seed + rung.number
+
+        def run_once(suffix: str = "", extra: tuple[str, ...] = ()) -> tuple[int, dict]:
+            target = output if not suffix else output.with_name(
+                f"{output.stem}_{suffix}{output.suffix}")
+            argv = [self.args.python, "-u", str(EVALUATOR), "eval",
+                    "--geometry", self._geometry(rung), "--checkpoint", checkpoint,
+                    "--episodes", "1", "--steps", str(steps or self.args.retention_steps),
+                    "--envs", str(self.args.retention_envs),
+                    "--seed", str(base_seed), "--out", str(target),
+                    *(("--power-model", self.args.power_model)
+                      if getattr(self.args, "power_model", "off") != "off" else ()),
+                    *extra]
+            if rung.geometry in ("ladder_locomotion", "ladder_combat", "universal_control"):
+                argv += ["--rung", str(rung.number)]
+            if opponent:
+                argv += ["--opponent", opponent]
+            if self.args.device:
+                argv += ["--device", self.args.device]
+            rc = self._run(argv, log)
+            metrics = json.loads(target.read_text()) if rc == 0 and target.exists() else {}
+            return rc, metrics
+
+        if rung.number != 26:
+            return run_once()
+        per_leg = {}
+        rc = 0
+        for leg in ("FL", "FR", "RL", "RR"):
+            leg_rc, per_leg[leg] = run_once(leg.lower(), ("--attack-leg", leg))
+            rc = rc or leg_rc
+        switch_rc, switch = run_once("switch", ("--attack-switch",))
+        rc = rc or switch_rc
+        combined = {
+            "attack_selected_hit_worst_leg": min(
+                float(row.get("attack_selected_hit", 0.0)) for row in per_leg.values()),
+            "attack_kick_speed_worst_leg": min(
+                float(row.get("attack_kick_speed", 0.0)) for row in per_leg.values()),
+            "attack_support_worst_leg": min(
+                float(row.get("attack_support", 0.0)) for row in per_leg.values()),
+            "attack_wrong_hit_worst_leg": max(
+                float(row.get("attack_wrong_hit", math.inf)) for row in per_leg.values()),
+            "attack_switch_fallrate": float(
+                switch.get("attack_switch_fallrate", math.inf)),
+            "per_leg": per_leg,
+            "switch": switch,
+        }
+        output.write_text(json.dumps(combined, indent=2, sort_keys=True) + "\n")
+        return rc, combined
+
+    def _candidate_paths(self, tag: Path) -> list[str]:
+        """Return the best immutable intermediates plus the mutable final policy."""
+        archive = Path(str(tag) + ".candidates")
+        ranked = []
+        for checkpoint in archive.glob("step_*.pt") if archive.exists() else ():
+            metadata_path = checkpoint.with_suffix(".json")
+            try:
+                metadata = json.loads(metadata_path.read_text())
+                margin = float(metadata["robust_gates"]["worst_relative_margin"])
+            except (FileNotFoundError, KeyError, TypeError, ValueError):
+                margin = -math.inf
+            ranked.append((margin, str(checkpoint)))
+        ranked.sort(reverse=True)
+        paths = [path for _, path in ranked[:self.args.candidate_eval_max]]
+        final = str(tag) + ".pt"
+        if Path(final).exists() and final not in paths:
+            paths.append(final)
+        return paths
+
+    def _promotion_gate(self, rung: Rung, checkpoint: str,
+                        attempt: int, opponent: str | list[str] | None = None
+                        ) -> tuple[bool, dict, list[str]]:
+        """Use a fresh, rotating full-episode bank unknown to PPO's diagnostics."""
+        if self.args.no_gates or self.args.tiny:
+            metrics = self._metrics(Path(checkpoint).with_suffix(""))
+            return True, metrics, ["promotion bank bypassed"]
+        results = []
+        details = []
+        count = max(1, self.args.promotion_seeds)
+        opponents = list(dict.fromkeys(opponent)) if isinstance(opponent, list) else [opponent]
+        for opponent_index, opponent_path in enumerate(opponents):
+          for index in range(count):
+            seed = (self.args.promotion_seed_base + rung.number * 100_003
+                    + attempt * 10_007 + opponent_index * 101 + index * 1_009)
+            label = (f"promotion_rung_{rung.number:02d}_attempt_{attempt:02d}_"
+                     f"opponent_{opponent_index:02d}_seed_{index:02d}_"
+                     f"{Path(checkpoint).stem}")
+            rc, metrics = self._evaluate_checkpoint(
+                rung, checkpoint, label, seed=seed,
+                steps=self.args.retention_steps, opponent=opponent_path)
+            passed, seed_details = self._gate(rung, metrics)
+            details.extend(f"seed {seed}: {item}" for item in seed_details)
+            if rc != 0:
+                passed = False
+            results.append((passed, metrics, seed))
+        adverse = {}
+        for gate in rung.gates:
+            values = [float(metrics[gate.metric]) for _, metrics, _ in results
+                      if gate.metric in metrics]
+            if values:
+                adverse[gate.metric] = (min(values) if gate.comparison == ">="
+                                        else max(values))
+        passed = len(results) == count * len(opponents) and all(row[0] for row in results)
+        adverse["promotion_seed_results"] = [
+            {"seed": seed, "pass": ok, "metrics": metrics}
+            for ok, metrics, seed in results]
+        adverse["promotion_seed_count"] = count
+        return passed, adverse, details
+
+    @staticmethod
+    def _test_out_margin(rung: Rung, metrics: dict) -> float:
+        """Worst dimensionless gate margin in a certification result."""
+        margins = []
+        for gate in rung.gates:
+            value = metrics.get(gate.metric)
+            if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+                return -math.inf
+            scale = max(abs(float(gate.threshold)), 1.0e-6)
+            raw = (float(value) - gate.threshold if gate.comparison == ">="
+                   else gate.threshold - float(value))
+            margins.append(raw / scale)
+        return min(margins) if margins else -math.inf
+
+    def _prepare_test_out_checkpoint(self, rung: Rung, parent: str) -> tuple[str | None, dict]:
+        """Clone the prior actor and make the new task exactly inherit it."""
+        directory = self.out / "test_out"
+        directory.mkdir(exist_ok=True)
+        output = directory / f"rung_{rung.number:02d}_{rung.slug}.pt"
+        metadata_path = output.with_suffix(output.suffix + ".json")
+        parent_hash = self._checkpoint_sha256(parent)
+        if output.exists() and metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text())
+                if (metadata.get("source_checkpoint_sha256") == parent_hash
+                        and metadata.get("source_task_index") == rung.number - 2
+                        and metadata.get("target_task_index") == rung.number - 1):
+                    return str(output), metadata
+            except (OSError, ValueError, TypeError,
+                    json.JSONDecodeError) as error:
+                print(f"test-out cache unreadable ({error}); regenerating",
+                      flush=True)
+        log = self.out / "logs" / f"test_out_prepare_rung_{rung.number:02d}.log"
+        argv = [self.args.python, "-u", str(EVALUATOR), "inherit-policy",
+                "--checkpoint", parent, "--out", str(output),
+                "--source-task", str(rung.number - 2),
+                "--target-task", str(rung.number - 1)]
+        rc = self._run(argv, log, dry_run=self.args.dry_run)
+        if rc != 0 or not output.exists() or not metadata_path.exists():
+            return None, {"returncode": rc, "source_checkpoint_sha256": parent_hash}
+        return str(output), json.loads(metadata_path.read_text())
+
+    def _test_out(self, rung: Rung, *, opponent: str | list[str] | None = None
+                  ) -> tuple[bool, dict, str | None]:
+        """Certify inherited competence before spending any PPO experience.
+
+        Passing requires a fresh rotating promotion bank, additional margin on
+        every current-task gate, and the same full regression replay demanded
+        of a trained candidate.  A failed exam simply falls through to PPO.
+        """
+        if (not self.args.test_out or self.args.no_gates or self.args.tiny
+                or self.args.dry_run or not rung.gates
+                or self.args.architecture == "mlp"):
+            return False, {"test_out": "disabled_or_ineligible"}, None
+        tag = self.out / f"rung_{rung.number:02d}_{rung.slug}"
+        if (Path(str(tag) + ".pt").exists()
+                or str(rung.number) in self.state.get("attempts", {})):
+            return False, {"test_out": "existing_training_candidate"}, None
+        parent = self._previous_checkpoint(rung)
+        previous = next((item for item in RUNGS if item.number == rung.number - 1), None)
+        if parent is None or previous is None or previous.family != rung.family:
+            return False, {"test_out": "no_immediate_family_predecessor"}, None
+        parent_hash = self._checkpoint_sha256(parent)
+        prior = self.state.setdefault("test_out", {}).get(str(rung.number))
+        if (isinstance(prior, dict)
+                and prior.get("source_checkpoint_sha256") == parent_hash
+                and prior.get("gate_signature") == self._gate_signature()):
+            if prior.get("decision") == "accept" and Path(
+                    str(prior.get("checkpoint", ""))).exists():
+                print(f"TEST-OUT reuse accepted rung {rung.number:02d}", flush=True)
+                return True, prior["metrics"], prior["checkpoint"]
+            if prior.get("decision") == "train":
+                print(f"TEST-OUT reuse failed exam for rung {rung.number:02d}; "
+                      "continuing to PPO", flush=True)
+                return False, prior.get("metrics", {}), None
+
+        if getattr(self.args, "command_observations", False):
+            # Command-conditioned policies have no per-rung channels to copy:
+            # the exam evaluates the parent directly under the next rung's
+            # command distribution, proving generalization on the shared
+            # command manifold instead of transfer of a copied embedding.
+            candidate, inheritance = parent, {
+                "mode": "command_manifold_direct",
+                "source_checkpoint_sha256": parent_hash}
+        else:
+            candidate, inheritance = self._prepare_test_out_checkpoint(rung, parent)
+        if candidate is None:
+            print(f"TEST-OUT rung {rung.number:02d}: inheritance preparation failed; "
+                  "continuing to PPO", flush=True)
+            return False, {"test_out": "preparation_failed",
+                           "inheritance": inheritance}, None
+        promotion_ok, promotion_metrics, promotion_details = self._promotion_gate(
+            rung, candidate, 0, opponent)
+        margin = self._test_out_margin(rung, promotion_metrics)
+        margin_ok = margin >= float(self.args.test_out_margin)
+        print("TEST-OUT PROMOTION " + "; ".join(promotion_details), flush=True)
+        print(f"TEST-OUT rung {rung.number:02d}: promotion={promotion_ok} "
+              f"worst_margin={margin:.4f} required={self.args.test_out_margin:.4f}",
+              flush=True)
+        fixed_checks = self._current_task_regression_checks(rung, promotion_metrics)
+        self._record_regression_task(
+            rung, candidate, rung, fixed_checks, promotion_ok and margin_ok,
+            "zero_shot_hidden_promotion")
+        retention_ok, retention = (self._retention_gate(rung, candidate)
+                                   if promotion_ok and margin_ok else (False, []))
+        accepted = promotion_ok and margin_ok and retention_ok
+        metrics = dict(
+            promotion_metrics,
+            test_out=True,
+            test_out_pass=accepted,
+            test_out_worst_relative_margin=margin,
+            test_out_required_relative_margin=float(self.args.test_out_margin),
+            test_out_inheritance=inheritance,
+            retention_pass=retention_ok,
+            retention_replays=len(retention),
+            selected_candidate=candidate if accepted else None,
+        )
+        record = {
+            "decision": "accept" if accepted else "train",
+            "time": time.time(),
+            "source_checkpoint": parent,
+            "source_checkpoint_sha256": parent_hash,
+            "gate_signature": self._gate_signature(),
+            "checkpoint": candidate,
+            "metrics": metrics,
+        }
+        self.state.setdefault("test_out", {})[str(rung.number)] = record
+        self._save()
+        if accepted:
+            print(f"TEST-OUT ACCEPT rung {rung.number:02d}: no PPO required", flush=True)
+        else:
+            print(f"TEST-OUT TRAIN rung {rung.number:02d}: certification did not "
+                  "meet every requirement", flush=True)
+        return accepted, metrics, candidate if accepted else None
 
     def _retention_gate(self, rung: Rung, checkpoint: str) -> tuple[bool, list[dict]]:
         """Replay prior same-family tasks and reject catastrophic forgetting."""
@@ -850,9 +1236,30 @@ class LadderRunner:
         report: list[dict] = []
         all_ok = True
         for learned in previous:
-            rc, current = self._evaluate_checkpoint(
-                learned, checkpoint,
-                f"retention_after_{rung.number:02d}_task_{learned.number:02d}")
+            opponents = self.state.setdefault("retention_opponents", {}).get(
+                str(learned.number), []) or [None]
+            evaluations = []
+            rc = 0
+            for opponent_index, opponent in enumerate(opponents):
+                label = (f"retention_after_{rung.number:02d}_task_{learned.number:02d}_"
+                         f"opponent_{opponent_index:02d}")
+                if opponent:
+                    opponent_rc, result = self._evaluate_checkpoint(
+                        learned, checkpoint, label, opponent=opponent)
+                else:
+                    opponent_rc, result = self._evaluate_checkpoint(
+                        learned, checkpoint, label)
+                rc = rc or opponent_rc
+                evaluations.append(result)
+            current = {}
+            for gate in learned.gates:
+                values = [float(result[gate.metric]) for result in evaluations
+                          if gate.metric in result]
+                if values:
+                    current[gate.metric] = (min(values) if gate.comparison == ">="
+                                            else max(values))
+            if len(evaluations) > 1:
+                current["retention_opponent_results"] = evaluations
             baseline = self.state.get("retention_baselines", {}).get(
                 str(learned.number), self.state["metrics"].get(str(learned.number), {}))
             checks = []
@@ -891,8 +1298,25 @@ class LadderRunner:
                                "margin": margin,
                                "regression": regression, "pass": ok})
             all_ok &= task_ok
+            pressure_key = str(learned.number)
+            old_pressure = float(self.state.setdefault("replay_pressures", {}).get(
+                pressure_key, 1.0))
+            failed_excesses = []
+            for check in checks:
+                if not check["pass"] and check["regression"] is not None:
+                    failed_excesses.append(max(
+                        (float(check["regression"]) - float(check["allowance"]))
+                        / max(float(check["allowance"]), 1.0e-6), 0.0))
+            if task_ok:
+                new_pressure = max(1.0, old_pressure * 0.90)
+            else:
+                new_pressure = min(10.0, max(old_pressure * 1.5,
+                                              1.0 + max(failed_excesses or [0.0])))
+            self.state["replay_pressures"][pressure_key] = new_pressure
             report.append({"candidate_rung": rung.number, "replayed_rung": learned.number,
-                           "checkpoint": checkpoint, "pass": task_ok, "checks": checks})
+                           "checkpoint": checkpoint, "pass": task_ok, "checks": checks,
+                           "replay_pressure_before": old_pressure,
+                           "replay_pressure_after": new_pressure})
             self._record_regression_task(
                 rung, checkpoint, learned, checks, task_ok, "retention_replay")
             status = "PASS" if task_ok else "FAIL"
@@ -911,11 +1335,11 @@ class LadderRunner:
                        dry_run=self.args.dry_run)
         return rc == 0, {"returncode": rc}, None
 
-    def _run_ppo(self, rung: Rung, *, opponent: str | None = None,
+    def _run_ppo(self, rung: Rung, *, opponent: str | list[str] | None = None,
                  tag_suffix: str = "", warm_override: str | None = None
                  ) -> tuple[bool, dict, str | None]:
         tag = self.out / f"rung_{rung.number:02d}_{rung.slug}{tag_suffix}"
-        if rung.number == 7:
+        if rung.number == 7 and self.args.walk_prior_mode == "always":
             self._ensure_walk_prior()
         log = self.out / "logs" / f"{tag.name}.log"
         warm = warm_override or self._previous_checkpoint(rung)
@@ -927,9 +1351,16 @@ class LadderRunner:
         recorded_attempts = int(self.state.get("attempts", {}).get(str(rung.number), 0))
         completed_attempts = (
             self._durable_completed_attempts(tag, base_steps, recorded_attempts)
-            if candidate_path.exists() and self._failed_on_entry == rung.number else 0)
+            if candidate_path.exists() and self.args.resume else 0)
         for offset in range(1, self.args.attempts + 1):
             attempt = completed_attempts + offset
+            # First let the accepted physical stepping policy discover forward
+            # travel from the outcome itself.  Only a failed attempt authorizes
+            # the optional gait teacher as an acquisition fallback; it is never
+            # a prerequisite or a permanent definition of walking.
+            if (rung.number == 7 and self.args.walk_prior_mode == "fallback"
+                    and attempt > 1):
+                self._ensure_walk_prior()
             target_steps = base_steps * attempt
             candidate_exists = candidate_path.exists()
             recorded_attempt = str(rung.number) in self.state.get("attempts", {})
@@ -942,6 +1373,18 @@ class LadderRunner:
                                       init_policy=warm if not resume else None,
                                       resume=resume, opponent=opponent,
                                       anchor_policy=warm)
+            plateau = self._plateau_aborted(tag) if resume else None
+            if plateau is not None and self.args.plateau_intervention:
+                # The previous attempt's gate margin was projected to never
+                # cross within its budget.  Buying more identical dynamics
+                # would repeat that trajectory: reinject exploration and warm
+                # restart the adapted learning rate instead.
+                argv += ["--entropy-boost", str(self.args.plateau_entropy_boost),
+                         "--learning-rate-restart"]
+                print(f"RUNG {rung.number:02d} attempt {attempt}: plateau "
+                      f"intervention (entropy x{self.args.plateau_entropy_boost}, "
+                      "learning-rate restart) after projected margin stall at "
+                      f"step {plateau.get('step')}", flush=True)
             rc = self._run(argv, log, dry_run=self.args.dry_run)
             self.state["attempts"][str(rung.number)] = attempt
             self._save()
@@ -953,32 +1396,24 @@ class LadderRunner:
             last_metrics = self._metrics(tag)
             passed, details = self._gate(rung, last_metrics)
             print("; ".join(details), flush=True)
-            if passed:
-                train_metrics = last_metrics
-                if not (self.args.tiny or self.args.no_gates):
-                    fixed_rc, fixed_metrics = self._evaluate_checkpoint(
-                        rung, str(tag) + ".pt", f"baseline_task_{rung.number:02d}")
-                    fixed_ok, fixed_details = self._gate(rung, fixed_metrics)
-                    fixed_checks = self._current_task_regression_checks(
-                        rung, fixed_metrics)
-                    self._record_regression_task(
-                        rung, str(tag) + ".pt", rung, fixed_checks,
-                        fixed_rc == 0 and fixed_ok, "candidate_task")
-                    print("FIXED-SEED " + "; ".join(fixed_details), flush=True)
-                    if fixed_rc != 0 or not fixed_ok:
-                        print(f"RUNG {rung.number:02d} did not reproduce its pass gate on the "
-                              "fixed retention seed", flush=True)
-                        if rung.number == 7:
-                            self._retarget_walk_prior(fixed_metrics)
-                            self._refine_walk_prior(fixed_metrics)
-                        continue
-                    last_metrics = dict(fixed_metrics, train_eval=train_metrics)
-                retention_ok, retention = self._retention_gate(
-                    rung, str(tag) + ".pt")
-                last_metrics = dict(last_metrics, retention_pass=retention_ok,
-                                    retention_replays=len(retention))
+            for candidate in self._candidate_paths(tag):
+                promotion_ok, promotion_metrics, promotion_details = \
+                    self._promotion_gate(rung, candidate, attempt, opponent)
+                print("PROMOTION " + "; ".join(promotion_details), flush=True)
+                fixed_checks = self._current_task_regression_checks(
+                    rung, promotion_metrics)
+                self._record_regression_task(
+                    rung, candidate, rung, fixed_checks, promotion_ok,
+                    "rotating_hidden_promotion")
+                if not promotion_ok:
+                    continue
+                retention_ok, retention = self._retention_gate(rung, candidate)
+                last_metrics = dict(
+                    promotion_metrics, train_eval=last_metrics,
+                    retention_pass=retention_ok, retention_replays=len(retention),
+                    selected_candidate=candidate)
                 if retention_ok:
-                    return True, last_metrics, str(tag) + ".pt"
+                    return True, last_metrics, candidate
                 print(f"RUNG {rung.number:02d} learned its new task but regressed an "
                       "earlier skill; continuing the candidate checkpoint", flush=True)
             print(f"RUNG {rung.number:02d} gate failed; continuing its checkpoint "
@@ -1005,25 +1440,63 @@ class LadderRunner:
                 return False, final_metrics, None
             final_ckpt = checkpoint
             hall.append(checkpoint)
-        final_metrics = dict(final_metrics, pfsp_hall_size=len(hall))
-        return True, final_metrics, final_ckpt
+        hall_ok, hall_metrics = self._pfsp_hall_gate(rung, final_ckpt, hall[:-1])
+        if hall_ok:
+            self.state.setdefault("retention_opponents", {})[str(rung.number)] = hall[:-1]
+            self._save()
+        final_metrics = dict(final_metrics, **hall_metrics,
+                             pfsp_hall_size=len(hall))
+        return hall_ok, final_metrics, final_ckpt if hall_ok else None
+
+    def _pfsp_hall_gate(self, rung: Rung, candidate: str,
+                        hall: list[str]) -> tuple[bool, dict]:
+        """Require the final policy to pass against every archived opponent."""
+        if self.args.tiny or self.args.no_gates:
+            return True, {"pfsp_hall_all_pass": True}
+        rows = []
+        for index, opponent in enumerate(hall):
+            output = self.out / "logs" / f"pfsp_final_opponent_{index:02d}.json"
+            log = self.out / "logs" / f"pfsp_final_opponent_{index:02d}.log"
+            argv = [self.args.python, "-u", str(EVALUATOR), "eval",
+                    "--geometry", self._geometry(rung), "--rung", str(rung.number),
+                    "--checkpoint", candidate, "--opponent", opponent,
+                    "--episodes", "1", "--steps", str(self.args.retention_steps),
+                    "--envs", str(self.args.retention_envs),
+                    "--seed", str(self.args.promotion_seed_base + 900_000 + index),
+                    "--out", str(output)]
+            if self.args.device:
+                argv += ["--device", self.args.device]
+            rc = self._run(argv, log)
+            metrics = json.loads(output.read_text()) if rc == 0 and output.exists() else {}
+            passed, _ = self._gate(rung, metrics)
+            rows.append({"opponent": opponent, "pass": rc == 0 and passed,
+                         "metrics": metrics})
+        aggregate = {"pfsp_hall_results": rows,
+                     "pfsp_hall_all_pass": all(row["pass"] for row in rows)}
+        for gate in rung.gates:
+            values = [float(row["metrics"][gate.metric]) for row in rows
+                      if gate.metric in row["metrics"]]
+            if values:
+                aggregate[gate.metric] = (min(values) if gate.comparison == ">="
+                                          else max(values))
+        return bool(aggregate["pfsp_hall_all_pass"]), aggregate
 
     def _pfsp_opponent(self, rung: Rung, candidate: str, hall: list[str],
-                       round_index: int) -> str:
+                       round_index: int) -> list[str]:
         """Prioritized fictitious self-play over measured archive matchups.
 
         Opponents that the current candidate rarely beats receive the largest
         weight. Sampling is seeded, so a resumed run makes the same choice.
         """
         if self.args.tiny:
-            return hall[round_index % len(hall)]
+            return [hall[round_index % len(hall)]]
         rows = []
         for index, opponent in enumerate(hall):
             label = f"pfsp_round_{round_index:02d}_opponent_{index:02d}"
             output = self.out / "logs" / f"{label}.json"
             log = self.out / "logs" / f"{label}.log"
             argv = [self.args.python, "-u", str(EVALUATOR), "eval",
-                    "--geometry", str(rung.geometry), "--rung", str(rung.number),
+                    "--geometry", self._geometry(rung), "--rung", str(rung.number),
                     "--checkpoint", candidate, "--opponent", opponent,
                     "--episodes", "1", "--steps", str(self.args.retention_steps),
                     "--envs", str(self.args.retention_envs),
@@ -1039,42 +1512,77 @@ class LadderRunner:
             rows.append({"opponent": opponent, "margin": margin,
                          "win_probability": win_probability, "weight": weight})
         weights = [row["weight"] for row in rows]
-        choice = random.Random(self.args.seed + round_index).choices(
-            range(len(hall)), weights=weights, k=1)[0]
+        choices = random.Random(self.args.seed + round_index).choices(
+            range(len(hall)), weights=weights, k=self.args.pfsp_pool_size)
         event = {"round": round_index, "candidate": candidate,
-                 "selected": hall[choice], "matchups": rows}
+                 "selected_pool": [hall[index] for index in choices], "matchups": rows}
         self.state.setdefault("pfsp_history", []).append(event)
         self._save()
-        print(f"PFSP round {round_index}: selected {Path(hall[choice]).name}; "
+        print(f"PFSP round {round_index}: mixed "
+              f"{[Path(hall[index]).name for index in choices]}; "
               f"weights={[round(value, 3) for value in weights]}", flush=True)
-        return hall[choice]
+        return [hall[index] for index in choices]
 
     def _run_search(self, rung: Rung) -> tuple[bool, dict, str | None]:
         checkpoint = self._previous_checkpoint(rung)
         if checkpoint is None:
             return False, {"error": "co-design search requires rung 30 checkpoint"}, None
-        output = self.out / f"rung_{rung.number:02d}_{rung.slug}.json"
-        log = self.out / "logs" / f"rung_{rung.number:02d}_{rung.slug}.log"
         candidates = 4 if self.args.tiny else self.args.search_candidates
         generations = 1 if self.args.tiny else self.args.search_generations
         steps = 4 if self.args.tiny else self.args.search_steps
         envs = 2 if self.args.tiny else min(self.args.envs, self.args.search_envs)
-        argv = [self.args.python, "-u", str(SEARCH), "design", "--candidates", str(candidates),
-                "--generations", str(generations), "--steps", str(steps), "--envs", str(envs),
-                "--seed", str(self.args.seed + rung.number), "--checkpoint", checkpoint,
-                "--out", str(output)]
-        if self.args.device:
-            argv += ["--device", self.args.device]
-        rc = self._run(argv, log, dry_run=self.args.dry_run)
-        if self.args.dry_run:
-            return True, {"dry_run": True}, checkpoint
-        metrics = json.loads(output.read_text()) if rc == 0 and output.exists() else {"returncode": rc}
+        rounds = 1 if self.args.tiny else self.args.codesign_rounds
+        metrics = {}
+        for round_index in range(rounds):
+            output = self.out / f"rung_{rung.number:02d}_{rung.slug}_round{round_index:02d}.json"
+            log = self.out / "logs" / f"rung_{rung.number:02d}_{rung.slug}_round{round_index:02d}.log"
+            argv = [self.args.python, "-u", str(SEARCH), "design",
+                    "--candidates", str(candidates), "--generations", str(generations),
+                    "--steps", str(steps), "--envs", str(envs),
+                    "--repeats", str(self.args.search_repeats),
+                    "--heldout-repeats", str(self.args.search_heldout_repeats),
+                    "--seed", str(self.args.seed + rung.number + round_index * 100_003),
+                    "--checkpoint", checkpoint, "--out", str(output)]
+            if self.args.device:
+                argv += ["--device", self.args.device]
+            rc = self._run(argv, log, dry_run=self.args.dry_run)
+            if self.args.dry_run:
+                return True, {"dry_run": True}, checkpoint
+            metrics = (json.loads(output.read_text())
+                       if rc == 0 and output.exists() else {"returncode": rc})
+            if rc != 0 or round_index == rounds - 1:
+                break
+            # Alternate design search with real PPO adaptation of the same
+            # universal policy on the discovered morphology plus the original
+            # corner/center coverage bank.
+            design_bank = [
+                [0.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 1.0, 1.0],
+                [1.0, 1.0, 0.0], [0.5, 0.5, 0.5], metrics["parameters"],
+            ]
+            bank_path = self.out / f"codesign_bank_round{round_index:02d}.json"
+            bank_path.write_text(json.dumps(design_bank, indent=2) + "\n")
+            adapt_tag = self.out / f"rung_31_codesign_adapt_round{round_index:02d}"
+            adapt_log = self.out / "logs" / f"{adapt_tag.name}.log"
+            adapt_rung = RUNGS[29]
+            adapt_argv = self._trainer_argv(
+                adapt_rung, adapt_tag, self.args.codesign_retrain_steps,
+                init_policy=checkpoint, resume=False, opponent=None,
+                anchor_policy=checkpoint)
+            adapt_argv += ["--design-bank-json", str(bank_path)]
+            adapt_rc = self._run(adapt_argv, adapt_log)
+            if adapt_rc != 0:
+                return False, {"error": "co-design policy adaptation failed",
+                               "returncode": adapt_rc}, None
+            checkpoint = str(adapt_tag) + ".pt"
         passed, details = self._gate(rung, metrics)
         print("; ".join(details), flush=True)
+        metrics["codesign_rounds"] = rounds
+        metrics["adapted_checkpoint"] = checkpoint
         return rc == 0 and passed, metrics, checkpoint
 
     def execute(self) -> int:
         self._audit_completed_contracts()
+        self._ensure_completed_replay_artifacts()
         for rung in selected_rungs(self.args.first, self.args.last):
             if rung.number in self.state["completed"]:
                 print(f"SKIP rung {rung.number:02d} {rung.name}: already accepted", flush=True)
@@ -1089,7 +1597,11 @@ class LadderRunner:
                 passed, metrics, checkpoint = self._run_verify(rung)
             elif rung.kind == "ppo":
                 opponent = self._previous_checkpoint(rung) if rung.number == 28 else None
-                passed, metrics, checkpoint = self._run_ppo(rung, opponent=opponent)
+                passed, metrics, checkpoint = self._test_out(rung, opponent=opponent)
+                if not passed:
+                    passed, metrics, checkpoint = self._run_ppo(rung, opponent=opponent)
+                if passed and rung.number == 28 and opponent:
+                    self.state.setdefault("retention_opponents", {})["28"] = [opponent]
             elif rung.kind == "pfsp":
                 passed, metrics, checkpoint = self._run_pfsp(rung)
             else:
@@ -1105,6 +1617,8 @@ class LadderRunner:
                     if gate.metric in metrics
                 }
                 self._save()
+                if checkpoint:
+                    self._ensure_replay_artifact(rung, checkpoint)
                 print(f"ACCEPT rung {rung.number:02d}: {rung.name}", flush=True)
             else:
                 self.state["failed"] = {"rung": rung.number, "name": rung.name,
@@ -1153,6 +1667,17 @@ def make_parser() -> argparse.ArgumentParser:
     run.add_argument("--eval-steps", type=int, default=400)
     run.add_argument("--diagnostic-eval-seeds", type=int, default=3,
                      help="held-out deterministic seeds summarized at every evaluation")
+    run.add_argument("--promotion-seeds", type=int, default=5,
+                     help="fresh full-episode seeds every candidate must all pass")
+    run.add_argument("--promotion-seed-base", type=int, default=2026080100,
+                     help="base for rotating promotion banks, separate from PPO diagnostics")
+    run.add_argument("--candidate-eval-max", type=int, default=5,
+                     help="highest-margin immutable intermediate policies to promote")
+    run.add_argument("--test-out", action=argparse.BooleanOptionalAction, default=True,
+                     help=("certify inherited behavior on fresh full episodes before PPO; "
+                           "use --no-test-out to require training every rung"))
+    run.add_argument("--test-out-margin", type=float, default=0.10,
+                     help="minimum dimensionless margin on every zero-shot promotion gate")
     run.add_argument("--checkpoint-replay-steps", type=int, default=32,
                      help="fixed rollout length compared immediately across save/reload")
     run.add_argument("--epochs", type=int, default=4)
@@ -1161,30 +1686,83 @@ def make_parser() -> argparse.ArgumentParser:
                      help="whole-rollout PPO KL target for adaptive epoch/lr control")
     run.add_argument("--kl-stop-multiplier", type=float, default=1.5,
                      help="stop remaining PPO epochs above this target-KL multiple")
-    run.add_argument("--hidden", default="512,256,128")
-    run.add_argument("--architecture", choices=("mlp", "task_film"), default="task_film")
+    # 512,512,512 constructs the exact network the accepted "512,256,128"
+    # runs actually trained (FiLM actors are constant-width at hidden[0]);
+    # the honest spelling avoids the trainer's taper warning.
+    run.add_argument("--hidden", default="512,512,512")
+    run.add_argument("--architecture", choices=(
+        "mlp", "task_film", "task_film_gru", "predictive_token_gru"),
+                     default="task_film")
+    run.add_argument("--prediction-horizon", type=int, default=32)
+    run.add_argument("--prediction-decoder", choices=("recurrent", "transformer"),
+                     default="recurrent")
+    run.add_argument("--prediction-anchors", type=int, default=4)
+    run.add_argument("--prediction-lr", type=float, default=None,
+                     help="constant decoder Adam learning rate forwarded to the "
+                          "trainer (default: the trainer's --lr ceiling)")
+    run.add_argument("--power-model", choices=("off", "shared_bus"),
+                     default="off",
+                     help="train and evaluate every locomotion-path rung under "
+                          "the shared-bus electrical budget (+shared_bus_v2 "
+                          "action semantics); the fused combat layer is not "
+                          "yet covered and stays on v1")
+    run.add_argument("--command-observations",
+                     action=argparse.BooleanOptionalAction, default=False,
+                     help="train every universal rung on the commands-only v2 "
+                          "observation contract (universal_command geometry): "
+                          "rung identity is invisible to the policy and all "
+                          "task semantics arrive as explicit commands; see "
+                          "notes/universal-command-contract.md")
+    run.add_argument("--plateau-intervention",
+                     action=argparse.BooleanOptionalAction, default=True,
+                     help="after a plateau-aborted attempt, retry with entropy "
+                          "reinjection and a learning-rate warm restart instead "
+                          "of identical dynamics")
+    run.add_argument("--plateau-entropy-boost", type=float, default=1.5,
+                     help="entropy-coefficient multiplier for plateau retries "
+                          "(capped at the trainer's from-scratch start value)")
+    run.add_argument("--prediction-loss-weight", type=float, default=0.25)
+    run.add_argument("--guidance-horizon", type=int, default=16)
+    run.add_argument("--guidance-steps", type=int, default=2)
+    run.add_argument("--guidance-interval", type=int, default=4)
     run.add_argument("--distill-weight", type=float, default=0.05,
                      help="old-policy behavior replay weight between sequential rungs")
     run.add_argument("--seed", type=int, default=20260712)
     run.add_argument("--pfsp-rounds", type=int, default=4)
+    run.add_argument("--pfsp-pool-size", type=int, default=8,
+                     help="PFSP-weighted frozen opponents mixed within each rollout")
     run.add_argument("--search-candidates", type=int, default=16)
     run.add_argument("--search-generations", type=int, default=4)
     run.add_argument("--search-steps", type=int, default=160)
     run.add_argument("--search-envs", type=int, default=64)
+    run.add_argument("--search-repeats", type=int, default=3)
+    run.add_argument("--search-heldout-repeats", type=int, default=5)
+    run.add_argument("--codesign-rounds", type=int, default=2,
+                     help="alternate held-out design search and policy adaptation")
+    run.add_argument("--codesign-retrain-steps", type=int, default=500_000)
     run.add_argument("--walk-search-population", type=int, default=64)
     run.add_argument("--walk-search-repeats", type=int, default=4)
     run.add_argument("--walk-search-generations", type=int, default=12)
     run.add_argument("--walk-search-steps", type=int, default=400)
+    run.add_argument(
+        "--walk-prior-mode", choices=("off", "fallback", "always"),
+        default="fallback",
+        help="try outcome-only rung 7 first, disable its gait prior, or require it")
     run.add_argument("--no-gates", action="store_true")
     run.add_argument("--retention-tolerance", type=float, default=0.20,
                      help="maximum relative regression from a skill's learned baseline")
     run.add_argument("--retention-absolute", type=float, default=0.02,
                      help="minimum absolute regression allowance for near-zero metrics")
-    run.add_argument("--retention-steps", type=int, default=200)
+    run.add_argument("--retention-steps", type=int, default=800,
+                     help="full fixed-seed episode length for every retention replay")
     run.add_argument("--retention-envs", type=int, default=32)
     run.add_argument("--retention-seed", type=int, default=2026071200)
     run.add_argument("--retention-max", type=int, default=0,
                      help="replay only the latest N prior skills (0 means every prior skill)")
+    run.add_argument("--replay-steps", type=int, default=200,
+                     help="accepted-policy physics steps stored per prior skill")
+    run.add_argument("--replay-envs", type=int, default=16,
+                     help="parallel worlds stored in each real retention replay")
     run.add_argument("--tiny", action="store_true")
     run.add_argument("--dry-run", action="store_true")
     return parser
@@ -1198,6 +1776,8 @@ def main(argv=None) -> int:
         return 0
     if not 1 <= args.first <= args.last <= 31:
         raise SystemExit("--from/--to must satisfy 1 <= from <= to <= 31")
+    if args.test_out_margin < 0.0:
+        raise SystemExit("--test-out-margin must be non-negative")
     return LadderRunner(args).execute()
 
 

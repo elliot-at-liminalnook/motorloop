@@ -787,19 +787,19 @@ def physics_json() -> dict:
         "notes": [
             "48 unnamed flat mesh nodes; groups assigned from measured bounds/colors/shape.",
             "Sector gear rim circle fit: center (-0.16269, 0.00000), R 0.0495, ~20 teeth over ~270 deg.",
-            "Design intent per user: drive frame [4] + guide rails [7] are NOT fixed - they swing "
-            "with the sector gear about the gear axle pin (worm-driven).",
+            ("Design intent per user: drive frame [4] + guide rails [7] are NOT fixed - they swing "
+             "with the sector gear about the gear axle pin (worm-driven)."),
             "A separate KNEE motor at the knee carrier drives the foot blade + pushrod.",
-            "The blade is TWO lengths hinged at the yellow toe pin: upper straight strip (knee "
-            "crank, r 75 mm) and lower curved perforated plates (conrod, L 100 mm) whose ear "
-            "wraps the heel pin on top of the piston. Slider-crank: as the blade sweeps out the "
-            "heel pin lowers 41 mm toward the ground, weight keeping the joints seated. The "
-            "distal-carrier bushing restricts the piston to up/down motion colinear with the "
-            "shin rail (no tilt).",
-            "Knee-blade ROM per design intent: toe pin pivots OUT IN FRONT of the knee pin "
-            "(-90 deg, blade horizontal toe-forward) with a small +10 deg back-reach; the heel "
-            "ear swings back through the knee carrier's internal slot region. Swing ROM +/-25 deg. "
-            "Both verified against rendered frames.",
+            ("The blade is TWO lengths hinged at the yellow toe pin: upper straight strip (knee "
+             "crank, r 75 mm) and lower curved perforated plates (conrod, L 100 mm) whose ear "
+             "wraps the heel pin on top of the piston. Slider-crank: as the blade sweeps out the "
+             "heel pin lowers 41 mm toward the ground, weight keeping the joints seated. The "
+             "distal-carrier bushing restricts the piston to up/down motion colinear with the "
+             "shin rail (no tilt)."),
+            ("Knee-blade ROM per design intent: toe pin pivots OUT IN FRONT of the knee pin "
+             "(-90 deg, blade horizontal toe-forward) with a small +10 deg back-reach; the heel "
+             "ear swings back through the knee carrier's internal slot region. Swing ROM +/-25 deg. "
+             "Both verified against rendered frames."),
             "Mass/friction values are placeholders for downstream schema testing.",
             "The GIF is keyframed kinematics, not a Bullet rigid-body simulation.",
         ],

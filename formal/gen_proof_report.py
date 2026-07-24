@@ -136,6 +136,7 @@ def main():
         lines.pop()
     REPORT.write_text("\n".join(lines) + "\n")
     print(f"wrote {REPORT}")
+    return 0
 
 
 if __name__ == "__main__":

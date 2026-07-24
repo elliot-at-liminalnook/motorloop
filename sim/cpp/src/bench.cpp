@@ -402,7 +402,7 @@ void Bench::tick() {
     } else {
       // Stop bit complete: byte done, line stays idle-high.
       uart_tx_bit_idx_ = -1;
-      uart_tx_queue_.erase(uart_tx_queue_.begin());
+      uart_tx_queue_.pop_front();
     }
     if (uart_tx_bit_idx_ >= 0) {
       uart_tx_next_edge_ = time_s_ + uart_bit_s_;

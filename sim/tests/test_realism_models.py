@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import math
 
-import pytest
 from bench_factory import bench_config
 
 

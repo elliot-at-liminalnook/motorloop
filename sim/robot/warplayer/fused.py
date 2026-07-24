@@ -41,9 +41,8 @@ HERE = Path(__file__).resolve().parent
 if str(HERE.parent) not in sys.path:
     sys.path.insert(0, str(HERE.parent))          # sim/robot: gen_robot_mjcf, constants
 
-from .lidar import Lidar, lidar_kernel  # noqa: E402,F401
+from .lidar import Lidar  # noqa: E402
 from .obsreward import (  # noqa: E402
-    FightIndices,
     RewardConfig,
     damage_kernel,
     damage_zero_kernel,

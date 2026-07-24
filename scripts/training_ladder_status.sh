@@ -61,6 +61,101 @@ if [[ -n "$latest_log" ]]; then
 else
   echo "no trainer log yet"
 fi
+echo "--- learning health ---"
+latest_diag="$(ls -1t "$out"/rung_*.diagnostics.json 2>/dev/null | head -1)"
+if [[ -n "$latest_diag" ]]; then
+  latest_stats="${latest_diag%.diagnostics.json}.stats.json"
+  latest_metrics="${latest_diag%.diagnostics.json}.metrics.jsonl"
+  python3 - "$latest_diag" "$latest_stats" "$latest_metrics" <<'PY'
+import json, math, pathlib, sys
+
+diagnostics_path, stats_path, metrics_path = map(pathlib.Path, sys.argv[1:])
+record = json.loads(diagnostics_path.read_text())
+diagnostics = record.get("diagnostics", {})
+evaluation = record.get("evaluation", {})
+robust = diagnostics.get("robust_gates", {})
+checks = robust.get("checks", [])
+failed = [row for row in checks if not row.get("pass", False)]
+print(f"step={record.get('step')} robust_pass={robust.get('all_pass')} "
+      f"worst={robust.get('worst_metric')} "
+      f"margin={robust.get('worst_relative_margin')}")
+if failed:
+    print("failing_gates=" + ", ".join(
+        f"{row.get('metric')}={row.get('value'):.6g} "
+        f"{row.get('comparison')}{row.get('threshold'):.6g} "
+        f"margin={row.get('relative_margin'):.3f}"
+        for row in failed))
+
+adaptive = diagnostics.get("adaptive_contracts", {})
+ceiling = float(adaptive.get("dual_max", 0.0))
+rows = adaptive.get("constraints", []) + adaptive.get("competence", [])
+if rows:
+    def violated(row):
+        observed, target = float(row["observed"]), float(row["target"])
+        return observed > target if row["comparison"] == "<=" else observed < target
+    print("adaptive=" + ", ".join(
+        f"{row['name']}:{row['observed']:.4g}{row['comparison']}{row['target']:.4g} "
+        f"dual={row['dual']:.3g}"
+        + (" SATURATED" if ceiling and violated(row)
+           and float(row["dual"]) >= 0.99 * ceiling else "")
+        for row in rows))
+
+trust = diagnostics.get("trust_region", {})
+controller = diagnostics.get("kl_controller", {})
+clipping = diagnostics.get("gradient_clipping", {})
+critic = diagnostics.get("critic", {}).get("after_update", {})
+print("optimizer="
+      f"kl={trust.get('approx_kl', float('nan')):.4g}/"
+      f"{controller.get('target_kl', float('nan')):.4g} "
+      f"ess={trust.get('effective_sample_fraction', float('nan')):.3f} "
+      f"epochs={controller.get('epochs_completed')}/{controller.get('epochs_requested')} "
+      f"lr={controller.get('learning_rate_next', float('nan')):.3g} "
+      f"actor_clip={clipping.get('actor', {}).get('clipped_fraction', float('nan')):.2f} "
+      f"critic_clip={clipping.get('critic', {}).get('clipped_fraction', float('nan')):.2f} "
+      f"critic_ev={critic.get('explained_variance', float('nan')):.3f} "
+      f"critic_nrmse={critic.get('normalized_rmse', float('nan')):.3f}")
+
+timing = diagnostics.get("timing", {})
+throughput = float("nan")
+if metrics_path.exists():
+    for line in metrics_path.read_text().splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("event") == "evaluation":
+            throughput = row.get("env_steps_per_second", throughput)
+elif stats_path.exists():
+    stats = json.loads(stats_path.read_text())
+    if stats.get("evals"):
+        throughput = stats["evals"][-1].get("env_steps_per_second", throughput)
+print("timing="
+      f"rollout={timing.get('rollout_seconds', float('nan')):.2f}s "
+      f"opt={timing.get('optimization_seconds', float('nan')):.2f}s "
+      f"eval={timing.get('evaluation_seconds', float('nan')):.2f}s "
+      f"throughput={throughput:.0f} env-step/s")
+
+roles = evaluation.get("reward_role_shares", {})
+print("behavior="
+      f"foot_air_min={evaluation.get('foot_air_fraction_min', float('nan')):.3f} "
+      f"foot_activity={evaluation.get('ladder_foot_activity', float('nan')):.3f} "
+      f"contact_entropy={evaluation.get('contact_pattern_entropy', float('nan')):.3f} "
+      f"contact_patterns={evaluation.get('contact_pattern_count', 'n/a')} "
+      f"clock_diagnostic={evaluation.get('ladder_step_clock', float('nan')):.3f}")
+if roles:
+    print("reward_roles=" + ", ".join(
+        f"{name}={float(value):.3f}" for name, value in roles.items()))
+
+replay = diagnostics.get("checkpoint_replay", {})
+print(f"checkpoint_replay_pass={replay.get('pass')} "
+      f"tolerance_used={replay.get('max_tolerance_ratio', float('nan')):.3g}")
+alerts = diagnostics.get("alerts", [])
+print("alerts=" + (", ".join(
+    f"{row.get('severity')}:{row.get('code')}" for row in alerts) or "none"))
+PY
+else
+  echo "no structured diagnostics yet"
+fi
 echo "--- GPU ---"
 nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu \
   --format=csv,noheader 2>/dev/null || true

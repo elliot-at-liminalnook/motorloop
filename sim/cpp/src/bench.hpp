@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <deque>
 #include <vector>
 
 #include <random>
@@ -268,7 +269,7 @@ class Bench {
 
   // UART host model (8N1 at rtl.uart_baud).
   double uart_bit_s_ = 0.0;
-  std::vector<int> uart_tx_queue_;     // host -> RTL, bytes
+  std::deque<int> uart_tx_queue_;      // host -> RTL, bytes (FIFO pops)
   int uart_tx_bit_idx_ = -1;           // -1 idle, 0 start, 1..8 data, 9 stop
   double uart_tx_next_edge_ = 0.0;
   std::vector<int> uart_rx_bytes_;     // RTL -> host, decoded

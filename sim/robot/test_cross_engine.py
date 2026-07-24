@@ -7,7 +7,6 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
-import warp as wp
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))

@@ -23,7 +23,12 @@ def run(default_geometry: str, argv=None, default_tag: str | None = None):
     parser.add_argument("--device", default=None)
     parser.add_argument("--tiny", action="store_true")
     parser.add_argument("--preflight", choices=("strict", "warn", "off"), default="strict")
-    args, _ = parser.parse_known_args(argv)
+    # Flags this adapter does not own are forwarded VERBATIM to the trainer's
+    # strict parser: a legitimate trainer flag (e.g. --evals) works, and an
+    # unsupported one fails loudly.  This adapter used to swallow unknown
+    # flags, which let launchers "set" reward and search knobs that never
+    # reached training.
+    args, extra = parser.parse_known_args(argv)
     if args.tiny:
         args.steps, args.envs, args.horizon = 512, 16, 16
         args.preflight = "off"
@@ -39,7 +44,7 @@ def run(default_geometry: str, argv=None, default_tag: str | None = None):
         out += ["--resume", args.resume]
     if args.opponent:
         out += ["--opponent", args.opponent]
-    return train(build_args(out))
+    return train(build_args(out + extra))
 
 
 def selfplay(argv=None):
@@ -51,7 +56,7 @@ def selfplay(argv=None):
     parser.add_argument("--tag", default="selfplay_warp")
     parser.add_argument("--device", default=None)
     parser.add_argument("--tiny", action="store_true")
-    args, _ = parser.parse_known_args(argv)
+    args, extra = parser.parse_known_args(argv)
     if args.tiny:
         args.rounds, args.steps, args.envs, args.horizon = 2, 512, 16, 16
     hall: list[str] = []
@@ -60,7 +65,7 @@ def selfplay(argv=None):
         opponent = random.Random(round_index).choice(hall) if hall else None
         cli = ["--steps", str(args.steps), "--envs", str(args.envs),
                "--horizon", str(args.horizon), "--tag", tag,
-               "--seed", str(round_index), "--preflight", "off"]
+               "--seed", str(round_index), "--preflight", "off", *extra]
         if args.device:
             cli += ["--device", args.device]
         if opponent:

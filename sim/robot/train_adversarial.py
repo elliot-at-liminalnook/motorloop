@@ -11,7 +11,6 @@ import torch
 import warp as wp
 
 from combat_warp_env import CombatWarpEnv
-from constants import LOCO_OBS
 from gen_robot_mjcf import load_spec
 from train_mesh_warp import load_policy as _load_torch_policy
 from warplayer.obsreward import RewardConfig
@@ -83,7 +82,7 @@ class AdversarialEnv(CombatWarpEnv):
 
 def load_policy(path, observation_size=None, action_size=None, device=None):
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    checkpoint = torch.load(path, map_location=device, weights_only=False)
+    checkpoint = torch.load(path, map_location=device, weights_only=True)
     observation_size = observation_size or checkpoint["obs_norm"]["mean"].numel()
     action_size = action_size or checkpoint["actor"]["log_std"].numel()
     return _load_torch_policy(path, observation_size, action_size, device)
@@ -95,7 +94,7 @@ def load_opponent(path, obs=None, act=None, device=None):
 
 def warm_start(path, obs_dim, act_dim=None):
     del obs_dim, act_dim
-    return torch.load(path, map_location="cpu", weights_only=False)
+    return torch.load(path, map_location="cpu", weights_only=True)
 
 
 def behavior_keep_ok(values, min_closed=-1e30, min_approach=-1e30,

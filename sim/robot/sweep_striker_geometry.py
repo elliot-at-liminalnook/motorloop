@@ -101,7 +101,8 @@ def main() -> None:
                         )
                         params = ta.warm_start(args.ckpt, env.observation_size, env.action_size)
                         if params is None:
-                            params = pickle.load(open(args.ckpt, "rb"))
+                            with open(args.ckpt, "rb") as f:
+                                params = pickle.load(f)
                         vals_by_seed = []
                         for seed in seeds:
                             bench = ta.build_benchmark(

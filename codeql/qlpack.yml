@@ -1,0 +1,4 @@
+name: motorloop/audit-queries
+version: 0.1.0
+dependencies:
+  codeql/python-all: "*"

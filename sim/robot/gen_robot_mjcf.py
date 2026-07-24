@@ -32,8 +32,9 @@ from motors import MOTORS, SERVOS  # noqa: E402
 try:
     from spec_schema import validate_spec  # noqa: E402
 except ImportError as _e:
-    print(f"WARNING: robot spec validation disabled ({_e}); "
-          "install pydantic==2.* to validate robot.toml at model build", file=sys.stderr)
+    import warnings
+    warnings.warn(f"robot spec validation disabled ({_e}); "
+                  "install pydantic==2.* to validate robot.toml at model build")
 
     def validate_spec(d: dict) -> dict:
         return d
@@ -314,8 +315,6 @@ def build_mjcf(spec: dict, overrides: dict | None = None, self_collision: bool =
 
 import math
 
-import numpy as np
-
 
 def _lidar_sites_xml(prefix: str, n_rays: int, max_range: float = 2.0,
                      n_vertical: int = 0, v_fov: float = 0.3) -> tuple[str, str]:
@@ -339,7 +338,7 @@ def _lidar_sites_xml(prefix: str, n_rays: int, max_range: float = 2.0,
     dx, dy = math.cos(angle), math.sin(angle)
     # Rotate (0,0,-1) -> (dx,dy,0): axis = cross((0,0,-1),(dx,dy,0)) = (dy,-dx,0)
     ax, ay = dy, -dx
-    n = math.sqrt(ax * ax + ay * ay)
+    n = math.hypot(ax, ay)
     if n < 1e-8:
       quat = "1 0 0 0"
     else:
@@ -356,7 +355,7 @@ def _lidar_sites_xml(prefix: str, n_rays: int, max_range: float = 2.0,
     for j in range(n_vertical):
       pitch = -v_fov + 2.0 * v_fov * (j + 1) / (n_vertical + 1)
       # Ray direction: (cos(pitch), 0, sin(pitch))
-      dx = math.cos(pitch); dz = math.sin(pitch)
+      dx = math.cos(pitch)
       # Rotate (0,0,-1) -> (dx,0,dz): axis = cross((0,0,-1),(dx,0,dz)) = (0,-dz,dx)... wait
       # cross((0,0,-1),(dx,0,dz)) = (0*dz - (-1)*0, (-1)*dx - 0*dz, 0*0 - 0*dx) = (0, -dx, 0)
       ax, ay, az = 0.0, -dx, 0.0

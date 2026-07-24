@@ -60,5 +60,5 @@ try:
     register(id="MotorloopLocomotion-v0", entry_point="foc_env:make_env",
              kwargs=dict(robot="HalfCheetah-v5", motor="db42s03", gear_ratio=2.0),
              max_episode_steps=1000)
-except Exception:
-    pass
+except ImportError:
+    pass  # gymnasium not installed: registration is optional; direct construction still works

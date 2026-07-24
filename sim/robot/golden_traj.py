@@ -20,8 +20,8 @@ COMMAND = (0.4, 0.0, 0.0)
 def fingerprint(env_name="commanded_pd"):
     if env_name != "commanded_pd":
         raise ValueError(env_name)
-    old_cat, old_prior = W.CAT_ON, W.MOTION_PRIOR_W
-    W.CAT_ON, W.MOTION_PRIOR_W = False, 0.0
+    old_cat = W.CAT_ON
+    W.CAT_ON = False
     try:
         env = W.WalkerWarpEnv(1, seed=0, device="cpu", episode_length=None)
         env._reset_noise.zero_(); env.reset()
@@ -36,7 +36,7 @@ def fingerprint(env_name="commanded_pd"):
                 "final_z": round(float(qpos[2]), 6),
                 "reward_sum": round(reward_sum, 6)}
     finally:
-        W.CAT_ON, W.MOTION_PRIOR_W = old_cat, old_prior
+        W.CAT_ON = old_cat
 
 
 if __name__ == "__main__":

@@ -18,7 +18,6 @@ harness, and the fused MuJoCo-Warp self-play match.
 from __future__ import annotations
 
 DAMAGE_MAX, CONTROL_MAX, AGGRESSION_MAX = 6.0, 6.0, 5.0
-TOTAL = DAMAGE_MAX + CONTROL_MAX + AGGRESSION_MAX        # 17
 
 
 def _c(x: float) -> float:

@@ -10,7 +10,6 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-CMD_DIM = 3
 DEFAULT_FAST_DESIGN = (0.5, 0.08, 1.0 / 3.0)
 VMAX = float(os.environ.get("CMD_VMAX", "1.2"))
 TRACK_W = 5.0
@@ -26,48 +25,22 @@ CMD_TRAIN_MODE = os.environ.get("CMD_TRAIN_MODE", "cardinal")
 CMD_REWARD_MODE = os.environ.get("CMD_REWARD_MODE", "command")
 CMD_CONTROL_MODE = os.environ.get("CMD_CONTROL_MODE", "pd")
 RESET_NOISE = float(os.environ.get("CMD_RESET_NOISE", "0.05"))
-from constants import PD_KD, PD_KP, AIRTIME_CAP, AIRTIME_TARGET, FOOT_CONTACT_Z
-PD_SCALE = float(os.environ.get("CMD_PD_SCALE", "1.0"))
-SIMPLE_FWD_W = float(os.environ.get("CMD_SIMPLE_FWD_W", "5.0"))
-SIMPLE_BACK_W = float(os.environ.get("CMD_SIMPLE_BACK_W", "3.0"))
-CPG_RESIDUAL_SCALE = float(os.environ.get("CMD_CPG_RESIDUAL_SCALE", "0.30"))
-CPG_RESIDUAL_SCALE_TRANSITION = float(os.environ.get(
-    "CMD_CPG_RESIDUAL_SCALE_TRANSITION", str(CPG_RESIDUAL_SCALE)))
-_WP2_SCALE = os.environ.get("CMD_CPG_RESIDUAL_SCALE_WP2", "").strip()
-CPG_RESIDUAL_SCALE_WP2 = None if not _WP2_SCALE else float(_WP2_SCALE)
-_WP3_SCALE = os.environ.get("CMD_CPG_RESIDUAL_SCALE_WP3", "").strip()
-CPG_RESIDUAL_SCALE_WP3 = None if not _WP3_SCALE else float(_WP3_SCALE)
 CPG_WP2_ACTION_JSON = os.environ.get("CMD_CPG_WP2_ACTION_JSON", "").strip()
 CPG_WP2_ACTION_SEGMENT_STEPS = int(os.environ.get("CMD_CPG_WP2_ACTION_SEGMENT_STEPS", "0") or "0")
 CPG_WP3_ACTION_JSON = os.environ.get("CMD_CPG_WP3_ACTION_JSON", "").strip()
 CPG_WP3_ACTION_SEGMENT_STEPS = int(os.environ.get("CMD_CPG_WP3_ACTION_SEGMENT_STEPS", "0") or "0")
-CPG_TRANSITION_DELTA_THRESH = float(os.environ.get("CMD_CPG_TRANSITION_DELTA_THRESH", "0.08"))
-CPG_TRANSITION_HOLD_STEPS = int(os.environ.get("CMD_CPG_TRANSITION_HOLD_STEPS", "0"))
 CMD_ROUTE_WAYPOINTS = os.environ.get("CMD_ROUTE_WAYPOINTS", "0.35,0;0.35,0.35;0,0.35;0,0")
 CMD_ROUTE_RADIUS = float(os.environ.get("CMD_ROUTE_RADIUS", "0.07"))
 CMD_ROUTE_GAIN = float(os.environ.get("CMD_ROUTE_GAIN", "2.0"))
 CMD_ROUTE_START_WP = int(os.environ.get("CMD_ROUTE_START_WP", "0"))
 CMD_ROUTE_START_XY = os.environ.get("CMD_ROUTE_START_XY", "")
 CMD_ROUTE_STARTS = os.environ.get("CMD_ROUTE_STARTS", "")
-ROUTE_PROGRESS_W = float(os.environ.get("CMD_ROUTE_PROGRESS_W", "18.0"))
-ROUTE_WAYPOINT_W = float(os.environ.get("CMD_ROUTE_WAYPOINT_W", "2.5"))
-ROUTE_CROSS_W = float(os.environ.get("CMD_ROUTE_CROSS_W", "4.0"))
-ROUTE_BACKTRACK_W = float(os.environ.get("CMD_ROUTE_BACKTRACK_W", "4.0"))
-ROUTE_ACTION_W = float(os.environ.get("CMD_ROUTE_ACTION_W", "0.02"))
-ROUTE_WP2_Y_OVERSHOOT_W = float(os.environ.get("CMD_ROUTE_WP2_Y_OVERSHOOT_W", "0.0"))
-ROUTE_WP2_Y_VEL_W = float(os.environ.get("CMD_ROUTE_WP2_Y_VEL_W", "0.0"))
-ROUTE_WP2_X_PROGRESS_W = float(os.environ.get("CMD_ROUTE_WP2_X_PROGRESS_W", "0.0"))
-ROUTE_WP2_X_REMAINING_W = float(os.environ.get("CMD_ROUTE_WP2_X_REMAINING_W", "0.0"))
-OBS_PRIOR_STRENGTH = os.environ.get("CMD_OBS_PRIOR_STRENGTH", "0").lower() in ("1", "true", "yes", "on")
-OBS_ROUTE_CONTEXT = os.environ.get("CMD_OBS_ROUTE_CONTEXT", "0").lower() in ("1", "true", "yes", "on")
-ROUTE_CONTEXT_DIM = 9
 AIRTIME_W = 1.0
 ACTRATE_W = 0.05
 VELZ_W = 0.5
 ANGXY_W = 0.1
 POSE_W = 0.2
 SLIP_W = 0.1
-YAWERR_W = 0.5
 YAW_MAX = float(os.environ.get("CMD_YAW_MAX", "0.8"))
 
 

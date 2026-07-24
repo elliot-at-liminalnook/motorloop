@@ -48,7 +48,6 @@ from train_mesh_warp import (  # noqa: E402
 
 def _disable_terminations(monkeypatch):
     monkeypatch.setattr(W, "CAT_ON", False)
-    monkeypatch.setattr(W, "MOTION_PRIOR_W", 0.0)
 
 
 def _walker_fingerprint():
@@ -169,7 +168,7 @@ def test_active_walker_mujoco_warp_trajectory_parity(monkeypatch, airborne, step
     qadr, dadr = env._qa.cpu().numpy(), env._da.cpu().numpy()
     kp = np.asarray(list(W.WALKER_KP) * 4)
     gear = m.actuator_gear[:m.nu, 0].copy()
-    wfree = np.asarray(W.WALK._DESIGN.wfrees())
+    wfree = np.asarray(W._DESIGN.wfrees())
     prev = np.zeros(m.nu)
     tape = np.random.default_rng(12).uniform(-0.25, 0.25, (steps, m.nu))
 
@@ -336,7 +335,14 @@ def test_reward_only_migration_preserves_actor_but_resets_critic(tmp_path, monke
     path = tmp_path / "policy.pt"
     contract = checkpoint_contract(env, args)
     save_ckpt(path, 10, actor, critic, on, pn, opt, args,
-              contract=contract, runtime={"canary": True})
+              contract=contract, runtime={
+                  "canary": True,
+                  "env": {"tensors": {
+                      "_constraint_duals": torch.tensor((2.0,)),
+                      "_competence_duals": torch.tensor((3.0,)),
+                      "_competence_error_square": torch.tensor((4.0,)),
+                  }},
+              })
     saved_actor = {name: value.detach().clone()
                    for name, value in actor.state_dict().items()}
     with torch.no_grad():
@@ -353,7 +359,11 @@ def test_reward_only_migration_preserves_actor_but_resets_critic(tmp_path, monke
         path, actor, critic, on, pn, opt, "cpu",
         expected_contract=new_contract, allow_reward_migration=True)
 
-    assert step == 10 and runtime == {"canary": True, "schedule_progress": 0.5}
+    assert step == 10 and runtime["canary"] is True
+    assert runtime["schedule_progress"] == 0.5
+    assert "_constraint_duals" in runtime["env"]["tensors"]
+    assert "_competence_duals" not in runtime["env"]["tensors"]
+    assert "_competence_error_square" not in runtime["env"]["tensors"]
     for name, value in actor.state_dict().items():
         torch.testing.assert_close(value, saved_actor[name])
     for name, value in critic.state_dict().items():

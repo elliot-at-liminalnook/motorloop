@@ -34,8 +34,8 @@ def code_version() -> dict:
                            text=True, timeout=5)
         if h.returncode == 0 and h.stdout.strip():
             return {"git": h.stdout.strip()[:12]}
-    except Exception:
-        pass
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # git missing or hung: fall through to the src-hash pin below
     src = HERE.parent.parent
     files = ["train_adversarial.py", "gen_robot_mjcf.py", "robot.toml"]
     return {"src_hash": _sha(b"".join((src / f).read_bytes() for f in files if (src / f).exists()))}
@@ -51,8 +51,8 @@ def machine_profile() -> dict:
         prof["warp"] = warp.__version__
         prof["devices"] = ([torch.cuda.get_device_name(i)
                             for i in range(torch.cuda.device_count())] or ["cpu"])
-    except Exception:
-        pass
+    except ImportError:
+        pass  # torch/warp optional (e.g. CPU-only checkout): profile just omits them
     return prof
 
 
@@ -134,7 +134,7 @@ def _selftest():
         done = 0.0; safety = {"sat": float(np.mean(np.abs(a) > 0.95))}
         return {"rng": state["rng"], "obs": obs}, obs, r, done, safety
     n1 = record_episode(d / "ep1.jsonl", reset, step, infer, steps=20, seed=42)
-    n2 = record_episode(d / "ep2.jsonl", reset, step, infer, steps=20, seed=42)
+    _ = record_episode(d / "ep2.jsonl", reset, step, infer, steps=20, seed=42)
     assert n1 == 20 and (d / "ep1.jsonl").read_text() == (d / "ep2.jsonl").read_text()  # replayable
     row = json.loads((d / "ep1.jsonl").read_text().splitlines()[0])
     assert {"t", "obs", "action", "reward", "safety"} <= set(row)

@@ -195,7 +195,7 @@ def build_walker(p=DEFAULTS, floor=True, sea=None):
 
 
 if __name__ == "__main__":
-    import mujoco, numpy as np
+    import mujoco
     p = DEFAULTS
     print(f"stance: {2*p['half_len']*1000:.0f}mm long x {stance_width()*1000:.0f}mm wide "
           f"(was 200x162); yaw lever {p['yaw_lever']*1000:.0f}mm (was 31); "

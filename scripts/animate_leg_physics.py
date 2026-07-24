@@ -417,8 +417,8 @@ def add_two_stage_physics_and_animation(meshes: list[bpy.types.Object]) -> dict:
         obj["body"] = "held_upper_carrier_black_rod"
         held_mesh_names.append(obj.name)
 
-    drive_pin = add_pin("pin_drive_gear_axis_z", HIP, 0.007, 0.045)
-    hip_pin = add_pin("pin_hip_bracket_revolute_axis_z", pivot, 0.0065, 0.042)
+    _ = add_pin("pin_drive_gear_axis_z", HIP, 0.007, 0.045)
+    _ = add_pin("pin_hip_bracket_revolute_axis_z", pivot, 0.0065, 0.042)
     knee_driver_pin = add_pin("pin_purple_hinge_driver_axis_z", KNEE_DRIVER, 0.0055, 0.038)
     knee_pin = add_pin("pin_purple_hinge_to_yellow_rod", KNEE, 0.0065, 0.042)
     distal_pin = add_pin("pin_fixed_purple_carrier_black_rod_hold", DISTAL_LINK, 0.005, 0.034)

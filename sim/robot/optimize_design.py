@@ -68,7 +68,6 @@ def _retract_clearance(model, data):
                              SPEC["leg"][0]["name"] + "_foot")
     if foot < 0:
         return 0.0
-    legjoints = [a for a in range(model.nu)]
     best = 0.0
     d = SPEC["leg_defaults"]
     for flex in d["flex_range"]:

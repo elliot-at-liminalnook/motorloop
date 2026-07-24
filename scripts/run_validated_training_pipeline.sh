@@ -60,7 +60,7 @@ echo "OUT=$OUT CMD_TAG=$CMD_TAG CMD_STEPS=$CMD_STEPS SP_ROUNDS=$SP_ROUNDS SP_ROU
 
 echo "===== train commanded walker ====="
 CODESIGN_OUT="$OUT" "$PY" -u sim/robot/train_commanded.py \
-  --tag "$CMD_TAG" --steps "$CMD_STEPS" --envs "$CMD_ENVS" --batch "$CMD_BATCH" --evals "$CMD_EVALS"
+  --tag "$CMD_TAG" --steps "$CMD_STEPS" --envs "$CMD_ENVS" --evals "$CMD_EVALS"
 
 echo "===== validate commanded deployment ====="
 CODESIGN_OUT="$OUT" CMD_CONTROL_MODE="${CMD_CONTROL_MODE:-cpg_pd}" "$PY" -u sim/robot/check_cpg_teacher_equivalence.py

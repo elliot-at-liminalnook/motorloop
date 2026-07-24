@@ -27,7 +27,7 @@ def load(files):
             ln = ln.strip()
             if ln:
                 try: rows.append(json.loads(ln))
-                except Exception: pass
+                except json.JSONDecodeError: pass  # tolerate a truncated in-flight append (writer may be live)
     rows.sort(key=lambda r: r.get("cum_step", r.get("step", 0)))
     return rows
 

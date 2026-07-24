@@ -33,7 +33,6 @@ def _last_jsonl(path):
                 pass
     return {}
 RUNPOD_IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
-RUNPOD_REST = "https://rest.runpod.io/v1/pods"
 
 
 class LocalRunner:
@@ -152,7 +151,9 @@ class PodRunner:
                 rows = [r for r in bj.splitlines() if r.strip()]
                 if rows:
                     try: sig = json.loads(rows[-1])
-                    except Exception: pass
+                    except json.JSONDecodeError:
+                        self.tracer.event("benchmark.parse", f"pod {stage.tag} benchmark tail line "
+                                          "malformed; signals omitted", level="WARN")
             return dict(best_bench=float(s["best_bench"]), best_ckpt=f"{self.out}/{stage.tag}_best.pkl",
                         cum_step=int(s["cum_step"]), last_ratio=s.get("last_ratio"), signals=sig)
 

@@ -52,8 +52,8 @@ def main() -> int:
 
     b = bldcsim.Bench(bench_config(config))
     output = PROJECT_ROOT / "sim" / "build" / f"bench_{args.scenario}.csv"
+    vcd_path = output.with_suffix(".vcd")
     if args.vcd:
-        vcd_path = output.with_suffix(".vcd")
         b.open_vcd(str(vcd_path))
 
     b.run_for(expected_init_time(config))

@@ -38,7 +38,7 @@ def ranking_info_gain(designs, worlds_axes, score_fn, axis_names, q=4):
     """Info gain on the WINNER design from learning each world-axis.
     `worlds_axes` = (W, A) sampled worlds (A axes); `score_fn(design_idx, world_row)`.
     Returns {axis_name: info_gain}. Higher = measuring this axis resolves the winner."""
-    W = len(worlds_axes); nD = len(designs)
+    nD = len(designs)
     winners = np.array([int(np.argmax([score_fn(d, w) for d in range(nD)]))
                         for w in worlds_axes])
     H0 = _entropy(winners, nD)

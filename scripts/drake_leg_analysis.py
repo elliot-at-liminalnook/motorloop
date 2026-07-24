@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 from pydrake.math import RigidTransform
-from pydrake.multibody.plant import DiscreteContactApproximation, MultibodyPlant
+from pydrake.multibody.plant import DiscreteContactApproximation
 from pydrake.multibody.tree import (
     FixedOffsetFrame,
     PrismaticJoint,
@@ -58,8 +58,6 @@ KNEE_IN_LEG = np.array([0.16269, 0.0, 0.0])       # knee pin in the leg-link fra
 CRANK_R = 0.075                                    # knee pin -> toe hinge
 CONROD_L = 0.100                                   # toe hinge -> heel pin
 HEEL_NEUTRAL_IN_LEG = np.array([0.16269, -0.025, 0.0])
-BUSHING_IN_LEG = np.array([0.16269, -0.2405, 0.0])
-ROD_TIP_FROM_PIN = -0.258                          # pin -> tip along rod
 SWING_LIM = math.radians(25.0)
 KNEE_LIM = (math.radians(-90.0), math.radians(10.0))
 WORM_RATIO = 20.0

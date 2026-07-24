@@ -18,6 +18,15 @@ import torch.nn as nn
 EPS = 1.0e-12
 
 
+def checkpoint_replay_tolerances(geometry: str) -> tuple[float, float]:
+    """GPU save/reload tolerance matched to each contact solver family."""
+    if geometry in ("combat", "leg_attack", "ladder_combat"):
+        return 2.0e-3, 5.0e-3
+    if geometry == "mesh":
+        return 1.0e-5, 5.0e-5
+    return 1.0e-3, 3.0e-3
+
+
 def _float(value: torch.Tensor | float | int) -> float:
     return float(value.detach()) if isinstance(value, torch.Tensor) else float(value)
 
@@ -213,9 +222,10 @@ def policy_trust_region_diagnostics(
     old_logp: torch.Tensor,
     logp_fn,
     clip: float,
+    mean_override: torch.Tensor | None = None,
 ) -> dict:
     """Whole-rollout PPO trust-region and action-saturation diagnostics."""
-    mean = actor(observations)
+    mean = actor(observations) if mean_override is None else mean_override
     new_logp = logp_fn(sampled_pre_tanh, mean, actor.log_std)
     log_ratio = new_logp - old_logp
     ratio = torch.exp(log_ratio)
@@ -438,6 +448,19 @@ def diagnostic_alerts(diagnostics: Mapping, gates: Mapping | None = None,
         alerts.append(row)
 
     evaluation = evaluation or {}
+    # Fail CLOSED on schema loss: every rule below reads sections with healthy
+    # defaults, so a diagnostics payload that silently lost its structure would
+    # otherwise present as perfect health — the worst possible failure mode
+    # for an alerting layer.
+    required_sections = ("integrity", "trust_region", "kl_controller",
+                         "parameter_updates", "losses")
+    missing = sorted(section for section in required_sections
+                     if not isinstance(diagnostics.get(section), Mapping)
+                     or not diagnostics.get(section))
+    if missing:
+        add("critical", "diagnostics_schema_missing",
+            "Diagnostics payload lost required sections; treating absence of "
+            "evidence as an alert, not as health.", missing)
     integrity = diagnostics.get("integrity", {})
     if integrity.get("nonfinite_count", 0):
         add("critical", "nonfinite", "Non-finite training data or parameters detected.",
@@ -531,6 +554,27 @@ def diagnostic_alerts(diagnostics: Mapping, gates: Mapping | None = None,
         add("warning", "adaptive_competence_saturated",
             f"Adaptive competence {row['name']} remains below target at the dual ceiling.",
             row)
+    for row in adaptive.get("competence", []):
+        name = row.get("name")
+        evaluated = evaluation.get(name)
+        observed = row.get("observed")
+        target = row.get("target")
+        comparison = row.get("comparison")
+        if not all(isinstance(value, (int, float))
+                   for value in (evaluated, observed, target)):
+            continue
+        training_pass = (observed >= target if comparison == ">="
+                         else observed <= target)
+        evaluation_pass = (evaluated >= target if comparison == ">="
+                           else evaluated <= target)
+        if training_pass != evaluation_pass:
+            add(
+                "warning", "adaptive_metric_window_mismatch",
+                f"Adaptive competence {name} disagrees between the training "
+                "window and full evaluation.",
+                {"name": name, "training": observed,
+                 "evaluation": evaluated, "target": target,
+                 "comparison": comparison})
     critic = diagnostics.get("critic", {}).get("after_update", {})
     if critic.get("normalized_rmse", 0.0) > 2.0:
         add("warning", "critic_scale_error",
@@ -616,14 +660,34 @@ def diagnostic_alerts(diagnostics: Mapping, gates: Mapping | None = None,
                 "One leg's contact duty differs substantially from another's.",
                 max(duty) - min(duty))
     components = evaluation.get("reward_components", {})
+    dominance_threshold = (0.60 if gates and not gates.get("all_pass", True)
+                           else 0.85)
     dominant = ([(name, row.get("absolute_mean_share", 0.0))
                  for name, row in components.items()
-                 if row.get("absolute_mean_share", 0.0) > 0.85]
+                 if row.get("absolute_mean_share", 0.0) > dominance_threshold]
                 if len(components) > 1 else [])
     if dominant:
         name, value = max(dominant, key=lambda item: item[1])
         add("warning", "reward_component_dominance",
-            f"Reward component {name} supplies over 85% of absolute reward scale.", value)
+            f"Reward component {name} supplies over "
+            f"{100 * dominance_threshold:.0f}% of absolute reward scale.", value)
+    roles = evaluation.get("reward_role_shares", {})
+    scaffold_share = roles.get("scaffold")
+    outcome_share = roles.get("outcome")
+    if (isinstance(scaffold_share, (int, float))
+            and isinstance(outcome_share, (int, float))
+            and scaffold_share > outcome_share):
+        add("warning", "scaffold_reward_dominance",
+            "Temporary/style shaping outweighs external task outcomes.",
+            {"scaffold": scaffold_share, "outcome": outcome_share})
+    pattern_entropy = evaluation.get("contact_pattern_entropy")
+    foot_activity = evaluation.get("ladder_foot_activity")
+    if (isinstance(pattern_entropy, (int, float))
+            and isinstance(foot_activity, (int, float))
+            and pattern_entropy < 0.10 and foot_activity < 0.40):
+        add("warning", "contact_behavior_collapse",
+            "The stepping task uses almost no distinct physical contact patterns.",
+            pattern_entropy)
     fall_rate = evaluation.get("termination_ledger", {}).get("fall", {}).get("rate")
     if isinstance(fall_rate, (int, float)) and fall_rate > 0.01:
         add("warning", "frequent_falls",

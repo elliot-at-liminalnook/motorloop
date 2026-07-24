@@ -67,7 +67,6 @@ def test_a_closed_form_match_1e9():
 
 
 MASSES = (0.05, 0.07, 0.08)          # blade_upper, blade_lower, pushrod (json)
-ARGS = None
 
 
 def _args():

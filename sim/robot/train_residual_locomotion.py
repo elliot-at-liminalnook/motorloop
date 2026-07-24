@@ -158,17 +158,6 @@ def main():
     ap.add_argument("--entropy", type=float, default=0.006)
     ap.add_argument("--vmax", type=float, default=0.35)
     ap.add_argument("--track-sigma", type=float, default=0.05)
-    ap.add_argument("--transition-scale-mult", type=float, default=1.0,
-                    help="multiply residual scale during short command-transition windows")
-    ap.add_argument("--transition-hold-steps", type=int, default=0,
-                    help="number of env steps to use transition residual scale after command changes")
-    ap.add_argument("--transition-delta-threshold", type=float, default=0.08)
-    ap.add_argument("--wp2-residual-scale", type=float, default=None,
-                    help="optional minimum residual scale while active route waypoint 2 is being corrected")
-    ap.add_argument("--obs-prior-strength", action="store_true",
-                    help="append current prior strength to the observation before the command tail")
-    ap.add_argument("--obs-route-context", action="store_true",
-                    help="append route waypoint/transition context to the observation before the command tail")
     ap.add_argument("--route-start-wp", type=int, default=0,
                     help="when --train-mode route, start episodes with this active waypoint")
     ap.add_argument("--route-start-xy", default="",
@@ -220,6 +209,9 @@ def main():
         "best": {"ckpt": str(best_ckpt), "score": best_score},
     }
 
+    # NOTE: the CMD_CPG_RESIDUAL_SCALE consumer was retired with the legacy CPG
+    # residual path; `scale` now only names the stage. The ladder's action-prior
+    # mechanism (training_ladder.py) is the successor to this experiment.
     for i, scale in enumerate(parse_scales(args.scales)):
         stage_tag = f"{args.tag}_r{safe_scale(scale)}"
         env = os.environ.copy()
@@ -227,13 +219,6 @@ def main():
         env.update({
             "CODESIGN_OUT": str(OUT),
             "CMD_CONTROL_MODE": "cpg_pd",
-            "CMD_CPG_RESIDUAL_SCALE": str(scale),
-            "CMD_CPG_RESIDUAL_SCALE_TRANSITION": str(scale * args.transition_scale_mult),
-            "CMD_CPG_RESIDUAL_SCALE_WP2": "" if args.wp2_residual_scale is None else str(args.wp2_residual_scale),
-            "CMD_CPG_TRANSITION_HOLD_STEPS": str(args.transition_hold_steps),
-            "CMD_CPG_TRANSITION_DELTA_THRESH": str(args.transition_delta_threshold),
-            "CMD_OBS_PRIOR_STRENGTH": "1" if args.obs_prior_strength else "0",
-            "CMD_OBS_ROUTE_CONTEXT": "1" if args.obs_route_context else "0",
             "CMD_VMAX": str(args.vmax),
             "CMD_TRACK_SIGMA": str(args.track_sigma),
             "CMD_TRAIN_MODE": args.train_mode,

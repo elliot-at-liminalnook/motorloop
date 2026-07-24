@@ -140,8 +140,10 @@ def main():
     ap.add_argument("--conflict-sign", type=float, default=0.55)
     args = ap.parse_args()
 
-    before = pickle.load(open(args.before, "rb"))
-    after = pickle.load(open(args.after, "rb"))
+    with open(args.before, "rb") as f:
+        before = pickle.load(f)
+    with open(args.after, "rb") as f:
+        after = pickle.load(f)
     delta = _flat_delta(before, after, args.part)
     base = _flat_params(before, args.part)
     norm = float(np.linalg.norm(delta))

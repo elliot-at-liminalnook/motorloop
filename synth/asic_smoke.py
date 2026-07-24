@@ -91,14 +91,14 @@ def main():
         # REUSE-IgnoreEnd
         "# ASIC-readiness smoke (robotics-ip stage 10)",
         "",
-        "Each reusable block driven to gate-level synthesis with yosys and "
-        "checked for ASIC cleanliness: maps to gates, **no inferred latches**, "
-        "**no combinational loops / multiple drivers** (`check -assert`).",
+        ("Each reusable block driven to gate-level synthesis with yosys and "
+         "checked for ASIC cleanliness: maps to gates, **no inferred latches**, "
+         "**no combinational loops / multiple drivers** (`check -assert`)."),
         "",
-        "> **Honest framing.** This is an ASIC-*synthesizability* smoke, **not** "
-        "a tapeout and **not** real-PDK place&route. Post-route timing/area need "
-        "OpenROAD + the sky130 PDK (`synth/openlane/` wires that flow). The FPGA "
-        "flow reports a real post-route system Fmax of **41.3 MHz** (stage 6.5).",
+        ("> **Honest framing.** This is an ASIC-*synthesizability* smoke, **not** "
+         "a tapeout and **not** real-PDK place&route. Post-route timing/area need "
+         "OpenROAD + the sky130 PDK (`synth/openlane/` wires that flow). The FPGA "
+         "flow reports a real post-route system Fmax of **41.3 MHz** (stage 6.5)."),
         "",
         "| Block | Synthesizes | Inferred latches | Multidriver/loop | Gate cells |",
         "| --- | --- | --- | --- | --- |",

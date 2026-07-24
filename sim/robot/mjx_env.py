@@ -5,9 +5,7 @@ New code should import :mod:`direct_warp_env` or :mod:`codesign_warp_env`.
 """
 
 from direct_warp_env import DirectWarpEnv
-from codesign_warp_env import CodesignWarpEnv, DesignEnsembleWarpEnv
-from design_codec import DESIGN_DIM, apply_fast_mujoco as apply_design
-
+from codesign_warp_env import DesignEnsembleWarpEnv
 
 class CodesignEnv(DirectWarpEnv):
     def __init__(self, xml: str, frame_skip: int = 5, design=None,
@@ -21,7 +19,6 @@ class UniversalEnv(DesignEnsembleWarpEnv):
                  fixed_design=None, nworld: int = 1, **kwargs):
         del xml, frame_skip
         designs = [fixed_design] if fixed_design is not None else kwargs.pop("designs", None)
-        if designs is None:
-            super().__init__(nworld=nworld, **kwargs)
-        else:
-            super().__init__(nworld=nworld, designs=designs, **kwargs)
+        if designs is not None:
+            kwargs["designs"] = designs
+        super().__init__(nworld=nworld, **kwargs)

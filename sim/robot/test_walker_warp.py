@@ -37,8 +37,21 @@ pytest.importorskip("mujoco_warp")
 import mujoco  # noqa: E402
 import warp as wp  # noqa: E402
 
-from walker_improved import DEFAULTS, LEGS, build_walker  # noqa: E402
-from walker_warp_env import EvalTelemetry, WalkerWarpEnv  # noqa: E402
+from mesh_warp_env import EvalTelemetry  # noqa: E402
+from walker_improved import DEFAULTS, build_walker  # noqa: E402
+import walker_warp_env as W  # noqa: E402
+from walker_warp_env import WalkerWarpEnv  # noqa: E402
+
+
+def _finite_telemetry_tree(value):
+    """Structured telemetry may contain mappings, sequences, and empty-bin None values."""
+    if isinstance(value, dict):
+        return all(_finite_telemetry_tree(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_finite_telemetry_tree(item) for item in value)
+    if value is None:
+        return True
+    return bool(np.isfinite(value).all())
 
 
 def test_eval_telemetry_keeps_distribution_tails_and_per_leg_means():
@@ -67,6 +80,8 @@ def test_eval_telemetry_keeps_distribution_tails_and_per_leg_means():
         "reward_components": {
             "task": torch.tensor((2.0, 4.0)),
             "penalty": torch.tensor((-0.5, -1.0)),
+            "ladder_task_constraint": torch.tensor((-0.2, -0.4)),
+            "ladder_task_scaffold": torch.tensor((0.1, 0.2)),
         },
         "actuator_diagnostics": {
             "effort_saturated": torch.tensor(
@@ -88,6 +103,14 @@ def test_eval_telemetry_keeps_distribution_tails_and_per_leg_means():
     assert result["forward_speed_fraction"] == pytest.approx(0.14 / 0.30)
     assert result["lateral_forward_ratio"] == pytest.approx(0.09 / 0.14)
     assert result["reward_components"]["task"]["mean"] == pytest.approx(3.0)
+    assert result["contact_pattern_count"] == 2
+    assert result["contact_pattern_entropy"] == pytest.approx(0.25)
+    assert result["foot_air_fraction_min"] == pytest.approx(0.5)
+    assert result["foot_air_fraction_balance"] == pytest.approx(1.0)
+    assert len(result["contact_correlation_matrix"]) == 4
+    assert result["reward_role_shares"]["outcome"] > 0.0
+    assert result["reward_role_shares"]["constraint"] > 0.0
+    assert result["reward_role_shares"]["scaffold"] > 0.0
     assert result["actuator_diagnostics"]["effort_saturated"][
         "by_leg"]["fl"]["mean"] == pytest.approx(1.0 / 6.0)
     assert result["simulation_diagnostics"]["constraint_rows"]["p99"] > 15.0
@@ -164,7 +187,6 @@ def test_reset_drop_settles_upright(monkeypatch):
     # This is a physical stance test, not a command-progress/CaT test. With CaT
     # enabled, zero action under a sampled nonzero command is intentionally reset
     # before it can settle (termination behavior is covered below).
-    import walker_warp_env as W
     monkeypatch.setattr(W, "CAT_ON", False)
     env = WalkerWarpEnv(nworld=8, seed=1, device="cpu", episode_length=None)
     obs = env.reset()
@@ -216,7 +238,7 @@ def test_env_smoke_random_actions(gpu_device):
     assert 0.0 <= m["duty"] <= 1.0
     assert m["air"] >= 0.0
     assert -1.0 <= m["diagsync"] <= 1.0
-    assert np.isfinite(list(m.values())).all()
+    assert _finite_telemetry_tree(m)
 
 
 # ---------------------------------------------------------------------------
@@ -263,10 +285,150 @@ def test_ppo_smoke_walker(tmp_path, gpu_device):
         assert np.isfinite([u["pi_loss"], u["v_loss"], u["entropy"]]).all()
     assert ups[0]["ent_coef"] != ups[2]["ent_coef"], "entropy schedule did not move"
     assert ups[0]["alpha"] != ups[2]["alpha"], "alpha curriculum did not move"
-    ck = torch.load(stats["ckpt"], map_location="cpu", weights_only=False)
+    ck = torch.load(stats["ckpt"], map_location="cpu", weights_only=True)
     assert ck["step"] == 3 * 8 * 8 and ck["args"]["geometry"] == "walker"
     assert ck["contract"]["geometry"] == "walker"
     assert ck["runtime"] is not None
+
+
+def test_shared_bus_enforces_robot_wide_current_budget():
+    """Twelve simultaneous stall demands must not survive the bus: the summed
+    current proxy of the limited torques stays inside the per-world budget,
+    while the unlimited kernel happily exceeds it."""
+    from mesh_warp_env import (SERVO_NO_LOAD_CURRENT, SERVO_STALL_CURRENT)
+    kwargs = dict(seed=3, device="cpu", episode_length=None)
+    plain = WalkerWarpEnv(2, **kwargs)
+    limited = WalkerWarpEnv(2, power_model="shared_bus",
+                            power_model_params={"voltage": 12.0,
+                                                "resistance": 0.0,
+                                                "current_limit": 8.0},
+                            **kwargs)
+    assert limited.action_semantics.endswith("shared_bus_v2")
+    assert not plain.action_semantics.endswith("shared_bus_v2")
+    # Slam every joint toward its limit: per-joint envelopes saturate.
+    action = torch.ones((2, plain.act_dim))
+    for env in (plain, limited):
+        env.step(action, alpha=1.0)
+
+    def bus_current(env):
+        ctrl = wp.to_torch(env._wd.ctrl)
+        return (SERVO_NO_LOAD_CURRENT
+                + (SERVO_STALL_CURRENT - SERVO_NO_LOAD_CURRENT)
+                * ctrl.abs()).sum(dim=-1)
+
+    assert float(bus_current(plain).min()) > 8.0
+    assert float(bus_current(limited).max()) <= 8.0 + 1e-3
+
+
+def test_shared_bus_voltage_droop_scales_torque():
+    kwargs = dict(seed=3, device="cpu", episode_length=None)
+    stiff = WalkerWarpEnv(2, power_model="shared_bus",
+                          power_model_params={"voltage": 12.0,
+                                              "resistance": 0.0,
+                                              "current_limit": 1000.0},
+                          **kwargs)
+    droopy = WalkerWarpEnv(2, power_model="shared_bus",
+                           power_model_params={"voltage": 10.8,
+                                               "resistance": 0.15,
+                                               "current_limit": 1000.0},
+                           **kwargs)
+    action = torch.ones((2, stiff.act_dim))
+    for env in (stiff, droopy):
+        env.step(action, alpha=1.0)
+    stiff_ctrl = wp.to_torch(stiff._wd.ctrl).abs().max()
+    droopy_ctrl = wp.to_torch(droopy._wd.ctrl).abs().max()
+    assert float(droopy_ctrl) < float(stiff_ctrl)
+    # alpha=0 disables the electrical model entirely (curriculum off-state):
+    # a bus-limited env and a plain env produce identical torques.
+    plain = WalkerWarpEnv(2, **kwargs)
+    fresh_droopy = WalkerWarpEnv(2, power_model="shared_bus",
+                                 power_model_params={"voltage": 10.8,
+                                                     "resistance": 0.15,
+                                                     "current_limit": 1000.0},
+                                 **kwargs)
+    plain.step(action, alpha=0.0)
+    fresh_droopy.step(action, alpha=0.0)
+    torch.testing.assert_close(wp.to_torch(fresh_droopy._wd.ctrl),
+                               wp.to_torch(plain._wd.ctrl))
+
+
+def test_shared_bus_parameters_are_seed_deterministic():
+    first = WalkerWarpEnv(4, seed=11, device="cpu", episode_length=None,
+                          power_model="shared_bus")
+    second = WalkerWarpEnv(4, seed=11, device="cpu", episode_length=None,
+                           power_model="shared_bus")
+    assert first.power_model_record == second.power_model_record
+    assert first.power_model_record["model"] == "shared_bus_v2"
+
+
+def test_capture_env_state_covers_every_mutating_tensor():
+    """Executable form of the exact-resume contract: any per-world tensor that
+    training mutates must be captured, or resume silently diverges. A new
+    episodic buffer added without a capture entry fails here instead of in a
+    checkpoint-replay diagnostic weeks later."""
+    from train_mesh_warp import capture_env_state
+    env = WalkerWarpEnv(2, seed=0, device="cpu", episode_length=6)
+    env.reset()
+
+    def per_world_tensors(target):
+        return {name: value.clone() for name, value in vars(target).items()
+                if isinstance(value, torch.Tensor) and value.ndim >= 1
+                and value.shape[0] == target.nworld}
+
+    before = per_world_tensors(env)
+    action = torch.linspace(-0.6, 0.6, env.act_dim).expand(2, -1)
+    for _ in range(8):
+        env.step(action, alpha=1.0)
+    after = per_world_tensors(env)
+    changed = {name for name in before
+               if name in after and not torch.equal(before[name], after[name])}
+    captured = set(capture_env_state(env)["tensors"].keys())
+    # Zero-copy views of MuJoCo-Warp Data are reconstructed by forward
+    # kinematics after qpos/qvel/warmstart restore; they need no capture entry.
+    derived_views = {"xpos", "geom_xpos", "cvel", "subtree_com",
+                     "qfrc_actuator", "sim_time", "constraint_rows",
+                     "solver_iterations", "qacc_warmstart", "qpos", "qvel",
+                     # within-step scratch: fully rewritten from the incoming
+                     # action (via captured _prev_a) before any substep reads it
+                     "_target_t"}
+    uncaptured = changed - captured - derived_views
+    assert not uncaptured, (
+        f"mutating per-world state not covered by capture_env_state: "
+        f"{sorted(uncaptured)} — add them to the capture contract")
+
+
+def test_diagnostic_alerts_fail_closed_on_missing_schema():
+    """An empty diagnostics payload must alert, never report perfect health."""
+    from training_diagnostics import diagnostic_alerts
+    alerts = diagnostic_alerts({})
+    assert any(alert["code"] == "diagnostics_schema_missing"
+               and alert["severity"] == "critical" for alert in alerts)
+
+
+def test_cli_adapter_rejects_unknown_flags_loudly():
+    """The launcher adapter must never swallow flags again: anything it does
+    not own is forwarded to the trainer's strict parser, so a knob that does
+    not exist fails instead of silently training without it."""
+    from warp_train_cli import run
+    with pytest.raises(SystemExit):
+        run("walker", ["--tiny", "--tag", "x", "--approach-weight", "3.0"])
+
+
+def test_plateau_abort_stops_doomed_attempt(tmp_path):
+    """An unreachable early gate with a flat margin must abort before the full
+    budget, leaving a durable plateau_abort record instead of an early stop."""
+    from train_mesh_warp import train
+    torch.set_num_threads(1)
+    args = _tiny_args(tmp_path, "plateau", steps=8 * 8 * 8)
+    args.evals = 8
+    args.early_gate = ["reward,>=,1000000000"]
+    args.plateau_min_evals = 3
+    args.plateau_patience = 2
+    stats = train(args)
+    assert "plateau_abort" in stats
+    assert stats["plateau_abort"]["step"] < 8 * 8 * 8
+    assert stats["plateau_abort"]["worst_relative_margin"] < 0.0
+    assert "early_stop" not in stats
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +454,6 @@ def test_anti_hack_slip_and_clearance():
     earns a positive clearance reward with ~zero CaT violation. Exercises the exact
     quantities step() assembles, on hand-set Data (mjwp.forward, no physics fight)."""
     import mujoco_warp as mjwp
-    import walker_warp_env as W
     env = WalkerWarpEnv(nworld=2, seed=0, device="cpu", episode_length=None)
     qpos = env.qpos.clone()
     qvel = torch.zeros_like(env.qvel)
@@ -334,7 +495,6 @@ def test_anti_hack_slip_and_clearance():
 #    non-tradeoff violation; a plausible crawl step clears the constraints.
 # ---------------------------------------------------------------------------
 def test_cat_escape_hatch_matrix():
-    import walker_warp_env as W
     env = WalkerWarpEnv(nworld=6, seed=0, device="cpu", episode_length=None)
     env.qvel.zero_()
     env.qvel[3, int(env._da[0])] = W.CAT_QVEL_LIMIT * 1.5
@@ -391,7 +551,6 @@ def test_cat_escape_hatch_matrix():
 # ---------------------------------------------------------------------------
 @pytest.mark.gpu
 def test_cat_terminations_and_telemetry(monkeypatch, gpu_device):
-    import walker_warp_env as W
     env = WalkerWarpEnv(nworld=256, seed=2, device=gpu_device, episode_length=200)
     gen = torch.Generator(device=gpu_device).manual_seed(5)
     tel = EvalTelemetry(env.device)

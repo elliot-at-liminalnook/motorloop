@@ -327,7 +327,7 @@ def main():
     out_pkl = OUT / f"{args.tag}_{args.direction}_gait.pkl"
     out_npz = OUT / f"{args.tag}_{args.direction}_gait_trace.npz"
     out_json.write_text(json.dumps(final, indent=2))
-    pickle.dump(final, open(out_pkl, "wb"))
+    out_pkl.write_bytes(pickle.dumps(final))
     np.savez(out_npz, **trace)
     print(json.dumps(final, indent=2), flush=True)
     print(f"saved {out_json}, {out_pkl}, {out_npz}", flush=True)

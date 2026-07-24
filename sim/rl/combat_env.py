@@ -35,7 +35,6 @@ BAND_Z = 0.07                   # blade centre height (spinner)
 BLADE_HALF = 0.05               # blade half-height -> strike band [0.02, 0.12]
 Z_HI = BAND_Z + BLADE_HALF      # top of the strike band the feet must clear
 REACH = R_W + 0.10              # bite radius used by the reward
-D_ENGAGE = 2.0                  # standoff radius the attacker repositions to
 FOOT_GEOMS = ["left_ankle_geom", "right_ankle_geom", "third_ankle_geom",
               "fourth_ankle_geom"]
 LEG_GEOMS = FOOT_GEOMS + ["aux_1_geom", "aux_2_geom", "aux_3_geom", "aux_4_geom",
@@ -45,8 +44,9 @@ LEG_GEOMS = FOOT_GEOMS + ["aux_1_geom", "aux_2_geom", "aux_3_geom", "aux_4_geom"
 
 def _ant_xml() -> str:
     import gymnasium
-    return open(glob.glob(os.path.dirname(gymnasium.__file__)
-                          + "/envs/mujoco/assets/ant.xml")[0]).read()
+    with open(glob.glob(os.path.dirname(gymnasium.__file__)
+                        + "/envs/mujoco/assets/ant.xml")[0]) as f:
+        return f.read()
 
 
 def build_scene() -> str:
@@ -358,5 +358,5 @@ try:
     from gymnasium.envs.registration import register
     register(id="MotorloopCombat-v0", entry_point="combat_env:make_combat_env",
              max_episode_steps=1000)
-except Exception:
-    pass
+except ImportError:
+    pass  # gymnasium not installed: registration is optional; direct construction still works

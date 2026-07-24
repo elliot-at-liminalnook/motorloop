@@ -27,10 +27,6 @@ _BLOCKED_BY_PATTERN = re.compile(r"^Q\d+$")
 _REQUIRED_KEYS = {"value", "unit", "status"}
 _OPTIONAL_KEYS = {"blocked_by", "source", "note", "derived_from"}
 
-# Tables that derived_from references may point at (circuit specs and the
-# motor electrical spec).
-_DERIVATION_SOURCE_PREFIXES = ("circuit.", "motor_spec")
-
 
 class ParamConfigError(Exception):
     """Raised when params.toml violates the parameter-table convention."""

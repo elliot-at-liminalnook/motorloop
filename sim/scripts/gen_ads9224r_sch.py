@@ -23,7 +23,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gen_kicad_sch  # noqa: E402
 import sim_params  # noqa: E402
-from gen_kicad_sch import to_si  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SCH_DIR = PROJECT_ROOT / "hw" / "ads9224r-module"
@@ -42,6 +41,7 @@ def components_from_params(params: sim_params.SimParams):
     channel: shunt -> FDA gain net (Rg, Rf) -> charge-bucket (Rflt, Cflt) ->
     ADC input. Plus the shared reference reservoir."""
     m = params.circuit_values("circuit.ads9224r_module")
+    to_si = gen_kicad_sch.to_si
     rf = to_si(m["fda_rf"], ""); rg = to_si(m["fda_rg"], "")
     rflt = to_si(m["flt_r"], ""); cflt = to_si(m["flt_c"], "")
     rsh = to_si(m["shunt"], ""); cref = to_si(m["ref_reservoir_c"], "")

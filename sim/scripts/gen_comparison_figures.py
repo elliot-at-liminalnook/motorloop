@@ -45,7 +45,6 @@ for sub in ("sim/scripts", "sim/tests", "sim/build/cpp"):
 
 import bldcsim  # noqa: E402
 import part_compare as PC  # noqa: E402
-import part_metrics as M  # noqa: E402
 import sim_params  # noqa: E402
 
 CAVEAT = ("simulated output, placeholder motor parameters (Q1) - relative "

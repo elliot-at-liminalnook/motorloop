@@ -34,6 +34,17 @@ from gen_mesh_robot_mjcf import build_mesh_robot, loop_consistent_pose, loop_pol
 from mesh_warp_env import EvalTelemetry, MeshWarpEnv  # noqa: E402
 
 
+def _finite_telemetry_tree(value):
+    """Structured telemetry may contain mappings, sequences, and empty-bin None values."""
+    if isinstance(value, dict):
+        return all(_finite_telemetry_tree(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return all(_finite_telemetry_tree(item) for item in value)
+    if value is None:
+        return True
+    return bool(np.isfinite(value).all())
+
+
 @pytest.fixture(scope="module")
 def small_env():
     return MeshWarpEnv(nworld=4, seed=3, device="cpu", episode_length=None)
@@ -155,7 +166,7 @@ def test_env_smoke_random_actions(gpu_device):
     assert 0.0 <= m["duty"] <= 1.0
     assert m["air"] >= 0.0
     assert -1.0 <= m["diagsync"] <= 1.0
-    assert np.isfinite(list(m.values())).all()
+    assert _finite_telemetry_tree(m)
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +236,7 @@ def test_ppo_smoke_and_ckpt_roundtrip(tmp_path, gpu_device):
         assert np.isfinite([u["pi_loss"], u["v_loss"], u["entropy"]]).all()
     assert ups[0]["ent_coef"] != ups[2]["ent_coef"], "entropy schedule did not move"
     assert ups[0]["alpha"] != ups[2]["alpha"], "alpha curriculum did not move"
-    ck1 = torch.load(stats["ckpt"], map_location="cpu", weights_only=False)
+    ck1 = torch.load(stats["ckpt"], map_location="cpu", weights_only=True)
     assert ck1["step"] == 3 * 8 * 8
     assert ck1["contract"]["geometry"] == "mesh"
     assert ck1["runtime"] is not None
@@ -235,7 +246,7 @@ def test_ppo_smoke_and_ckpt_roundtrip(tmp_path, gpu_device):
                        resume=stats["ckpt"], device=gpu_device)
     stats2 = train(args2)
     assert len(stats2["updates"]) == 0
-    ck2 = torch.load(stats2["ckpt"], map_location="cpu", weights_only=False)
+    ck2 = torch.load(stats2["ckpt"], map_location="cpu", weights_only=True)
     assert ck2["step"] == ck1["step"]
     for part in ("actor", "critic", "obs_norm", "priv_norm"):
         for k, v in ck1[part].items():

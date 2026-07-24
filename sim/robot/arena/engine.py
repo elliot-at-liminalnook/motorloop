@@ -132,7 +132,7 @@ def _selftest():
             return super().train(stage, warm, cum_base)
     a = RunState(path=sp)
     try: drive(Curriculum(steps_per_phase=1000), HalfRunner(lambda t: ladder[t]), a)
-    except RuntimeError: pass
+    except RuntimeError: pass                                                # the simulated crash above, on purpose
     a.save()
     done_before = list(a.completed)
     assert 0 < len(done_before) < len(cd.PHASES), done_before

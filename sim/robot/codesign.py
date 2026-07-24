@@ -43,7 +43,6 @@ COMBAT_MIN = 12.0       # N·m minimum pitch stall torque to retain the stomp/pl
 SELFLOCK_RATIO = 15.0   # worm ratio at/above which the pitch is self-locking
 
 # design vector: (half_len, half_wid, yaw_lever, stance_h, lift_range, worm, belt)
-NAMES = ["half_len", "half_wid", "yaw_lever", "stance_h", "lift_range", "worm", "belt"]
 BOUNDS = [(0.10, 0.20), (0.06, 0.12), (0.05, 0.16), (0.35, 0.50),
           (0.03, 0.06), (8.0, 20.0), (4.0, 8.0)]
 DEFAULT_THETA = np.array([DEFAULTS["half_len"], DEFAULTS["half_wid"],
@@ -261,12 +260,6 @@ if __name__ == "__main__":
     # --- the servo-ceiling finding: what does a DYNAMIC gait actually require? ---
     print("\n=== servo ceiling: can this servo ever go dynamic? ===")
     # best-case Fr over the WHOLE design space (ignore combat, push ratios to bounds)
-    best_fr, best_th = 0.0, None
-    for _ in range(4000):
-        th = np.array([np.random.uniform(lo, hi) for lo, hi in BOUNDS]) if False else \
-             np.array([b[0] + (b[1] - b[0]) * ((i * 0.6180339 + 0.1) % 1.0)
-                       for i, b in enumerate(BOUNDS)])       # deterministic-ish spread
-        break
     # analytic max: yaw v = (SERVO_FREE/belt_min)*lev_max/2, at the loosest ratios
     lev_max, belt_min, worm_min, H_min = 0.16, 4.0, 8.0, 0.35
     v_yaw = (SERVO_FREE_RAD_S / belt_min) * lev_max / 2

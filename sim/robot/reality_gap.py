@@ -172,7 +172,7 @@ def _backend(x):
         if isinstance(x, torch.Tensor):
             return torch
     except ImportError:
-        pass
+        pass  # torch optional: without it x cannot be a Tensor, so numpy is correct
     return np
 
 

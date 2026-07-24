@@ -156,6 +156,11 @@ gpu-win-exchanges:  ## STEP 2: win-exchanges curriculum DRIVER (gate+rollback+ke
 	$(WARP_PY) sim/robot/curriculum_drive.py --steps-per-phase 4000000 --lean-contacts
 gpu-combat-scaffold:  ## scaffold-prior combat curriculum with baseline/trained eval and renders
 	bash scripts/run_scaffold_combat_curriculum.sh
+# NOTE: the win-exchanges targets drive legacy reward flags (--sep-*,
+# --approach-weight, ...) that the fused Warp trainer never implemented; the
+# CLI adapter used to swallow them silently and now forwards them to the
+# trainer's strict parser, so these targets FAIL LOUDLY until the legacy
+# combat drivers are consolidated with the ladder's leg_attack/PFSP path.
 gpu-win-exchanges-medium:  ## STEP 2 2·0: medium ~2-4 GPU-hr single-stage learning-curve validation (does the curve RISE?)
 	$(WARP_PY) sim/robot/train_combat_warp.py --tag medium \
 	  --steps 8000000 --lean-contacts --sep-lo 0.4 --sep-hi 1.0 --approach-weight 1.5 --azimuth 2.0 \

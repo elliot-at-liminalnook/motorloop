@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MIT -->
 # Robot hardware contract
 
-> **Document status:** Current · **Audience:** Robot and hardware developers · **Last reviewed:** 2026-07-12 · **Canonical for:** Active robot physical envelope
+> **Document status:** Current · **Audience:** Robot and hardware developers · **Last reviewed:** 2026-07-23 · **Canonical for:** Active robot physical envelope
 
 Effective 2026-07-09, the modeled robot has two hard constraints:
 
@@ -29,9 +29,22 @@ The model uses the 12 V datasheet point from the
 Waveshare does not publish continuous-duty torque or output inertia. The simulator
 therefore treats 20 kgf.cm as a short-duration stall envelope, applies a linear
 torque-speed derating, and keeps output inertia as a named estimate. Both need bench
-identification before hardware-correlated training. Supply droop/current sharing is
-not yet modeled; the battery and distribution design must be specified before the
-model can decide whether all twelve stall envelopes are simultaneously deliverable.
+identification before hardware-correlated training.
+
+Supply droop and current sharing are modeled by the opt-in **shared-bus
+electrical budget** (`--power-model shared_bus`, action semantics
+`+shared_bus_v2`): per-servo currents (0.24 A no-load to 2.4 A locked rotor,
+linear in torque fraction) sum on one bus, the supply sags `V = V0 − I·R`,
+torque authority scales with voltage and never above the 12 V point, and a hard
+bus current limit rescales all joints together against the headroom above the
+no-load floor. Twelve simultaneous stall envelopes are therefore no longer
+deliverable in simulation, matching the undelivered reality. Supply parameters
+are conservative per-world randomized ranges (10.8–12.6 V, 0.04–0.15 Ω,
+15–30 A) **pending bench identification of the actual battery and
+distribution**; measured values replace the ranges via `power_model_params`.
+The fused combat layer does not yet apply the bus model and stays on v1 action
+semantics. Runs that never enable the model keep the v1 per-joint fiction and
+remain provisional against it.
 
 ## Mass budget
 

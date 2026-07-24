@@ -162,8 +162,8 @@ def merge(*paths) -> list:
                 if line:
                     try:
                         evs.append(json.loads(line))
-                    except Exception:
-                        pass
+                    except json.JSONDecodeError:
+                        pass  # tolerate a truncated in-flight append (local/pod writers may be live)
     return sorted(evs, key=lambda e: e.get("ts", 0.0))
 
 

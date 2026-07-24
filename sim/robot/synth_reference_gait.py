@@ -278,8 +278,6 @@ class Plan:
             if xi is None:
                 k = self.knee_stance(L, th)
             else:
-                k_lift = self.knee_stance(L, self.rb.ik(L, *self.foot_xy(
-                    L, SLOTS[L][0] - 1e-6)[0])[1] if False else th)  # placeholder
                 # knee: retract from the lift-end stance value to KNEE_SWING,
                 # hold, re-extend to the plant-end stance value
                 (fxa, fya), _ = self.foot_xy(L, SLOTS[L][0] - 1e-6)
