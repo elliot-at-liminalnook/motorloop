@@ -677,7 +677,8 @@ class LadderRunner:
     def _trainer_argv(self, rung: Rung, tag: Path, target_steps: int,
                       *, init_policy: str | None, resume: bool,
                       opponent: str | list[str] | None,
-                      anchor_policy: str | None) -> list[str]:
+                      anchor_policy: str | None,
+                      acquisition: bool = False) -> list[str]:
         a = self.args
         if a.tiny:
             envs, horizon, steps = 2, 2, 4
@@ -712,6 +713,8 @@ class LadderRunner:
                   if a.prediction_lr is not None else ()),
                 *(("--power-model", a.power_model)
                   if getattr(a, "power_model", "off") != "off" else ()),
+                *(("--entropy-floor", str(a.acquisition_entropy_floor))
+                  if acquisition else ()),
                 "--epochs", str(epochs), "--minibatches", str(minibatches),
                 "--target-kl", str(a.target_kl),
                 "--kl-stop-multiplier", str(a.kl_stop_multiplier),
@@ -1406,7 +1409,7 @@ class LadderRunner:
             argv = self._trainer_argv(rung, tag, target_steps,
                                       init_policy=warm if not resume else None,
                                       resume=resume, opponent=opponent,
-                                      anchor_policy=warm)
+                                      anchor_policy=warm, acquisition=scratch)
             plateau = self._plateau_aborted(tag) if resume else None
             if plateau is not None and self.args.plateau_intervention:
                 # The previous attempt's gate margin was projected to never
@@ -1741,6 +1744,10 @@ def make_parser() -> argparse.ArgumentParser:
                           "the shared-bus electrical budget (+shared_bus_v2 "
                           "action semantics); the fused combat layer is not "
                           "yet covered and stays on v1")
+    run.add_argument("--acquisition-entropy-floor", type=float, default=0.015,
+                     help="entropy-coefficient floor for from-scratch "
+                          "acquisition rungs (half the from-scratch start; "
+                          "the default anneal starves discovery)")
     run.add_argument("--walk-first",
                      action=argparse.BooleanOptionalAction, default=False,
                      help="acquire locomotion from scratch first (rung 8 with a standing-hold stripe), then certify stand/pose/step rungs as commanded special cases; requires --command-observations")

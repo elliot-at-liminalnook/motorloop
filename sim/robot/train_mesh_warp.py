@@ -1240,6 +1240,9 @@ def schedules(step: int, args, progress_floor: float = 0.0) -> tuple[float, floa
     # the scheduled coefficient but never exceeds the from-scratch start value:
     # this is a partial rewind of the anneal, not a new exploration regime.
     ent = min(ENT_START, ent * max(float(getattr(args, "entropy_boost", 1.0)), 1.0))
+    # Acquisition runs keep an exploration floor: annealing to ENT_END before
+    # the skill exists starves the stochastic discovery the task requires.
+    ent = min(ENT_START, max(ent, float(getattr(args, "entropy_floor", ENT_END))))
     ap = min(p / max(args.alpha_frac, 1e-9), 1.0)
     alpha = args.alpha_start + (args.alpha_end - args.alpha_start) * ap
     imit = max(0.0, 1.0 - p / max(args.imit_anneal_frac, 1e-9))
@@ -3018,6 +3021,10 @@ def build_args(argv=None):
                          "plateau strike is possible")
     ap.add_argument("--plateau-patience", type=int, default=3,
                     help="consecutive plateau strikes before aborting")
+    ap.add_argument("--entropy-floor", type=float, default=ENT_END,
+                    help="minimum entropy coefficient regardless of anneal "
+                         "progress; raised by the ladder for from-scratch "
+                         "acquisition rungs")
     ap.add_argument("--entropy-boost", type=float, default=1.0,
                     help="multiplier on the scheduled entropy coefficient, "
                          "capped at the from-scratch start value; used by "

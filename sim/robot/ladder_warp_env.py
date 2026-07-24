@@ -274,12 +274,24 @@ class LadderLocomotionWarpEnv(WalkerWarpEnv):
         version = {3: 2, 6: 13, 7: 15, 12: 2, 15: 2, 16: 2, 22: 2}.get(
             self.rung, 1)
         objective = "objective4" if self.rung in (6, 7) else "objective3"
-        return f"ladder:{self.rung:02d}:{self.rung_name}:v{version}:{objective}"
+        return (f"ladder:{self.rung:02d}:{self.rung_name}:v{version}:{objective}"
+                "+catprog")
 
     @property
     def cat_term_keys(self) -> tuple[str, ...]:
-        """Non-negotiable physics only; competence and style never terminate."""
-        return ("cat_slip", "cat_orient", "cat_qvel", "cat_body")
+        """Physical boundaries plus ONE outcome termination.
+
+        cat_progress terminates a world that sustains near-zero progress while
+        a motion command is active (command-gated, EMA-matured, grace period).
+        It is an OUTCOME constraint — failure to do the commanded task — not a
+        style: the contract's termination ban targets gait-shape preferences.
+        Restored 2026-07-24 after pressure-only duals lost to the standing
+        attractor on both curriculum orderings (rung 6 stand-first, rung 8
+        walk-first): a policy whose bootstrap survives standing under command
+        out-earns every first step toward motion.
+        """
+        return ("cat_slip", "cat_orient", "cat_qvel", "cat_body",
+                "cat_progress")
 
     def configure_action_prior(self, path: str | Path) -> None:
         """Load a searched behavior prior artifact without embedding it in code."""

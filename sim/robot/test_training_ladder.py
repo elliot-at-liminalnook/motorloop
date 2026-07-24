@@ -380,6 +380,58 @@ def test_rung8_command_distribution_includes_standing_stripe():
     assert float(forward.abs().max()) > 0.0, "non-stripe worlds still move"
 
 
+def test_cat_progress_terminates_commanded_standing_not_holds():
+    """The outcome termination: a world standing under an active motion
+    command accumulates cat_progress violation; zero-command worlds (the
+    stripe, stand rungs) are exempt by construction."""
+    env = LadderLocomotionWarpEnv(16, rung=8, seed=7, device="cpu",
+                                  episode_length=200)
+    assert "cat_progress" in env.cat_term_keys
+    assert "+catprog" in env.reward_semantics
+    env.reset()
+    zero_action = torch.zeros((16, env.act_dim))
+    worst = 0.0
+    stripe_worst = 0.0
+    terminations = 0.0
+    for _ in range(60):  # beyond grace + EMA maturity (worlds may die and reset)
+        _, _, done, info = env.step(zero_action, alpha=0.0)
+        worst = max(worst, float(info["cat_progress"].max()))
+        stripe_worst = max(stripe_worst, float(info["cat_progress"][0].abs()))
+        terminations += float(done.sum())
+    # command gating means any nonzero violation came from a commanded world
+    assert worst > 0.0, "standing under command must violate cat_progress"
+    assert terminations > 0.0, "violating worlds must actually terminate"
+    assert stripe_worst == 0.0, "the v=0 stripe world is exempt"
+
+
+def test_entropy_floor_holds_exploration_through_the_anneal():
+    from train_mesh_warp import ENT_END, ENT_START, build_args, schedules
+    base = ["--geometry", "walker", "--steps", "1000000", "--tag", "x"]
+    floored = build_args(base + ["--entropy-floor", "0.015"])
+    plain = build_args(base)
+    late = 990_000
+    ent_floored, _, _ = schedules(late, floored)
+    ent_plain, _, _ = schedules(late, plain)
+    assert ent_floored == pytest.approx(0.015)
+    assert ent_plain < 0.015
+    assert ent_floored <= ENT_START
+
+
+def test_scratch_acquisition_gets_the_entropy_floor(tmp_path, monkeypatch):
+    runner = LadderRunner(make_parser().parse_args(
+        ["run", "--out", str(tmp_path), "--command-observations",
+         "--walk-first", "--attempts", "1"]))
+    rung8 = next(rung for rung in RUNGS if rung.number == 8)
+    commands = []
+    monkeypatch.setattr(
+        runner, "_run",
+        lambda argv, log, dry_run=False: commands.append(argv) or 1)
+    runner._run_ppo(rung8)  # scratch: no accepted predecessor
+    assert "--entropy-floor" in commands[0]
+    floor = commands[0][commands[0].index("--entropy-floor") + 1]
+    assert float(floor) == pytest.approx(0.015)
+
+
 def test_scenario_seed_changes_physical_model_variant():
     low = LadderLocomotionWarpEnv(
         1, rung=17, seed=1, device="cpu", episode_length=2,
@@ -1280,7 +1332,10 @@ def test_ladder_constraint_grace_uses_episode_age_not_command_timer():
 def test_step_in_place_reports_duty_without_treating_style_as_catastrophe():
     env = LadderLocomotionWarpEnv(1, rung=6, seed=11, device="cpu", episode_length=100)
     assert env.adaptive_constraint_names == ("cat_slip",)
-    assert env.cat_term_keys == ("cat_slip", "cat_orient", "cat_qvel", "cat_body")
+    # Physics boundaries + the commanded-progress OUTCOME termination; style
+    # metrics (duty shape) still never terminate — that is the ban's intent.
+    assert set(env.cat_term_keys) == {"cat_slip", "cat_orient", "cat_qvel",
+                                      "cat_body", "cat_progress"}
     env._constraint_age.fill_(env.duty_constraint_grace_steps)
     cf = torch.ones((1, 4))
     scalar = torch.ones(1)
