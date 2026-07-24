@@ -787,6 +787,12 @@ class LadderRunner:
                 argv += ["--transfer-policy", str(LEGACY_WALK_TEACHER),
                          "--transfer-obs-dim", "50"]
             argv += ["--action-prior-json", str(prior)]
+            if rung.number == 8 and getattr(a, "walk_first", False):
+                # Acquisition-time slip duals suppress the adaptive prior
+                # weight (observed 0.5*2.0 -> 0.21 effective) — the safety
+                # pressure muting the very teacher that ends the slip deaths.
+                # Triple the base so the suppressed weight still teaches.
+                argv += ["--action-prior-weight", "3.0"]
         return argv
 
     def _ensure_walk_prior(self) -> str | None:
